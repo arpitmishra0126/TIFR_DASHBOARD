@@ -161,8 +161,8 @@ class FakeRedCapRepository:
         self._metadata = metadata
         self._records = records
 
-    async def get_metadata(self) -> list[dict]:
+    async def get_metadata(self, force: bool = False) -> list[dict]:
         return self._metadata
 
-    async def get_records(self) -> list[dict]:
+    async def get_records(self, force: bool = False) -> list[dict]:
         return self._records

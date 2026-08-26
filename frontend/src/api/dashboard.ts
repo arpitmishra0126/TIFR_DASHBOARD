@@ -1,4 +1,4 @@
-import { apiGet } from "./client";
+import { apiGet, withRefresh } from "./client";
 import type {
   DemographicsResponse,
   OverviewResponse,
@@ -7,8 +7,8 @@ import type {
   UnavailableModule,
 } from "../types/liveDashboard";
 
-export function getOverview(): Promise<OverviewResponse> {
-  return apiGet<OverviewResponse>("/dashboard/overview");
+export function getOverview(opts?: { force?: boolean }): Promise<OverviewResponse> {
+  return apiGet<OverviewResponse>(withRefresh("/dashboard/overview", opts?.force));
 }
 
 export interface RegistryQuery {
@@ -17,6 +17,7 @@ export interface RegistryQuery {
   village?: string;
   limit?: number;
   offset?: number;
+  force?: boolean;
 }
 
 export function getRegistry(query: RegistryQuery = {}): Promise<RegistryResponse> {
@@ -26,11 +27,11 @@ export function getRegistry(query: RegistryQuery = {}): Promise<RegistryResponse
   if (query.village) params.set("village", query.village);
   params.set("limit", String(query.limit ?? 50));
   params.set("offset", String(query.offset ?? 0));
-  return apiGet<RegistryResponse>(`/dashboard/registry?${params.toString()}`);
+  return apiGet<RegistryResponse>(withRefresh(`/dashboard/registry?${params.toString()}`, query.force));
 }
 
-export function getDemographics(): Promise<DemographicsResponse> {
-  return apiGet<DemographicsResponse>("/dashboard/demographics");
+export function getDemographics(opts?: { force?: boolean }): Promise<DemographicsResponse> {
+  return apiGet<DemographicsResponse>(withRefresh("/dashboard/demographics", opts?.force));
 }
 
 export function getHealthScreening(): Promise<UnavailableModule> {
@@ -49,6 +50,6 @@ export function getNeurodevelopment(): Promise<UnavailableModule> {
   return apiGet<UnavailableModule>("/dashboard/neurodevelopment");
 }
 
-export function getProgress(): Promise<ProgressResponse> {
-  return apiGet<ProgressResponse>("/dashboard/progress");
+export function getProgress(opts?: { force?: boolean }): Promise<ProgressResponse> {
+  return apiGet<ProgressResponse>(withRefresh("/dashboard/progress", opts?.force));
 }

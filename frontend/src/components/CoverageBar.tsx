@@ -13,7 +13,9 @@ export default function CoverageBar({ label, count, total, percent }: CoverageBa
         <div className="coverage-fill" style={{ width: `${Math.min(percent, 100)}%` }} />
       </div>
       <div className="coverage-value">
-        {count} / {total}
+        <span className="coverage-count">
+          {count} / {total}
+        </span>
         <span className="coverage-percent">{percent}%</span>
       </div>
     </div>

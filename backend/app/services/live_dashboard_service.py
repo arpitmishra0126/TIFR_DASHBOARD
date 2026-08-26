@@ -172,9 +172,9 @@ class LiveDashboardService:
     def __init__(self, repository: LiveRedCapRepository) -> None:
         self._repository = repository
 
-    async def _load(self) -> tuple[list[dict], dict[str, ChoiceMap]]:
-        metadata = await self._repository.get_metadata()
-        records = await self._repository.get_records()
+    async def _load(self, force: bool = False) -> tuple[list[dict], dict[str, ChoiceMap]]:
+        metadata = await self._repository.get_metadata(force=force)
+        records = await self._repository.get_records(force=force)
         return records, build_choice_maps(metadata)
 
     def _normalize_children(self, records: list[dict], choice_maps: dict[str, ChoiceMap]) -> list[RegistryChild]:
@@ -187,8 +187,9 @@ class LiveDashboardService:
         village: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        force: bool = False,
     ) -> RegistryResponse:
-        records, choice_maps = await self._load()
+        records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
 
         if search:
@@ -210,8 +211,8 @@ class LiveDashboardService:
             unavailable_fields=[],
         )
 
-    async def get_demographics(self) -> DemographicsResponse:
-        records, choice_maps = await self._load()
+    async def get_demographics(self, force: bool = False) -> DemographicsResponse:
+        records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
 
         udai_categories = [r.get("scr_pareek_category") or None for r in records]
@@ -240,8 +241,8 @@ class LiveDashboardService:
             },
         )
 
-    async def get_overview(self) -> OverviewResponse:
-        records, choice_maps = await self._load()
+    async def get_overview(self, force: bool = False) -> OverviewResponse:
+        records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
         total_registered = len(children)
 
@@ -277,8 +278,8 @@ class LiveDashboardService:
             },
         )
 
-    async def get_progress(self) -> ProgressResponse:
-        records, _ = await self._load()
+    async def get_progress(self, force: bool = False) -> ProgressResponse:
+        records, _ = await self._load(force=force)
         total_registered = len({_child_id(r) for r in records if _child_id(r)})
 
         core_ids = _core_battery_ids(records)

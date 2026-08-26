@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getRegistry } from "../api/dashboard";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
+import { useRefresh } from "../context/RefreshContext";
 import type { RegistryResponse } from "../types/liveDashboard";
 
 const PAGE_SIZE = 25;
@@ -13,13 +14,14 @@ export default function Registry() {
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<RegistryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { version } = useRefresh();
 
   useEffect(() => {
     setError(null);
     getRegistry({ search: search || undefined, sex: sex || undefined, limit: PAGE_SIZE, offset })
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [search, sex, offset]);
+  }, [search, sex, offset, version]);
 
   return (
     <section>

@@ -26,16 +26,16 @@ class LiveRedCapRepository:
         self._records: list[dict] | None = None
         self._records_fetched_at: float = 0.0
 
-    async def get_metadata(self) -> list[dict]:
+    async def get_metadata(self, force: bool = False) -> list[dict]:
         async with self._lock:
-            if self._metadata is None or self._is_stale(self._metadata_fetched_at):
+            if force or self._metadata is None or self._is_stale(self._metadata_fetched_at):
                 self._metadata = await self._client.fetch_metadata()
                 self._metadata_fetched_at = time.monotonic()
             return self._metadata
 
-    async def get_records(self) -> list[dict]:
+    async def get_records(self, force: bool = False) -> list[dict]:
         async with self._lock:
-            if self._records is None or self._is_stale(self._records_fetched_at):
+            if force or self._records is None or self._is_stale(self._records_fetched_at):
                 self._records = await self._client.fetch_records(fields=list(LIVE_FIELDS))
                 self._records_fetched_at = time.monotonic()
             return self._records

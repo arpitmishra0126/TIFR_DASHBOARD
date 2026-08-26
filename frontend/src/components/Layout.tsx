@@ -14,6 +14,7 @@ import {
   IconProgress,
   IconUsers,
 } from "./icons";
+import Topbar from "./Topbar";
 
 interface NavItem {
   to: string;
@@ -71,7 +72,7 @@ export default function Layout() {
         title={collapsed ? item.label : undefined}
       >
         <span className="sidebar-nav-icon">
-          <Icon width={18} height={18} />
+          <Icon width={16} height={16} />
         </span>
         <span className="sidebar-nav-label">{item.label}</span>
       </NavLink>
@@ -92,9 +93,28 @@ export default function Layout() {
       {mobileOpen && <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />}
 
       <aside className={`app-sidebar${mobileOpen ? " mobile-open" : ""}`}>
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-title">ICMR Neurodevelopment</div>
-          <div className="sidebar-brand-subtitle">Study Dashboard</div>
+        <div className="sidebar-top">
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-mark" aria-hidden={!collapsed}>
+              IN
+            </div>
+            <div className="sidebar-brand-text">
+              <div className="sidebar-brand-title">ICMR Neurodevelopment</div>
+              <div className="sidebar-brand-subtitle">Study Dashboard</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sidebar-toggle-row">
+          <button
+            type="button"
+            className="sidebar-collapse-toggle"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <IconChevron width={14} height={14} style={{ transform: collapsed ? "none" : "rotate(180deg)" }} />
+          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -109,22 +129,13 @@ export default function Layout() {
         <div className="sidebar-footer">
           <span className="live-badge">
             <span className="live-badge-dot" />
-            <span className="sidebar-nav-label">LIVE REDCAP DATA</span>
+            <span className="sidebar-nav-label">Live REDCap data</span>
           </span>
         </div>
-
-        <button
-          type="button"
-          className="sidebar-collapse-toggle"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <IconChevron width={16} height={16} style={{ transform: collapsed ? "none" : "rotate(180deg)" }} />
-        </button>
       </aside>
 
       <main className="app-content">
+        <Topbar />
         <Outlet />
       </main>
     </div>

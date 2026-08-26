@@ -30,6 +30,19 @@ def test_overview_endpoint_returns_core_battery_progression():
     assert "physical_activity" in body["modules_pending_integration"]
 
 
+def test_overview_endpoint_accepts_refresh_query_param():
+    response = client.get("/api/v1/dashboard/overview?refresh=true")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_registered"] == 6
+
+
+def test_overview_endpoint_refresh_param_does_not_change_default_response_shape():
+    default_response = client.get("/api/v1/dashboard/overview").json()
+    refreshed_response = client.get("/api/v1/dashboard/overview?refresh=true").json()
+    assert default_response == refreshed_response
+
+
 def test_overview_endpoint_returns_registration_completion_and_coverage():
     response = client.get("/api/v1/dashboard/overview")
     body = response.json()

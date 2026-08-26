@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getRegistry } from "../api/dashboard";
+import { useRefresh } from "../context/RefreshContext";
 import type { RegistryChild } from "../types/liveDashboard";
 
 const PAGE_SIZE = 500;
@@ -14,6 +15,7 @@ const PAGE_SIZE = 500;
 export function usePopulation() {
   const [children, setChildren] = useState<RegistryChild[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { version } = useRefresh();
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +40,7 @@ export function usePopulation() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
   return { children, error };
 }

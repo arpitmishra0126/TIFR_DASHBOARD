@@ -10,6 +10,11 @@ export class ApiError extends Error {
   }
 }
 
+export function withRefresh(path: string, force?: boolean): string {
+  if (!force) return path;
+  return path.includes("?") ? `${path}&refresh=true` : `${path}?refresh=true`;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`);
   if (!response.ok) {

@@ -45,14 +45,17 @@ export default function HorizontalBarChart({ data, height, mode = "categorical" 
           width={110}
         />
         <Tooltip
-          cursor={{ fill: "var(--gridline)" }}
+          cursor={{ fill: "var(--surface-2)" }}
           contentStyle={{
             background: "var(--surface-1)",
-            border: "1px solid var(--border-hairline)",
-            borderRadius: 6,
+            border: "1px solid var(--border-hairline-strong)",
+            borderRadius: 10,
+            boxShadow: "var(--shadow-card-hover)",
             fontSize: 12,
+            padding: "8px 12px",
             color: "var(--text-primary)",
           }}
+          labelStyle={{ color: "var(--text-secondary)", fontWeight: 600, marginBottom: 2 }}
         />
         <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={28}>
           {data.map((entry, index) => (

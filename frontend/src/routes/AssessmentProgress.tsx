@@ -4,15 +4,25 @@ import { getOverview, getProgress } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
 import CoverageBar from "../components/CoverageBar";
 import Funnel from "../components/Funnel";
-import KpiCard from "../components/KpiCard";
+import { IconClipboardCheck, IconGraduationCap, IconUserCheck, IconUsers } from "../components/icons";
+import KpiCard, { type KpiTone } from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
+
+const STAGE_VISUALS: Record<string, { icon: typeof IconUsers; tone: KpiTone }> = {
+  registered: { icon: IconUsers, tone: "blue" },
+  core_assessment_battery: { icon: IconClipboardCheck, tone: "aqua" },
+  ssrs_child: { icon: IconUserCheck, tone: "violet" },
+  ssrs_teacher: { icon: IconGraduationCap, tone: "amber" },
+};
 
 export default function AssessmentProgress() {
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { version } = useRefresh();
 
   useEffect(() => {
     Promise.all([getProgress(), getOverview()])
@@ -21,7 +31,7 @@ export default function AssessmentProgress() {
         setOverview(o);
       })
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [version]);
 
   if (error) return <p className="error-text">Could not reach backend: {error}</p>;
   if (!data || !overview) return <p className="loading-text">Loading…</p>;
@@ -41,6 +51,8 @@ export default function AssessmentProgress() {
             label={stage.label}
             value={stage.count.toLocaleString()}
             sublabel={`${stage.percent_of_registered}% of registered`}
+            icon={STAGE_VISUALS[stage.key]?.icon}
+            tone={STAGE_VISUALS[stage.key]?.tone ?? "neutral"}
           />
         ))}
       </div>

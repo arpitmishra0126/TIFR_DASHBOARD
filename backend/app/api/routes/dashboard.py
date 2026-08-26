@@ -19,9 +19,18 @@ from app.services.live_dashboard_service import LiveDashboardService
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
+_REFRESH_QUERY = Query(
+    default=False,
+    description="If true, bypass the in-memory REDCap cache and force a fresh fetch from REDCap.",
+)
+
+
 @router.get("/overview", response_model=OverviewResponse)
-async def get_overview(service: LiveDashboardService = Depends(get_live_dashboard_service)) -> OverviewResponse:
-    return await service.get_overview()
+async def get_overview(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> OverviewResponse:
+    return await service.get_overview(force=refresh)
 
 
 @router.get("/registry", response_model=RegistryResponse)
@@ -31,16 +40,18 @@ async def get_registry(
     village: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    refresh: bool = _REFRESH_QUERY,
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> RegistryResponse:
-    return await service.get_registry(search=search, sex=sex, village=village, limit=limit, offset=offset)
+    return await service.get_registry(search=search, sex=sex, village=village, limit=limit, offset=offset, force=refresh)
 
 
 @router.get("/demographics", response_model=DemographicsResponse)
 async def get_demographics(
+    refresh: bool = _REFRESH_QUERY,
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> DemographicsResponse:
-    return await service.get_demographics()
+    return await service.get_demographics(force=refresh)
 
 
 @router.get("/health", response_model=UnavailableModule)
@@ -64,5 +75,8 @@ async def get_neurodevelopment() -> UnavailableModule:
 
 
 @router.get("/progress", response_model=ProgressResponse)
-async def get_progress(service: LiveDashboardService = Depends(get_live_dashboard_service)) -> ProgressResponse:
-    return await service.get_progress()
+async def get_progress(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> ProgressResponse:
+    return await service.get_progress(force=refresh)

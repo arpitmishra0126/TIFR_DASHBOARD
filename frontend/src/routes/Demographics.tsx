@@ -8,6 +8,7 @@ import HorizontalBarChart from "../components/HorizontalBarChart";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import { useRefresh } from "../context/RefreshContext";
 import { usePopulation } from "../hooks/usePopulation";
 import {
   ageDistribution,
@@ -24,12 +25,13 @@ export default function Demographics() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PopulationFilters>({});
   const { children, error: populationError } = usePopulation();
+  const { version } = useRefresh();
 
   useEffect(() => {
     getDemographics()
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, []);
+  }, [version]);
 
   const filtered = useMemo(() => (children ? applyFilters(children, filters) : []), [children, filters]);
   const villageOptions = useMemo(() => (children ? distinctVillages(children) : []), [children]);
