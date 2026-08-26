@@ -31,6 +31,7 @@ from app.ingestion.live_field_map import (
 )
 from app.ingestion.normalize import capitalize_label, compute_age_years, parse_complete_flag, parse_date, parse_float, parse_int
 from app.redcap.live_repository import LiveRedCapRepository
+from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
 from app.schemas.dashboard import (
     AgeBucket,
     CategoryCount,
@@ -179,6 +180,18 @@ class LiveDashboardService:
 
     def _normalize_children(self, records: list[dict], choice_maps: dict[str, ChoiceMap]) -> list[RegistryChild]:
         return [c for r in records if (c := _normalize_child(r, choice_maps)) is not None]
+
+    async def get_active_cases_export(self, force: bool = False) -> bytes:
+        """Build the Active Cases newsletter workbook (.xlsx bytes) from live data."""
+        records, choice_maps = await self._load(force=force)
+        children = self._normalize_children(records, choice_maps)
+        return build_active_cases_workbook(children, records, choice_maps)
+
+    async def get_active_cases_csv_export(self, force: bool = False) -> str:
+        """Build the Active Cases CSV export from live data."""
+        records, choice_maps = await self._load(force=force)
+        children = self._normalize_children(records, choice_maps)
+        return build_active_cases_csv(children, records)
 
     async def get_registry(
         self,

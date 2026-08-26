@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { getRegistry } from "../api/dashboard";
+import { exportActiveCases, exportActiveCasesCsv, getRegistry } from "../api/dashboard";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
 import { useRefresh } from "../context/RefreshContext";
@@ -16,12 +16,44 @@ export default function Registry() {
   const [error, setError] = useState<string | null>(null);
   const { version } = useRefresh();
 
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportCsvMessage, setExportCsvMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+
   useEffect(() => {
     setError(null);
     getRegistry({ search: search || undefined, sex: sex || undefined, limit: PAGE_SIZE, offset })
       .then(setData)
       .catch((err: Error) => setError(err.message));
   }, [search, sex, offset, version]);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      await exportActiveCases();
+      setExportMessage({ kind: "success", text: "Export downloaded." });
+    } catch (err) {
+      setExportMessage({ kind: "error", text: `Export failed: ${(err as Error).message}` });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleExportCsv() {
+    setExportingCsv(true);
+    setExportCsvMessage(null);
+    try {
+      await exportActiveCasesCsv();
+      setExportCsvMessage({ kind: "success", text: "CSV export downloaded." });
+    } catch (err) {
+      setExportCsvMessage({ kind: "error", text: `CSV export failed: ${(err as Error).message}` });
+    } finally {
+      setExportingCsv(false);
+    }
+  }
 
   return (
     <section>
@@ -30,6 +62,28 @@ export default function Registry() {
         title="Participants"
         subtitle="Approved registry identifiers only — parent/family names and contact numbers are not exposed here."
       />
+
+      <div className="export-bar">
+        <button type="button" className="export-button" onClick={() => void handleExport()} disabled={exporting} aria-busy={exporting}>
+          {exporting ? "Generating export…" : "Export Active Cases (Excel)"}
+        </button>
+        {exportMessage && (
+          <span className={exportMessage.kind === "success" ? "export-success-text" : "error-text"}>{exportMessage.text}</span>
+        )}
+
+        <button
+          type="button"
+          className="export-button"
+          onClick={() => void handleExportCsv()}
+          disabled={exportingCsv}
+          aria-busy={exportingCsv}
+        >
+          {exportingCsv ? "Generating export…" : "Export Active Cases (CSV)"}
+        </button>
+        {exportCsvMessage && (
+          <span className={exportCsvMessage.kind === "success" ? "export-success-text" : "error-text"}>{exportCsvMessage.text}</span>
+        )}
+      </div>
 
       <div className="filter-bar">
         <span className="filter-bar-label">Filter</span>

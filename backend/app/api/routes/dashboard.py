@@ -5,6 +5,7 @@ and normalizes in memory. There is no database. The REDCap token never leaves
 the backend process.
 """
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 
 from app.api.deps import get_live_dashboard_service
 from app.schemas.dashboard import (
@@ -14,6 +15,7 @@ from app.schemas.dashboard import (
     RegistryResponse,
     UnavailableModule,
 )
+from app.services.export_service import export_filename
 from app.services.live_dashboard_service import LiveDashboardService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -72,6 +74,34 @@ async def get_screen_time() -> UnavailableModule:
 @router.get("/neurodevelopment", response_model=UnavailableModule)
 async def get_neurodevelopment() -> UnavailableModule:
     return LiveDashboardService.get_neurodevelopment_status()
+
+
+@router.get("/export/active-cases")
+async def export_active_cases(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> Response:
+    workbook_bytes = await service.get_active_cases_export(force=refresh)
+    filename = export_filename()
+    return Response(
+        content=workbook_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/export/active-cases.csv")
+async def export_active_cases_csv(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> Response:
+    csv_text = await service.get_active_cases_csv_export(force=refresh)
+    filename = export_filename(extension="csv")
+    return Response(
+        content="﻿" + csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/progress", response_model=ProgressResponse)

@@ -99,6 +99,30 @@ def test_neurodevelopment_endpoint_reports_instrument_exists_but_unmapped():
     assert "SSRS Teacher" in body["reason"]
 
 
+def test_export_active_cases_endpoint_returns_xlsx_with_dated_filename():
+    response = client.get("/api/v1/dashboard/export/active-cases")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert 'filename="ICMR_Active_Cases_' in response.headers["content-disposition"]
+    assert response.headers["content-disposition"].endswith('.xlsx"')
+    assert len(response.content) > 0
+
+
+def test_export_active_cases_csv_endpoint_returns_csv_with_dated_filename():
+    response = client.get("/api/v1/dashboard/export/active-cases.csv")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert 'filename="ICMR_Active_Cases_' in response.headers["content-disposition"]
+    assert response.headers["content-disposition"].endswith('.csv"')
+
+    body = response.content.decode("utf-8-sig")
+    lines = body.strip().splitlines()
+    header = lines[0].split(",")
+    assert header[0] == "Child ID"
+    # 6 registered/active fixture children -> 1 header + 6 data rows
+    assert len(lines) == 7
+
+
 def test_progress_endpoint_returns_four_stage_pipeline():
     response = client.get("/api/v1/dashboard/progress")
     assert response.status_code == 200

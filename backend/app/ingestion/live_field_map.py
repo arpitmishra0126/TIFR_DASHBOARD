@@ -177,6 +177,131 @@ ALL_STATUS: tuple[LiveFieldStatus, ...] = (
     + PROGRESSION_STATUS
 )
 
+# --- Export-only fields (Active Cases Excel/CSV export) ---
+# Approved per the 2026-08-26 live-metadata field audit. These are NOT used
+# by any dashboard module/calculation above — they exist here only so that
+# LiveRedCapRepository's fixed field whitelist (LIVE_FIELDS) includes them,
+# for app.services.export_service to read. See export_service.py's
+# ACTIVE_CASES_FIELD_SPECS for the per-field acquired/derived documentation.
+#
+# Udai Pareek P1 (caste, scr_pareek_caste) and P1a (actual caste category,
+# scr_caste_category) are intentionally EXCLUDED from this list and from the
+# export — caste is sensitive demographic data and was excluded per explicit
+# instruction, even though it is technically part of the P1-P9 Udai Pareek
+# item set. The 8 fields below are P2-P9.
+SES_EXPORT_FIELDS: tuple[str, ...] = (
+    "scr_bg_income",
+    "scr_pareek_occupation",
+    "scr_pareek_social",
+    "scr_pareek_house",
+    "scr_pareek_animals",
+    "scr_pareek_education",
+    "scr_pareek_land",
+    "scr_pareek_assets",
+    "scr_pareek_family",
+)
+
+DSEQ_EXPORT_FIELDS: tuple[str, ...] = (
+    "q1_tv_freq",
+    "q2_tv_school",
+    "q3_tv_holiday",
+    "q4_phone_freq",
+    "q5_phone_school",
+    "q6_phone_holiday",
+    "q7_laptop_freq",
+    "q8_supervision",
+    "q9_household_rules",
+    "q10_total_screen_time",
+    "q11_outdoor_school",
+    "q12_outdoor_holiday",
+    "q13_main_use",
+    "q14_school_use",
+    "q15_entertainment_use",
+)
+
+# The 34 coded Yes/No/ordinal fields identified in the audit report (the
+# audit's prose estimate of "~26" undercounted the 10 individual chh_q8_*
+# named-condition checks as a single group).
+CHH_EXPORT_FIELDS: tuple[str, ...] = (
+    "chh_illness_current",
+    "chh_unwell_7days",
+    "chh_illness_3mo",
+    "chh_illness_3mo_freq",
+    "chh_missed_school_3mo",
+    "chh_chronic_condition",
+    "chh_q8_asthma",
+    "chh_q8_heart",
+    "chh_q8_tb",
+    "chh_q8_diabetes",
+    "chh_q8_thyroid",
+    "chh_q8_anaemia",
+    "chh_q8_malnutrition",
+    "chh_q8_kidney",
+    "chh_q8_liver",
+    "chh_q8_infections",
+    "chh_q8_other",
+    "chh_seizures",
+    "chh_loc_fainting",
+    "chh_cns_infection",
+    "chh_head_injury",
+    "chh_vision_difficulty",
+    "chh_uses_glasses",
+    "chh_hearing_difficulty",
+    "chh_ear_infection",
+    "chh_dev_diagnosis",
+    "chh_hospitalised",
+    "chh_surgery",
+    "chh_medicine_current",
+    "chh_allergy",
+    "chh_health_rating",
+    "chh_fit_for_assessment",
+    "chh_health_affects_today",
+    "chh_assessor_decision",
+)
+
+PAQA_EXPORT_FIELDS: tuple[str, ...] = ("paq_item1_score", "paq_item8_score", "paq_total_score")
+
+DIETARY_EXPORT_FIELDS: tuple[str, ...] = (
+    "die_grains_freq",
+    "die_pulses_freq",
+    "die_nuts_seeds_freq",
+    "die_dairy_freq",
+    "die_flesh_freq",
+    "die_eggs_freq",
+    "die_dgl_veg_freq",
+    "die_vita_fv_freq",
+    "die_other_veg_freq",
+    "die_other_fruits_freq",
+)
+
+# SSRS Parent/Child/Teacher: per-item frequency + importance rating fields
+# (confirmed live field names, 2026-08-26). Raw items are not individually
+# exported to keep the Active Cases sheet readable — export_service.py
+# instead computes a per-child "items answered" count and mean rating for
+# each of the two rating scales. Included for all three instruments
+# (including Teacher, which has 0/212 live completions today) so the same
+# computation is dynamic and future-proof rather than hardcoded per form.
+SSRS_PARENT_FREQ_FIELDS: tuple[str, ...] = tuple(f"p{i}_freq" for i in range(1, 53))
+SSRS_PARENT_IMP_FIELDS: tuple[str, ...] = tuple(f"p{i}_imp" for i in range(1, 41))
+SSRS_CHILD_FREQ_FIELDS: tuple[str, ...] = tuple(f"c{i}_freq" for i in range(1, 35))
+SSRS_CHILD_IMP_FIELDS: tuple[str, ...] = tuple(f"c{i}_imp" for i in range(1, 35))
+SSRS_TEACHER_FREQ_FIELDS: tuple[str, ...] = tuple(f"t{i}_freq" for i in range(1, 43))
+SSRS_TEACHER_IMP_FIELDS: tuple[str, ...] = tuple(f"t{i}_imp" for i in range(1, 31))
+
+EXPORT_ONLY_FIELDS: tuple[str, ...] = (
+    *SES_EXPORT_FIELDS,
+    *DSEQ_EXPORT_FIELDS,
+    *CHH_EXPORT_FIELDS,
+    *PAQA_EXPORT_FIELDS,
+    *DIETARY_EXPORT_FIELDS,
+    *SSRS_PARENT_FREQ_FIELDS,
+    *SSRS_PARENT_IMP_FIELDS,
+    *SSRS_CHILD_FREQ_FIELDS,
+    *SSRS_CHILD_IMP_FIELDS,
+    *SSRS_TEACHER_FREQ_FIELDS,
+    *SSRS_TEACHER_IMP_FIELDS,
+)
+
 # The fixed set of live REDCap field names the application requests and caches.
 LIVE_FIELDS: tuple[str, ...] = (
     "child_id",
@@ -194,4 +319,5 @@ LIVE_FIELDS: tuple[str, ...] = (
     *CORE_BATTERY_COMPLETE_FIELDS,
     SSRS_CHILD_COMPLETE_FIELD,
     SSRS_TEACHER_COMPLETE_FIELD,
+    *EXPORT_ONLY_FIELDS,
 )

@@ -1,4 +1,4 @@
-import { apiGet, withRefresh } from "./client";
+import { apiDownload, apiGet, withRefresh } from "./client";
 import type {
   DemographicsResponse,
   OverviewResponse,
@@ -52,4 +52,14 @@ export function getNeurodevelopment(): Promise<UnavailableModule> {
 
 export function getProgress(opts?: { force?: boolean }): Promise<ProgressResponse> {
   return apiGet<ProgressResponse>(withRefresh("/dashboard/progress", opts?.force));
+}
+
+export function exportActiveCases(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  return apiDownload("/dashboard/export/active-cases", `ICMR_Active_Cases_${today}.xlsx`);
+}
+
+export function exportActiveCasesCsv(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  return apiDownload("/dashboard/export/active-cases.csv", `ICMR_Active_Cases_${today}.csv`);
 }
