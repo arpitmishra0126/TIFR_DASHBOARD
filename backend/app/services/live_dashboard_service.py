@@ -21,30 +21,44 @@ from app.ingestion.live_field_map import (
     CORE_BATTERY_COMPLETE_FIELDS,
     CORE_BATTERY_DESCRIPTION,
     CORE_BATTERY_INSTRUMENTS,
-    HEALTH_SCREENING_STATUS,
-    NEURODEVELOPMENT_STATUS,
-    PHYSICAL_ACTIVITY_STATUS,
     REGISTRATION_COMPLETE_FIELD,
-    SCREEN_TIME_STATUS,
     SSRS_CHILD_COMPLETE_FIELD,
+    SSRS_CHILD_FREQ_FIELDS,
+    SSRS_CHILD_IMP_FIELDS,
+    SSRS_PARENT_FREQ_FIELDS,
+    SSRS_PARENT_IMP_FIELDS,
     SSRS_TEACHER_COMPLETE_FIELD,
+    SSRS_TEACHER_FREQ_FIELDS,
+    SSRS_TEACHER_IMP_FIELDS,
 )
 from app.ingestion.normalize import capitalize_label, compute_age_years, parse_complete_flag, parse_date, parse_float, parse_int
 from app.redcap.live_repository import LiveRedCapRepository
 from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
+from app.services.module_analytics import (
+    build_health_screening_analysis,
+    build_neurodevelopment_analysis,
+    build_physical_activity_analysis,
+    build_screen_time_analysis,
+)
 from app.schemas.dashboard import (
     AgeBucket,
     CategoryCount,
     DemographicsResponse,
+    HealthScreeningResponse,
+    InstrumentCompletion,
     InstrumentCoverage,
+    NeurodevelopmentResponse,
     NumericSummary,
     OverviewResponse,
+    PhysicalActivityResponse,
     ProgressResponse,
     ProgressStage,
     RegistryChild,
     RegistryResponse,
+    ScoreSummary,
+    ScreenTimeResponse,
     SexDistribution,
-    UnavailableModule,
+    SSRSInstrumentSummary,
 )
 
 _AGE_BUCKETS = [
@@ -343,42 +357,81 @@ class LiveDashboardService:
 
         return ProgressResponse(total_registered=total_registered, stages=stages)
 
-    @staticmethod
-    def get_health_screening_status() -> UnavailableModule:
-        return UnavailableModule(
-            reason="The Child Illness History instrument exists in the live REDCap project "
-            "(PID 196), but its field-level content has not yet been mapped into this "
-            "dashboard module. Only its instrument-completion status is currently used, "
-            "in the Assessment Progress pipeline.",
-            unavailable_fields=[s.metric for s in HEALTH_SCREENING_STATUS],
+    async def get_health_screening(self, force: bool = False) -> HealthScreeningResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_health_screening_analysis(records, choice_maps)
+        return HealthScreeningResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            named_conditions=[CategoryCount(code=label, count=count) for label, count in analysis["named_conditions"]],
+            general_flags=[CategoryCount(code=label, count=count) for label, count in analysis["general_flags"]],
+            notes={
+                "scope": "Named conditions and general flags approved 2026-08-26; item-level Child Illness "
+                "History fields not in this list (e.g. health rating, fit-for-assessment) are exported in the "
+                "Active Cases Excel sheet but not part of the approved dashboard analysis.",
+            },
         )
 
-    @staticmethod
-    def get_physical_activity_status() -> UnavailableModule:
-        return UnavailableModule(
-            reason="The PAQ-A instrument exists in the live REDCap project (PID 196), but "
-            "its field-level content has not yet been mapped into this dashboard module. "
-            "Only its instrument-completion status is currently used, in the Assessment "
-            "Progress pipeline.",
-            unavailable_fields=[s.metric for s in PHYSICAL_ACTIVITY_STATUS],
+    async def get_physical_activity(self, force: bool = False) -> PhysicalActivityResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_physical_activity_analysis(records, choice_maps)
+        return PhysicalActivityResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            item1_summary=ScoreSummary(**analysis["item1_summary"]),
+            item8_summary=ScoreSummary(**analysis["item8_summary"]),
+            total_summary=ScoreSummary(**analysis["total_summary"]),
+            total_score_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["total_score_distribution"]],
+            notes={
+                "scores": "Item 1, Item 8 and Total scores are REDCap-calculated fields (paq_item1_score, "
+                "paq_item8_score, paq_total_score), not derived by this dashboard.",
+            },
         )
 
-    @staticmethod
-    def get_screen_time_status() -> UnavailableModule:
-        return UnavailableModule(
-            reason="The Digital-Screen Exposure Questionnaire (DSEQ) instrument exists in "
-            "the live REDCap project (PID 196), but its field-level content has not yet "
-            "been mapped into this dashboard module. Only its instrument-completion status "
-            "is currently used, in the Assessment Progress pipeline.",
-            unavailable_fields=[s.metric for s in SCREEN_TIME_STATUS],
+    async def get_screen_time(self, force: bool = False) -> ScreenTimeResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_screen_time_analysis(records, choice_maps)
+        return ScreenTimeResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            total_screen_time_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["total_screen_time_distribution"]],
+            yes_no_items=[CategoryCount(code=label, count=count) for label, count in analysis["yes_no_items"]],
+            notes={
+                "scope": "Q10 total daily screen time distribution and 3 Yes/No items (Q9, Q14, Q15) approved "
+                "2026-08-26; per-item TV/phone/laptop frequency breakdowns are exported in the Active Cases "
+                "Excel sheet but not part of the approved dashboard analysis.",
+            },
         )
 
-    @staticmethod
-    def get_neurodevelopment_status() -> UnavailableModule:
-        return UnavailableModule(
-            reason="The SSRS Teacher instrument exists in the live REDCap project (PID 196), "
-            "but its field-level content has not yet been mapped into this dashboard "
-            "module. Only its instrument-completion status is currently used, in the "
-            "Assessment Progress pipeline.",
-            unavailable_fields=[s.metric for s in NEURODEVELOPMENT_STATUS],
+    async def get_neurodevelopment(self, force: bool = False) -> NeurodevelopmentResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_neurodevelopment_analysis(
+            records, choice_maps,
+            SSRS_PARENT_FREQ_FIELDS, SSRS_PARENT_IMP_FIELDS,
+            SSRS_CHILD_FREQ_FIELDS, SSRS_CHILD_IMP_FIELDS,
+            SSRS_TEACHER_FREQ_FIELDS, SSRS_TEACHER_IMP_FIELDS,
+        )
+        def _instrument_summary(data: dict) -> SSRSInstrumentSummary:
+            return SSRSInstrumentSummary(
+                instrument=data["instrument"],
+                children_with_any_data=data["children_with_any_data"],
+                total_registered=data["total_registered"],
+                percent=data["percent"],
+                completed_count=data["completed_count"],
+                avg_frequency_summary=ScoreSummary(**data["avg_frequency_summary"]),
+                avg_importance_summary=ScoreSummary(**data["avg_importance_summary"]),
+            )
+
+        return NeurodevelopmentResponse(
+            parent=_instrument_summary(analysis["parent"]),
+            child=_instrument_summary(analysis["child"]),
+            teacher=_instrument_summary(analysis["teacher"]),
+            notes={
+                "scope": "Items-answered counts and mean frequency/importance ratings, computed from the raw "
+                "SSRS rating items — the same calculation used in the Active Cases Excel export. Not a "
+                "validated SSRS composite score. Individual SSRS Teacher item ratings (t43-t51) are not part "
+                "of the approved analytical specification.",
+                "ssrs_teacher": "0 live Teacher assessments are complete — Teacher's counts/summaries will "
+                "populate automatically once real data exists; no value has been invented here.",
+            },
         )

@@ -262,6 +262,31 @@ Use actual REDCap instruments/fields when mapped.
 
 Do not claim an instrument does not exist if it exists in PID 196.
 
+**IMPLEMENTED as real analytics (2026-08-26)** — the Active Cases Excel export's "DOMAIN ANALYSIS" section (see EXPORT FEATURE below) was approved as the official V1 analytical specification, and these four pages now render real live data instead of a placeholder. Source of truth for every metric: `backend/app/services/module_analytics.py` — a shared calculation engine used by BOTH these dashboard endpoints and the Excel export's Summary sheet (export_service.py imports its low-level helpers and field-list constants from this module), so the two can never compute different numbers for the same metric. Population = **all registered children** (same convention as Overview/Demographics/Progress), not "Active Cases" (the export's newsletter-specific scope) — only the underlying arithmetic is shared, not the population filter.
+
+- **Health & Screening** (`/api/v1/dashboard/health`, `HealthScreeningResponse`): Child Illness History instrument completion + 11 named-condition Yes-counts (asthma, heart disease, TB, diabetes, thyroid, anaemia, malnutrition, kidney, liver, recurrent infections, other) + 8 general-flag Yes-counts (currently ill, chronic condition, hospitalised, allergy, vision/hearing difficulty, seizures, developmental diagnosis). No other CHH fields (e.g. health rating, fit-for-assessment) are in the approved dashboard analysis — they're exported in the Excel sheet only.
+- **Physical Activity** (`/api/v1/dashboard/physical-activity`, `PhysicalActivityResponse`): PAQ-A instrument completion + Item 1/Item 8/Total score summaries (REDCap-calculated fields `paq_item1_score`/`paq_item8_score`/`paq_total_score`; valid N/missing N/mean/min/max, never treating missing as zero) + a 4-bucket Total score distribution.
+- **Screen Time** (`/api/v1/dashboard/screen-time`, `ScreenTimeResponse`): DSEQ instrument completion + Q10 "Average Total Daily Screen Time" distribution + 3 Yes/No items (Q9 household rules, Q14 school use, Q15 entertainment use). Per-item TV/phone/laptop frequency breakdowns exist in the Excel export but are **not** part of the approved dashboard analysis.
+- **Neurodevelopment** (`/api/v1/dashboard/neurodevelopment`, `NeurodevelopmentResponse`): SSRS Parent/Child/Teacher, each showing "children with any rating item answered", REDCap completion count, and cohort-level mean-of-per-child-means for the frequency and importance rating scales (same per-child derivation as the Excel export's `<Instrument>: Avg Frequency/Importance Rating` columns, aggregated here with no participant identifiers). Explicitly **not** a validated SSRS composite score. SSRS Teacher (0/212 live completions) shows `valid_n=0`/`mean=null` — computed the same way as Parent/Child, not a special-cased placeholder, so it will populate automatically once real Teacher data exists. The individual SSRS Teacher item ratings (`t43_rating`...`t51_rating`) are **not** part of the approved specification and remain unmapped (see `NEURODEVELOPMENT_STATUS` in `live_field_map.py`).
+
+`backend/app/ingestion/live_field_map.py`'s `HEALTH_SCREENING_STATUS`/`PHYSICAL_ACTIVITY_STATUS`/`SCREEN_TIME_STATUS` ledgers were updated to `available=True` for the metrics now actually computed (documentation correctness only — no dashboard calculation changed); `NEURODEVELOPMENT_STATUS` stays `available=False` since t43-t51 were never approved.
+
+Frontend: `HealthScreening.tsx`/`PhysicalActivity.tsx`/`ScreenTime.tsx`/`Neurodevelopment.tsx` now render real `KpiCard`/`ChartCard`/`CategoryBarChart`/`HorizontalBarChart` components (reused from Demographics/Overview — no new chart components were built) instead of the old `EmptyStateCard` (deleted, no longer used anywhere). Every KPI shows valid-N/missing-N or "of registered" context; a null mean renders as "—" with an explicit "No data acquired (0/N)" sublabel, never a fabricated 0.
+
+Tests: `backend/tests/test_module_analytics.py` (unit tests for every shared calculation) + service-level tests in `test_live_dashboard_service.py` + endpoint tests in `test_dashboard_endpoints.py`. Verified against **live REDCap data**: all 4 endpoints and their pages checked directly against the live API (e.g. Health & Screening 20/212 completed, 1 Anaemia + 1 Liver case; PAQ-A total score mean 2.47 over 19/212; DSEQ Q10 distribution across 20/212; SSRS Parent 20/212 with data, SSRS Teacher correctly 0/212 with null mean) — all cross-checking exactly against the earlier Excel export audit numbers. Backend: **105/105 tests pass**. Frontend build succeeds; both light and dark theme confirmed via headless-browser screenshots with zero console errors.
+
+---
+
+## FRONTEND ERROR ISOLATION (2026-08-26)
+
+**Bug fixed:** all 4 assessment-module routes (`/health-screening`, `/physical-activity`, `/screen-time`, `/neurodevelopment`) white-screened. **Root cause:** those pages destructure/`.map()` the new analytics response shape with no defensive checks (e.g. `data.named_conditions.map(...)`); if the API ever returns something else — the immediate trigger was a stale local backend process still serving the old pre-refactor `UnavailableModule` shape (`available`/`reason`/`unavailable_fields`) on port 8000 — the resulting `TypeError` had no React error boundary anywhere in the tree, so it unmounted the entire app (sidebar and all), not just the broken route.
+
+**Shared fix** (not four per-page patches): `frontend/src/components/RouteErrorBoundary.tsx` (new) — a class-based React error boundary wrapping `<Outlet />` in `frontend/src/components/Layout.tsx`, keyed by `location.pathname` so navigating to a different route automatically clears any tripped error state. A crash in any routed page now shows a contained "Module Unavailable" card (reuses the existing `StatusBadge` component; no data is invented) while the sidebar/topbar/theme stay intact — verified by forcing a malformed API response via Playwright route interception: the broken route showed the fallback, the sidebar remained visible, and navigating to a healthy route recovered cleanly. This protects all routes present and future, not just the four assessment modules. Page components themselves (`HealthScreening.tsx` etc.) were **not** modified — their live-REDCap logic is unchanged.
+
+Small CSS addition in `app.css`: `.route-error-card` / `.route-error-message` (styled consistently with `.chart-card`).
+
+If a module route ever shows this fallback again in local dev, first check for a stale/zombie backend process holding port 8000 from a previous `uvicorn --reload` session (visible via `Get-CimInstance Win32_Process -Filter "Name = 'python.exe'"` even when `Get-NetTCPConnection`'s reported owning PID doesn't resolve via `Get-Process` — the reload parent can be a different, harder-to-see PID than its multiprocessing worker child) — kill it and restart a fresh backend before assuming a code regression.
+
 ---
 
 ## LIVE DATA BEHAVIOUR
@@ -368,7 +393,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **82/82 passing** (as of the Excel export refinement pass, 2026-08-26). Frontend `npm run build` succeeds (no frontend changes were needed for either the field-audit expansion or the refinement pass).
+Backend test count: **105/105 passing** (as of the four assessment-module analytics build, 2026-08-26). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes — run the tests.
 

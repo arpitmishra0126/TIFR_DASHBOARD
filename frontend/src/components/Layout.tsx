@@ -14,6 +14,7 @@ import {
   IconProgress,
   IconUsers,
 } from "./icons";
+import RouteErrorBoundary from "./RouteErrorBoundary";
 import Topbar from "./Topbar";
 
 interface NavItem {
@@ -136,7 +137,9 @@ export default function Layout() {
 
       <main className="app-content">
         <Topbar />
-        <Outlet />
+        <RouteErrorBoundary key={location.pathname}>
+          <Outlet />
+        </RouteErrorBoundary>
       </main>
     </div>
   );

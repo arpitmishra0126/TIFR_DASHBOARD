@@ -98,6 +98,74 @@ class DemographicsResponse(BaseModel):
     notes: dict[str, str]
 
 
+# --- Assessment module analytics (Health & Screening / Physical Activity /
+# Screen Time / Neurodevelopment) — approved 2026-08-26 analytical
+# specification. Population = all registered children (same convention as
+# Overview/Demographics/Progress), not just "active" cases. ---
+class InstrumentCompletion(BaseModel):
+    instrument: str
+    completed: int
+    total_registered: int
+    percent: float
+    coverage_tier: str  # "High" | "Partial" | "No Data"
+
+
+class ScoreSummary(BaseModel):
+    """valid_n + missing_n always sum to total; missing is never treated as
+    zero — mean/minimum/maximum are null when there is no data at all."""
+
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    minimum: float | None
+    maximum: float | None
+
+
+class HealthScreeningResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    named_conditions: list[CategoryCount]
+    general_flags: list[CategoryCount]
+    notes: dict[str, str]
+
+
+class PhysicalActivityResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    item1_summary: ScoreSummary
+    item8_summary: ScoreSummary
+    total_summary: ScoreSummary
+    total_score_distribution: list[CategoryCount]
+    notes: dict[str, str]
+
+
+class ScreenTimeResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    total_screen_time_distribution: list[CategoryCount]
+    yes_no_items: list[CategoryCount]
+    notes: dict[str, str]
+
+
+class SSRSInstrumentSummary(BaseModel):
+    instrument: str
+    children_with_any_data: int
+    total_registered: int
+    percent: float
+    completed_count: int
+    avg_frequency_summary: ScoreSummary
+    avg_importance_summary: ScoreSummary
+
+
+class NeurodevelopmentResponse(BaseModel):
+    parent: SSRSInstrumentSummary
+    child: SSRSInstrumentSummary
+    teacher: SSRSInstrumentSummary
+    notes: dict[str, str]
+
+
 # --- Assessment Progress pipeline ---
 class ProgressStage(BaseModel):
     key: str

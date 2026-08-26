@@ -70,33 +70,50 @@ def test_demographics_endpoint_returns_distributions():
     assert body["ses_profile_count"] == 3
 
 
-def test_health_endpoint_reports_instrument_exists_but_unmapped():
+def test_health_endpoint_returns_real_named_conditions_and_completion():
     response = client.get("/api/v1/dashboard/health")
     assert response.status_code == 200
     body = response.json()
-    assert body["available"] is False
-    assert "Child Illness History" in body["reason"]
+    assert body["instrument"] == "Child Illness History"
+    assert body["completion"]["total_registered"] == 6
+    assert body["completion"]["completed"] == 4
+    conditions = {c["code"]: c["count"] for c in body["named_conditions"]}
+    assert conditions["Asthma"] == 1
+    flags = {c["code"]: c["count"] for c in body["general_flags"]}
+    assert flags["Currently ill"] == 0
 
 
-def test_physical_activity_endpoint_reports_instrument_exists_but_unmapped():
+def test_physical_activity_endpoint_returns_real_score_summaries():
     response = client.get("/api/v1/dashboard/physical-activity")
+    assert response.status_code == 200
     body = response.json()
-    assert body["available"] is False
-    assert "PAQ-A" in body["reason"]
+    assert body["instrument"] == "PAQ-A"
+    assert body["total_summary"]["valid_n"] == 1
+    assert body["total_summary"]["missing_n"] == 5
+    assert body["total_summary"]["mean"] == 3.2
 
 
-def test_screen_time_endpoint_reports_instrument_exists_but_unmapped():
+def test_screen_time_endpoint_returns_real_distribution():
     response = client.get("/api/v1/dashboard/screen-time")
+    assert response.status_code == 200
     body = response.json()
-    assert body["available"] is False
-    assert "DSEQ" in body["reason"]
+    assert body["instrument"] == "DSEQ"
+    dist = {c["code"]: c["count"] for c in body["total_screen_time_distribution"]}
+    assert dist == {"30 minutes-1 hour": 1}
+    yes_no = {c["code"]: c["count"] for c in body["yes_no_items"]}
+    assert yes_no["Household has screen-use rules (Q9)"] == 1
 
 
-def test_neurodevelopment_endpoint_reports_instrument_exists_but_unmapped():
+def test_neurodevelopment_endpoint_shows_teacher_with_no_acquired_data():
     response = client.get("/api/v1/dashboard/neurodevelopment")
+    assert response.status_code == 200
     body = response.json()
-    assert body["available"] is False
-    assert "SSRS Teacher" in body["reason"]
+    assert body["parent"]["children_with_any_data"] == 1
+    assert body["parent"]["avg_frequency_summary"]["mean"] == 0.5
+    assert body["child"]["children_with_any_data"] == 1
+    assert body["teacher"]["children_with_any_data"] == 0
+    assert body["teacher"]["avg_frequency_summary"]["valid_n"] == 0
+    assert body["teacher"]["avg_frequency_summary"]["mean"] is None
 
 
 def test_export_active_cases_endpoint_returns_xlsx_with_dated_filename():

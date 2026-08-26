@@ -10,10 +10,13 @@ from fastapi.responses import Response
 from app.api.deps import get_live_dashboard_service
 from app.schemas.dashboard import (
     DemographicsResponse,
+    HealthScreeningResponse,
+    NeurodevelopmentResponse,
     OverviewResponse,
+    PhysicalActivityResponse,
     ProgressResponse,
     RegistryResponse,
-    UnavailableModule,
+    ScreenTimeResponse,
 )
 from app.services.export_service import export_filename
 from app.services.live_dashboard_service import LiveDashboardService
@@ -56,24 +59,36 @@ async def get_demographics(
     return await service.get_demographics(force=refresh)
 
 
-@router.get("/health", response_model=UnavailableModule)
-async def get_health_screening() -> UnavailableModule:
-    return LiveDashboardService.get_health_screening_status()
+@router.get("/health", response_model=HealthScreeningResponse)
+async def get_health_screening(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> HealthScreeningResponse:
+    return await service.get_health_screening(force=refresh)
 
 
-@router.get("/physical-activity", response_model=UnavailableModule)
-async def get_physical_activity() -> UnavailableModule:
-    return LiveDashboardService.get_physical_activity_status()
+@router.get("/physical-activity", response_model=PhysicalActivityResponse)
+async def get_physical_activity(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> PhysicalActivityResponse:
+    return await service.get_physical_activity(force=refresh)
 
 
-@router.get("/screen-time", response_model=UnavailableModule)
-async def get_screen_time() -> UnavailableModule:
-    return LiveDashboardService.get_screen_time_status()
+@router.get("/screen-time", response_model=ScreenTimeResponse)
+async def get_screen_time(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> ScreenTimeResponse:
+    return await service.get_screen_time(force=refresh)
 
 
-@router.get("/neurodevelopment", response_model=UnavailableModule)
-async def get_neurodevelopment() -> UnavailableModule:
-    return LiveDashboardService.get_neurodevelopment_status()
+@router.get("/neurodevelopment", response_model=NeurodevelopmentResponse)
+async def get_neurodevelopment(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> NeurodevelopmentResponse:
+    return await service.get_neurodevelopment(force=refresh)
 
 
 @router.get("/export/active-cases")

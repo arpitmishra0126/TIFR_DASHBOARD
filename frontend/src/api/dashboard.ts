@@ -1,10 +1,13 @@
 import { apiDownload, apiGet, withRefresh } from "./client";
 import type {
   DemographicsResponse,
+  HealthScreeningResponse,
+  NeurodevelopmentResponse,
   OverviewResponse,
+  PhysicalActivityResponse,
   ProgressResponse,
   RegistryResponse,
-  UnavailableModule,
+  ScreenTimeResponse,
 } from "../types/liveDashboard";
 
 export function getOverview(opts?: { force?: boolean }): Promise<OverviewResponse> {
@@ -34,20 +37,20 @@ export function getDemographics(opts?: { force?: boolean }): Promise<Demographic
   return apiGet<DemographicsResponse>(withRefresh("/dashboard/demographics", opts?.force));
 }
 
-export function getHealthScreening(): Promise<UnavailableModule> {
-  return apiGet<UnavailableModule>("/dashboard/health");
+export function getHealthScreening(opts?: { force?: boolean }): Promise<HealthScreeningResponse> {
+  return apiGet<HealthScreeningResponse>(withRefresh("/dashboard/health", opts?.force));
 }
 
-export function getPhysicalActivity(): Promise<UnavailableModule> {
-  return apiGet<UnavailableModule>("/dashboard/physical-activity");
+export function getPhysicalActivity(opts?: { force?: boolean }): Promise<PhysicalActivityResponse> {
+  return apiGet<PhysicalActivityResponse>(withRefresh("/dashboard/physical-activity", opts?.force));
 }
 
-export function getScreenTime(): Promise<UnavailableModule> {
-  return apiGet<UnavailableModule>("/dashboard/screen-time");
+export function getScreenTime(opts?: { force?: boolean }): Promise<ScreenTimeResponse> {
+  return apiGet<ScreenTimeResponse>(withRefresh("/dashboard/screen-time", opts?.force));
 }
 
-export function getNeurodevelopment(): Promise<UnavailableModule> {
-  return apiGet<UnavailableModule>("/dashboard/neurodevelopment");
+export function getNeurodevelopment(opts?: { force?: boolean }): Promise<NeurodevelopmentResponse> {
+  return apiGet<NeurodevelopmentResponse>(withRefresh("/dashboard/neurodevelopment", opts?.force));
 }
 
 export function getProgress(opts?: { force?: boolean }): Promise<ProgressResponse> {

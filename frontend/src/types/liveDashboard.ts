@@ -89,6 +89,70 @@ export interface DemographicsResponse {
   notes: Record<string, string>;
 }
 
+// --- Assessment module analytics (Health & Screening / Physical Activity /
+// Screen Time / Neurodevelopment) — approved 2026-08-26 analytical
+// specification. Population = all registered children. ---
+export interface InstrumentCompletion {
+  instrument: string;
+  completed: number;
+  total_registered: number;
+  percent: number;
+  coverage_tier: "High" | "Partial" | "No Data";
+}
+
+export interface ScoreSummary {
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface HealthScreeningResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  named_conditions: CategoryCount[];
+  general_flags: CategoryCount[];
+  notes: Record<string, string>;
+}
+
+export interface PhysicalActivityResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  item1_summary: ScoreSummary;
+  item8_summary: ScoreSummary;
+  total_summary: ScoreSummary;
+  total_score_distribution: CategoryCount[];
+  notes: Record<string, string>;
+}
+
+export interface ScreenTimeResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  total_screen_time_distribution: CategoryCount[];
+  yes_no_items: CategoryCount[];
+  notes: Record<string, string>;
+}
+
+export interface SSRSInstrumentSummary {
+  instrument: string;
+  children_with_any_data: number;
+  total_registered: number;
+  percent: number;
+  completed_count: number;
+  avg_frequency_summary: ScoreSummary;
+  avg_importance_summary: ScoreSummary;
+}
+
+export interface NeurodevelopmentResponse {
+  parent: SSRSInstrumentSummary;
+  child: SSRSInstrumentSummary;
+  teacher: SSRSInstrumentSummary;
+  notes: Record<string, string>;
+}
+
 export interface ProgressStage {
   key: string;
   label: string;

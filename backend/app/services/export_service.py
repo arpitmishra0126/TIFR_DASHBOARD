@@ -43,6 +43,21 @@ from app.ingestion.live_field_map import (
 )
 from app.ingestion.normalize import parse_complete_flag, parse_date, parse_float, parse_int
 from app.schemas.dashboard import RegistryChild
+from app.services.module_analytics import (
+    CHH_GENERAL_FLAGS,
+    CHH_NAMED_CONDITIONS,
+    DSEQ_YES_NO_ITEMS,
+    INCOME_BUCKET_EDGES,
+    INCOME_BUCKET_LABELS,
+    PAQA_SCORE_BUCKET_EDGES,
+    PAQA_SCORE_BUCKET_LABELS,
+)
+from app.services.module_analytics import bucket_counts as _bucket_counts
+from app.services.module_analytics import category_counts as _category_counts
+from app.services.module_analytics import complete_count as _complete_count
+from app.services.module_analytics import numeric_values as _numeric_values
+from app.services.module_analytics import resolve_value as _resolve_value
+from app.services.module_analytics import yes_count as _yes_count
 
 # All 8 non-registration instruments in PID 196, in newsletter order.
 ASSESSMENT_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
@@ -74,20 +89,6 @@ def _is_active(child: RegistryChild) -> bool:
     """
     status = (child.child_status or "").strip().lower()
     return status != "dead"
-
-
-def _resolve_value(field_name: str, raw_value: str | None, choice_maps: dict[str, ChoiceMap]) -> str:
-    """Resolve a coded (radio/dropdown) value to its REDCap choice label, or
-    pass a plain text/calc field's value through unchanged. Never invents a
-    value: blank/missing input returns "", and a code with no matching
-    choice label falls back to the raw code rather than guessing.
-    """
-    if raw_value is None or raw_value.strip() == "":
-        return ""
-    field_choices = choice_maps.get(field_name)
-    if field_choices is not None:
-        return field_choices.get(raw_value, raw_value.strip())
-    return raw_value.strip()
 
 
 class FieldSpec(NamedTuple):
@@ -706,24 +707,6 @@ def _village_counts(children: list[RegistryChild]) -> list[tuple[str, int]]:
     return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
-def _category_counts(active_records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> list[tuple[str, int]]:
-    counts = Counter()
-    for record in active_records:
-        value = _resolve_value(field, record.get(field), choice_maps)
-        if value:
-            counts[value] += 1
-    return sorted(counts.items(), key=lambda kv: (-kv[1], str(kv[0])))
-
-
-def _numeric_values(active_records: list[dict], field: str, parse: Callable[[str | None], float | int | None]) -> list[float]:
-    values = []
-    for record in active_records:
-        value = parse(record.get(field))
-        if value is not None:
-            values.append(value)
-    return values
-
-
 def _numeric_summary_line(label: str, values: list[float], total: int) -> str:
     if not values:
         return f"{label}: No data acquired (0/{total})."
@@ -731,28 +714,6 @@ def _numeric_summary_line(label: str, values: list[float], total: int) -> str:
         f"{label}: n={len(values)}/{total} acquired ({_percent(len(values), total)}), "
         f"mean={round(mean(values), 1)}, min={min(values)}, max={max(values)}"
     )
-
-
-def _bucket_counts(values: list[float], edges: list[float], labels: list[str]) -> list[tuple[str, int]]:
-    counts = [0] * len(labels)
-    for value in values:
-        placed = False
-        for i, edge in enumerate(edges):
-            if value < edge:
-                counts[i] += 1
-                placed = True
-                break
-        if not placed:
-            counts[-1] += 1
-    return list(zip(labels, counts))
-
-
-def _yes_count(active_records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> int:
-    return sum(1 for r in active_records if _resolve_value(field, r.get(field), choice_maps).strip().lower() == "yes")
-
-
-def _complete_count(active_records: list[dict], field: str) -> int:
-    return sum(1 for r in active_records if parse_complete_flag(r.get(field)))
 
 
 def _percent(numerator: int, denominator: int) -> str:
@@ -866,9 +827,7 @@ def _build_summary_sheet(
     _add_bar_chart(sheet, next_chart_anchor(), "BG Prasad Category Distribution", hdr, first, last)
 
     per_capita_values = _numeric_values(active_records, "scr_pci", parse_float)
-    income_buckets = _bucket_counts(per_capita_values, [1000, 2000, 3000, 4000, 5000], [
-        "< 1,000", "1,000-1,999", "2,000-2,999", "3,000-3,999", "4,000-4,999", "5,000+",
-    ])
+    income_buckets = _bucket_counts(per_capita_values, INCOME_BUCKET_EDGES, INCOME_BUCKET_LABELS)
     row, hdr, first, last = _write_table(sheet, row, "Monthly Income — Per Capita Income Distribution (INR)", ["Range", "Count"], income_buckets)
     monthly_income_values = _numeric_values(active_records, "scr_bg_income", parse_float)
     row = _write_coverage_note(sheet, row, _numeric_summary_line("Per capita income", per_capita_values, total_active))
@@ -943,34 +902,15 @@ def _build_summary_sheet(
         _category_counts(active_records, "q10_total_screen_time", choice_maps),
     )
     _add_bar_chart(sheet, next_chart_anchor(), "DSEQ: Total Daily Screen Time", hdr, first, last)
-    dseq_yn_rows = [
-        ("Household has screen-use rules (Q9)", _yes_count(active_records, "q9_household_rules", choice_maps)),
-        ("Uses screens for school/homework (Q14)", _yes_count(active_records, "q14_school_use", choice_maps)),
-        ("Uses screens mainly for entertainment (Q15)", _yes_count(active_records, "q15_entertainment_use", choice_maps)),
-    ]
+    dseq_yn_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in DSEQ_YES_NO_ITEMS]
     row, _, _, _ = _write_table(sheet, row, "DSEQ — Selected Yes/No Items (of Active)", ["Item", "Yes Count"], dseq_yn_rows)
 
     # --- Child Illness History ---
-    chh_conditions = (
-        ("chh_q8_asthma", "Asthma"), ("chh_q8_heart", "Heart Disease"), ("chh_q8_tb", "TB"),
-        ("chh_q8_diabetes", "Diabetes"), ("chh_q8_thyroid", "Thyroid"), ("chh_q8_anaemia", "Anaemia"),
-        ("chh_q8_malnutrition", "Malnutrition"), ("chh_q8_kidney", "Kidney"), ("chh_q8_liver", "Liver"),
-        ("chh_q8_infections", "Recurrent Infections"), ("chh_q8_other", "Other"),
-    )
-    condition_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in chh_conditions]
+    condition_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in CHH_NAMED_CONDITIONS]
     row, hdr, first, last = _write_table(sheet, row, "Child Illness History — Named Conditions (Yes counts)", ["Condition", "Yes Count"], condition_rows)
     _add_bar_chart(sheet, next_chart_anchor(), "CHH: Named Conditions (Yes)", hdr, first, last)
 
-    chh_general_rows = [
-        ("Currently ill", _yes_count(active_records, "chh_illness_current", choice_maps)),
-        ("Chronic condition", _yes_count(active_records, "chh_chronic_condition", choice_maps)),
-        ("Ever hospitalised", _yes_count(active_records, "chh_hospitalised", choice_maps)),
-        ("Known allergy", _yes_count(active_records, "chh_allergy", choice_maps)),
-        ("Vision difficulty", _yes_count(active_records, "chh_vision_difficulty", choice_maps)),
-        ("Hearing difficulty", _yes_count(active_records, "chh_hearing_difficulty", choice_maps)),
-        ("Seizures/fits", _yes_count(active_records, "chh_seizures", choice_maps)),
-        ("Developmental diagnosis", _yes_count(active_records, "chh_dev_diagnosis", choice_maps)),
-    ]
+    chh_general_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in CHH_GENERAL_FLAGS]
     row, _, _, _ = _write_table(sheet, row, "Child Illness History — General Flags (Yes counts, of Active)", ["Flag", "Yes Count"], chh_general_rows)
 
     # --- PAQ-A ---
@@ -981,7 +921,7 @@ def _build_summary_sheet(
     row = _write_coverage_note(sheet, row, _numeric_summary_line("PAQ-A Item 8 score", item8, total_active))
     row = _write_coverage_note(sheet, row, _numeric_summary_line("PAQ-A Total score", total_scores, total_active))
     row += 1
-    paqa_buckets = _bucket_counts(total_scores, [2, 3, 4], ["1.0-1.99 (Low)", "2.0-2.99", "3.0-3.99", "4.0-5.0 (High)"])
+    paqa_buckets = _bucket_counts(total_scores, PAQA_SCORE_BUCKET_EDGES, PAQA_SCORE_BUCKET_LABELS)
     row, hdr, first, last = _write_table(sheet, row, "PAQ-A Total Score Distribution", ["Range", "Count"], paqa_buckets)
     _add_bar_chart(sheet, next_chart_anchor(), "PAQ-A Total Score Distribution", hdr, first, last)
 

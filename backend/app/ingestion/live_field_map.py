@@ -9,10 +9,16 @@ Intake, SSRS Parent, SSRS Child, SSRS Teacher.
 
 Resolution rule applied below: a live field is mapped to an approved V1
 metric ONLY when it measures the same underlying construct, not merely a
-similarly-labelled field. This app currently maps field-level content for
-Registration and the SES questionnaire only; the other 6 instruments exist
-in the project but their per-field content has not yet been mapped into
-this dashboard — only their instrument-level completion status is used
+similarly-labelled field. As of 2026-08-26, field-level content is mapped
+into the dashboard for Registration, SES, Child Illness History (Health &
+Screening), PAQ-A (Physical Activity), and DSEQ (Screen Time) — following
+the approved Active Cases Excel analytical specification (see
+app.services.module_analytics). SSRS Parent/Child/Teacher contribute
+items-answered/mean-rating summaries to Neurodevelopment (not the
+individual t43-t51 teacher ratings, which remain unmapped — see
+NEURODEVELOPMENT_STATUS). Dietary Intake's per-field content is exported
+in the Active Cases sheet but has no dedicated dashboard module.
+Instrument-level completion status for all instruments is used throughout
 (see PROGRESSION_STATUS and the Assessment Progress module).
 """
 from dataclasses import dataclass
@@ -77,61 +83,65 @@ SES_STATUS: tuple[LiveFieldStatus, ...] = (
     ),
 )
 
-# --- Instruments that exist in PID 196 but whose per-field content is not yet
-#     mapped into this dashboard. Their instrument-level completion status IS
-#     used (see PROGRESSION_STATUS) — this section covers the still-unbuilt
-#     detailed-metric modules only. ---
+# --- Assessment module analytics (approved 2026-08-26 as the V1 analytical
+#     specification — see app.services.module_analytics and the Active Cases
+#     Excel export's "DOMAIN ANALYSIS" section, which uses the exact same
+#     field lists and calculations as these four dashboard modules). ---
 HEALTH_SCREENING_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
-        "Health & Screening", "current_illness_flag", False, None, None,
-        "The 'Child Illness History' instrument exists in this project, but its "
-        "field-level content has not yet been mapped into this dashboard module. "
-        "Only its instrument-completion status is currently used (Assessment Progress).",
+        "Health & Screening", "current_illness_flag", True, "chh_illness_current", "child_illness_history",
+        "Approved 2026-08-26 as part of the Child Illness History 'general flags' analysis.",
     ),
-    LiveFieldStatus("Health & Screening", "chronic_condition_flag", False, None, None, "See current_illness_flag note."),
-    LiveFieldStatus("Health & Screening", "neurodev_condition_flag", False, None, None, "See current_illness_flag note."),
-    LiveFieldStatus("Health & Screening", "hospitalisation_flag", False, None, None, "See current_illness_flag note."),
-    LiveFieldStatus("Health & Screening", "assessment_eligibility_decision", False, None, None, "See current_illness_flag note."),
+    LiveFieldStatus("Health & Screening", "chronic_condition_flag", True, "chh_chronic_condition", "child_illness_history"),
+    LiveFieldStatus("Health & Screening", "neurodev_condition_flag", True, "chh_dev_diagnosis", "child_illness_history"),
+    LiveFieldStatus("Health & Screening", "hospitalisation_flag", True, "chh_hospitalised", "child_illness_history"),
+    LiveFieldStatus(
+        "Health & Screening", "assessment_eligibility_decision", False, None, None,
+        "chh_fit_for_assessment/chh_assessor_decision exist and are exported in the Active Cases sheet, but "
+        "were not included in the approved Summary/dashboard analysis — only the 11 named conditions and 8 "
+        "general flags were approved for aggregate display.",
+    ),
 )
 
 PHYSICAL_ACTIVITY_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
-        "Physical Activity", "item1_composite_score", False, None, None,
-        "The PAQ-A instrument exists in this project, but its field-level content "
-        "has not yet been mapped into this dashboard module. Only its instrument-"
-        "completion status is currently used (Assessment Progress).",
+        "Physical Activity", "item1_composite_score", True, "paq_item1_score", "paq_a",
+        "REDCap-calculated field; approved 2026-08-26.",
     ),
-    LiveFieldStatus("Physical Activity", "item8_composite_score", False, None, None, "See item1_composite_score note."),
-    LiveFieldStatus("Physical Activity", "paqa_final_score", False, None, None, "See item1_composite_score note."),
+    LiveFieldStatus("Physical Activity", "item8_composite_score", True, "paq_item8_score", "paq_a"),
+    LiveFieldStatus("Physical Activity", "paqa_final_score", True, "paq_total_score", "paq_a"),
 )
 
 SCREEN_TIME_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
-        "Screen Time", "total_daily_screen_time", False, None, None,
-        "The Digital-Screen Exposure Questionnaire (DSEQ) instrument exists in this "
-        "project, but its field-level content has not yet been mapped into this "
-        "dashboard module. Only its instrument-completion status is currently used "
-        "(Assessment Progress).",
+        "Screen Time", "total_daily_screen_time", True, "q10_total_screen_time", "dseq",
+        "Approved 2026-08-26 distribution + 3 Yes/No items (Q9/Q14/Q15).",
     ),
-    LiveFieldStatus("Screen Time", "tv_frequency", False, None, None, "See total_daily_screen_time note."),
-    LiveFieldStatus("Screen Time", "smartphone_frequency", False, None, None, "See total_daily_screen_time note."),
-    LiveFieldStatus("Screen Time", "laptop_frequency", False, None, None, "See total_daily_screen_time note."),
-    LiveFieldStatus("Screen Time", "educational_use_flag", False, None, None, "See total_daily_screen_time note."),
-    LiveFieldStatus("Screen Time", "entertainment_use_flag", False, None, None, "See total_daily_screen_time note."),
+    LiveFieldStatus(
+        "Screen Time", "tv_frequency", False, "q1_tv_freq", "dseq",
+        "Field is mapped and exported in the Active Cases sheet, but per-item TV/phone/laptop frequency "
+        "distributions were not included in the approved Summary/dashboard analysis (only Q10 total screen "
+        "time + the 3 Yes/No items were).",
+    ),
+    LiveFieldStatus("Screen Time", "smartphone_frequency", False, "q4_phone_freq", "dseq", "See tv_frequency note."),
+    LiveFieldStatus("Screen Time", "laptop_frequency", False, "q7_laptop_freq", "dseq", "See tv_frequency note."),
+    LiveFieldStatus("Screen Time", "educational_use_flag", True, "q14_school_use", "dseq", "Approved 2026-08-26 (Q14 Yes/No item)."),
+    LiveFieldStatus("Screen Time", "entertainment_use_flag", True, "q15_entertainment_use", "dseq", "Approved 2026-08-26 (Q15 Yes/No item)."),
 )
 
 NEURODEVELOPMENT_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
-        "Neurodevelopment", "teacher_academic_performance", False, None, None,
-        "The SSRS Teacher instrument exists in this project, but its field-level "
-        "content has not yet been mapped into this dashboard module. Only its "
-        "instrument-completion status is currently used (Assessment Progress).",
+        "Neurodevelopment", "teacher_academic_performance", False, "t43_rating", "ssrs_teacher",
+        "t43_rating exists in REDCap but is NOT part of the approved analytical specification — the approved "
+        "Neurodevelopment analysis uses SSRS Parent/Child/Teacher items-answered counts and mean "
+        "frequency/importance ratings (p*/c*/t*_freq and _imp fields) instead of the individual t43-t51 "
+        "teacher ratings. SSRS Teacher also has 0/live completions today regardless.",
     ),
-    LiveFieldStatus("Neurodevelopment", "teacher_reading_ability", False, None, None, "See teacher_academic_performance note."),
-    LiveFieldStatus("Neurodevelopment", "teacher_math_ability", False, None, None, "See teacher_academic_performance note."),
-    LiveFieldStatus("Neurodevelopment", "teacher_academic_motivation", False, None, None, "See teacher_academic_performance note."),
-    LiveFieldStatus("Neurodevelopment", "teacher_learning_ability", False, None, None, "See teacher_academic_performance note."),
-    LiveFieldStatus("Neurodevelopment", "teacher_classroom_behaviour", False, None, None, "See teacher_academic_performance note."),
+    LiveFieldStatus("Neurodevelopment", "teacher_reading_ability", False, "t44_rating", "ssrs_teacher", "See teacher_academic_performance note."),
+    LiveFieldStatus("Neurodevelopment", "teacher_math_ability", False, "t45_rating", "ssrs_teacher", "See teacher_academic_performance note."),
+    LiveFieldStatus("Neurodevelopment", "teacher_academic_motivation", False, "t48_rating", "ssrs_teacher", "See teacher_academic_performance note."),
+    LiveFieldStatus("Neurodevelopment", "teacher_learning_ability", False, "t50_rating", "ssrs_teacher", "See teacher_academic_performance note."),
+    LiveFieldStatus("Neurodevelopment", "teacher_classroom_behaviour", False, "t51_rating", "ssrs_teacher", "See teacher_academic_performance note."),
 )
 
 # --- Assessment Progress / Pipeline ---

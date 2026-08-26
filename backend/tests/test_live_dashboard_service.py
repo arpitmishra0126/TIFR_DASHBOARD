@@ -206,18 +206,50 @@ async def test_demographics_numeric_summaries_exclude_blanks(service: LiveDashbo
     assert result.ses_profile_count == 3
 
 
-# --- Unavailable-module helpers ---
+# --- Assessment module analytics (approved 2026-08-26) ---
 
 
-def test_unavailable_module_helpers_reference_pid196_instruments_not_missing_ones():
-    health = LiveDashboardService.get_health_screening_status()
-    assert "Child Illness History instrument exists" in health.reason
+@pytest.mark.asyncio
+async def test_health_screening_reports_real_completion_and_conditions(service: LiveDashboardService):
+    result = await service.get_health_screening()
+    assert result.instrument == "Child Illness History"
+    assert result.completion.total_registered == 6
+    assert result.completion.completed == 4
+    assert result.completion.coverage_tier == "High"
+    conditions = {c.code: c.count for c in result.named_conditions}
+    assert conditions["Asthma"] == 1
 
-    pa = LiveDashboardService.get_physical_activity_status()
-    assert "PAQ-A instrument exists" in pa.reason
 
-    st = LiveDashboardService.get_screen_time_status()
-    assert "DSEQ" in st.reason and "instrument exists" in st.reason
+@pytest.mark.asyncio
+async def test_physical_activity_reports_real_score_summaries(service: LiveDashboardService):
+    result = await service.get_physical_activity()
+    assert result.instrument == "PAQ-A"
+    assert result.total_summary.valid_n == 1
+    assert result.total_summary.missing_n == 5
+    assert result.total_summary.mean == 3.2
+    # Missing is never treated as zero — item1 has 1 valid + 5 missing, not a mean of 0.
+    assert result.item1_summary.valid_n == 1
+    assert result.item1_summary.missing_n == 5
+    assert result.item1_summary.mean == 2.5
 
-    nd = LiveDashboardService.get_neurodevelopment_status()
-    assert "SSRS Teacher instrument exists" in nd.reason
+
+@pytest.mark.asyncio
+async def test_screen_time_reports_real_distribution_and_yes_no_items(service: LiveDashboardService):
+    result = await service.get_screen_time()
+    assert result.instrument == "DSEQ"
+    dist = {c.code: c.count for c in result.total_screen_time_distribution}
+    assert dist == {"30 minutes-1 hour": 1}
+    yes_no = {c.code: c.count for c in result.yes_no_items}
+    assert yes_no["Household has screen-use rules (Q9)"] == 1
+    assert yes_no["Uses screens for school/homework (Q14)"] == 0
+
+
+@pytest.mark.asyncio
+async def test_neurodevelopment_reports_ssrs_summaries_with_teacher_unmapped_data(service: LiveDashboardService):
+    result = await service.get_neurodevelopment()
+    assert result.parent.children_with_any_data == 1
+    assert result.parent.avg_frequency_summary.mean == 0.5
+    assert result.child.children_with_any_data == 1
+    assert result.teacher.children_with_any_data == 0
+    assert result.teacher.avg_frequency_summary.valid_n == 0
+    assert result.teacher.avg_frequency_summary.mean is None
