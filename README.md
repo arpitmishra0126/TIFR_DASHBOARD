@@ -1,25 +1,26 @@
 # ICMR Neurodevelopment Dashboard — V1
 
-Dashboard for the ICMR Neurodevelopment study. REDCap is the production
-source of truth; this application consumes REDCap data through the REDCap
-API, normalizes it into PostgreSQL, and serves it to a React dashboard.
+Live dashboard for the ICMR Neurodevelopment study. REDCap is the production
+source of truth; this application reads directly from the REDCap API,
+normalizes/aggregates in memory, and serves it to a React dashboard.
 
 ```
-REDCap → REDCap API → ingestion/normalization → PostgreSQL → FastAPI → React UI
+REDCap → REDCap API → FastAPI (in-memory normalization/aggregation) → React UI
 ```
 
-PostgreSQL is the application's normalized data/cache layer, not a
-replacement for REDCap.
+There is **no database**. No PostgreSQL, SQLite, or ORM persistence layer is
+used anywhere in this project — see `CLAUDE.md` for the authoritative
+architecture rule.
 
 ## Current status
 
-This is the **V1 technical foundation**: project structure, backend/frontend
-scaffolding, database models, dashboard-facing schemas, API routes, and the
-REDCap integration boundary. It is **not yet connected to REDCap** —
-`REDCAP_API_URL` / `REDCAP_API_TOKEN` / `REDCAP_PROJECT_ID` are unset, and no
-REDCap data has been ingested. No mock data has been created anywhere in the
-codebase; all list endpoints will return empty results until real data is
-ingested.
+The application is connected to **live REDCap data** (project: ICMR
+Neurodevelopment Study). `REDCAP_API_URL` / `REDCAP_API_TOKEN` must be
+supplied via environment variables (see `.env.example`); the app does not
+start meaningfully without them. No mock/fabricated data is used anywhere in
+the codebase. See `CLAUDE.md` for full current architecture, module, and
+export-feature documentation — it is the living source of truth for this
+project.
 
 ## V1 scope
 
@@ -43,16 +44,13 @@ data/                       # reference files only — read-only, not a data sou
 backend/
   app/
     config.py                # environment-based settings
-    database.py               # SQLAlchemy engine/session, Base
-    models/                   # SQLAlchemy ORM models, one file per module
     schemas/                  # dashboard-facing Pydantic response schemas
     api/routes/                # FastAPI routers, one file per module + health
-    services/                  # data/service layer between routes and models
-    redcap/                    # REDCap API client, exceptions, response models
-    ingestion/                  # normalization helpers + REDCap field-label map
+    services/                  # data/service layer (live REDCap aggregation, export)
+    redcap/                    # REDCap API client, live repository/cache, exceptions
+    ingestion/                  # normalization helpers + live REDCap field map
     core/                       # logging setup
     main.py                     # FastAPI app entrypoint
-  scripts/init_db.py            # creates tables from SQLAlchemy metadata
   tests/                        # pytest suite
   requirements.txt
   .env.example
@@ -61,22 +59,22 @@ frontend/
     routes/                    # one page per dashboard module
     components/                 # Layout/nav
     api/client.ts                # typed fetch wrapper
-    types/dashboard.ts            # TS types mirroring backend schemas
+    types/                       # TS types mirroring backend schemas
   package.json
   .env.example
+render.yaml                  # Render deployment blueprint (backend + frontend)
 ```
 
 ## Backend — setup & run
 
-Requires Python 3.11+ (developed against 3.14) and PostgreSQL.
+Requires Python 3.11+ (developed against 3.14). No database required.
 
 ```bash
 cd backend
 python -m venv .venv
 ./.venv/Scripts/activate        # Windows; use `source .venv/bin/activate` on macOS/Linux
 pip install -r requirements.txt
-cp .env.example .env            # then edit DATABASE_URL; leave REDCAP_* blank for now
-python -m scripts.init_db       # creates tables in PostgreSQL (requires a running instance)
+cp .env.example .env            # then set REDCAP_API_URL / REDCAP_API_TOKEN
 uvicorn app.main:app --reload
 ```
 
@@ -90,8 +88,7 @@ cd backend
 ./.venv/Scripts/python.exe -m pytest -v
 ```
 
-Model/schema tests run against an in-memory SQLite database, so they don't
-require PostgreSQL to be running. 14 tests currently pass.
+105 tests currently pass. No database is required to run the suite.
 
 ## Frontend — setup & run
 
@@ -109,24 +106,17 @@ App: http://localhost:5173
 `npm run build` runs the TypeScript project build followed by the Vite
 production build.
 
-## REDCap integration — what's built vs. what's blocked
+## REDCap integration
 
-Built: `app/redcap/client.py` (authenticated, retrying REDCap API client for
-record + metadata export), `app/redcap/exceptions.py`, and
-`app/ingestion/field_map.py` + `app/ingestion/normalize.py` (the V1 field
-contract and pure transform helpers).
+The application connects live to REDCap project **196 (ICMR Neurodevelopment
+Study)** via `app/redcap/client.py` + `app/redcap/live_repository.py` (a
+30-second in-memory cache over record/metadata export). Requires
+`REDCAP_API_URL` and `REDCAP_API_TOKEN`; `REDCAP_PROJECT_ID` is optional
+bookkeeping only. See `CLAUDE.md` for the full field-mapping/instrument
+documentation.
 
-Blocked until credentials are supplied:
+## Deployment
 
-- `REDCAP_API_URL`, `REDCAP_API_TOKEN`, `REDCAP_PROJECT_ID`
-- The REDCap **Data Dictionary** (metadata) export — the only REDCap export
-  available so far is a DATA_LABELS export, which has no real REDCap
-  variable names, only question-label text. `app/ingestion/field_map.py`
-  documents this limitation directly; the field map must be re-keyed to real
-  variable names once the Data Dictionary is available.
-- Confirmation of whether the Parent-report / Child self-report / Teacher
-  Social Skills instruments are repeating instruments or separate events in
-  the live REDCap project.
-
-No live REDCap connection is made anywhere in the codebase, and no REDCap or
-dashboard data has been fabricated.
+See `render.yaml` for the Render blueprint (backend Web Service + frontend
+Static Site). Required environment variables and deployment steps are
+documented in `CLAUDE.md`.

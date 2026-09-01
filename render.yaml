@@ -1,0 +1,34 @@
+services:
+  # FastAPI backend — REDCap API -> in-memory processing -> JSON. No database.
+  - type: web
+    name: icmr-dashboard-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CORS_ALLOW_ORIGINS
+        sync: false # set to the deployed frontend URL (comma-separated to also allow localhost:5173)
+      - key: REDCAP_API_URL
+        sync: false # enter manually in Render dashboard — never commit
+      - key: REDCAP_API_TOKEN
+        sync: false # enter manually in Render dashboard — never commit
+
+  # React/Vite frontend — static build served by Render, talks to the backend above.
+  - type: web
+    name: icmr-dashboard-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # set to https://<backend-service>.onrender.com/api/v1
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

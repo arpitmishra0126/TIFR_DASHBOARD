@@ -30,6 +30,59 @@ Do not hardcode credentials or participant data.
 
 ---
 
+## DEPLOYMENT (Render) — PREPARED 2026-09-01, NOT YET DEPLOYED
+
+`render.yaml` (repo root) defines two Render services matching the existing
+architecture exactly — no database service, no new backend logic:
+
+- **`icmr-dashboard-backend`** — Web Service, `env: python`, `rootDir: backend`.
+  Build: `pip install -r requirements.txt`. Start:
+  `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (existing entrypoint,
+  unmodified). Env vars `REDCAP_API_URL`, `REDCAP_API_TOKEN`,
+  `CORS_ALLOW_ORIGINS` are `sync: false` (must be entered manually in the
+  Render dashboard — never committed); `ENVIRONMENT=production` and
+  `LOG_LEVEL=INFO` are set inline (non-secret).
+- **`icmr-dashboard-frontend`** — Static Site, `env: static`,
+  `rootDir: frontend`. Build: `npm install && npm run build`. Publish:
+  `./dist`. Env var `VITE_API_BASE_URL` (`sync: false`, manual) must be set to
+  `https://<backend-service>.onrender.com/api/v1`. A catch-all rewrite
+  (`/* -> /index.html`) is configured so direct navigation/refresh on any
+  client-side route (e.g. `/registry`, `/health-screening`) doesn't 404 —
+  required because `frontend/src/main.tsx` uses React Router's `BrowserRouter`.
+
+No application code changed to support this — `frontend/src/api/client.ts`
+already reads `import.meta.env.VITE_API_BASE_URL` (falling back to
+`http://localhost:8000/api/v1` only for local dev, never committed as a prod
+value), and `backend/app/config.py` already supports multiple comma-separated
+CORS origins via `CORS_ALLOW_ORIGINS`, so both localhost and the deployed
+Render frontend URL can be allowed simultaneously.
+
+`backend/.env.example` was cleaned up: removed a stale, unused
+`DATABASE_URL` line left over from the pre-REDCap V1 scaffold (never read by
+any current code — `app/config.py` has no such field); this was a
+documentation fix only, not a behavior change. `README.md` was also
+corrected to match this section (it previously described the obsolete
+PostgreSQL-based V1 architecture).
+
+Actual current routes (for reference — task briefs sometimes list slightly
+different paths): `/`, `/registry`, `/demographics`, `/health-screening`,
+`/physical-activity`, `/screen-time`, `/neurodevelopment`, `/progress` — all
+under `frontend/src/App.tsx`.
+
+Verified before this config was written (2026-09-01): backend 105/105 tests
+pass; frontend `npm run build` succeeds; a temporary local backend instance
+confirmed live REDCap data on `/health`, `/overview`, `/registry`, all four
+assessment-module endpoints, and both export endpoints (200 OK, real live
+counts e.g. core assessment battery 32/212 at time of check — expected to
+keep changing as REDCap data grows). No `.env` files are tracked in git
+(confirmed via `git ls-files`); only `.env.example` is tracked.
+
+Deployment itself (clicking deploy, entering secrets into Render) was
+intentionally NOT performed — prepared for manual review/execution by the
+user.
+
+---
+
 ## CORRECT REDCAP PROJECT
 
 Project:
