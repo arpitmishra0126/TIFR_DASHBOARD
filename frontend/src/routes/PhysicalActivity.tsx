@@ -3,16 +3,16 @@ import { useEffect, useState } from "react";
 import { getPhysicalActivity } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
-import { IconActivity } from "../components/icons";
-import KpiCard, { type KpiTone } from "../components/KpiCard";
+import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StatusBadge from "../components/StatusBadge";
 import { useRefresh } from "../context/RefreshContext";
 import type { PhysicalActivityResponse, ScoreSummary } from "../types/liveDashboard";
 
-const TIER_TONE: Record<string, KpiTone> = {
-  High: "aqua",
-  Partial: "amber",
+const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
+  High: "good",
+  Partial: "warning",
   "No Data": "neutral",
 };
 
@@ -51,14 +51,15 @@ export default function PhysicalActivity() {
         subtitle="Physical Activity Questionnaire for Adolescents — live REDCap instrument."
       />
 
+      <div className="module-status-line">
+        <StatusBadge label={`${completion.coverage_tier} coverage`} tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"} />
+        <span>
+          {completion.completed} / {completion.total_registered} registered children completed this instrument (
+          {completion.percent}%)
+        </span>
+      </div>
+
       <div className="kpi-row">
-        <KpiCard
-          label="Instrument Completion"
-          value={`${completion.completed} / ${completion.total_registered}`}
-          sublabel={`${completion.percent}% of registered — ${completion.coverage_tier} coverage`}
-          icon={IconActivity}
-          tone={TIER_TONE[completion.coverage_tier] ?? "neutral"}
-        />
         <KpiCard label="Item 1 composite score" value={scoreValue(data.item1_summary)} sublabel={scoreSublabel(data.item1_summary)} />
         <KpiCard label="Item 8 composite score" value={scoreValue(data.item8_summary)} sublabel={scoreSublabel(data.item8_summary)} />
         <KpiCard label="Total score" value={scoreValue(data.total_summary)} sublabel={scoreSublabel(data.total_summary)} tone="violet" />

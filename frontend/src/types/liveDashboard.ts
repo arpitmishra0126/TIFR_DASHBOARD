@@ -33,11 +33,14 @@ export interface UnavailableModule {
   unavailable_fields: string[];
 }
 
+export type CoverageTier = "High" | "Partial" | "No Data";
+
 export interface InstrumentCoverage {
   key: string;
   label: string;
   completed_count: number;
   percent_of_registered: number;
+  coverage_tier: CoverageTier;
 }
 
 export interface OverviewResponse {
@@ -53,6 +56,7 @@ export interface OverviewResponse {
   ssrs_teacher_count: number;
   ssrs_teacher_percent: number;
   instrument_coverage: InstrumentCoverage[];
+  all_instrument_coverage: InstrumentCoverage[];
   sex_distribution: SexDistribution;
   age_distribution: AgeBucket[];
   udai_pareek_category_distribution: CategoryCount[];
@@ -99,7 +103,7 @@ export interface InstrumentCompletion {
   completed: number;
   total_registered: number;
   percent: number;
-  coverage_tier: "High" | "Partial" | "No Data";
+  coverage_tier: CoverageTier;
 }
 
 export interface ScoreSummary {

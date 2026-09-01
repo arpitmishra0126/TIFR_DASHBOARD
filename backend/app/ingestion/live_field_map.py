@@ -171,6 +171,18 @@ CORE_BATTERY_DESCRIPTION = (
     "SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent completed."
 )
 
+# All nine live instruments in PID 196, each paired with its own completion
+# field and a display label for the Overview "Assessment Instrument Coverage"
+# panel. Every entry is calculated independently of the others — this is a
+# per-instrument breakdown, NOT the Completed Assessment Set intersection
+# (see CORE_BATTERY_COMPLETE_FIELDS / _core_battery_ids for that).
+ALL_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
+    ("registration", REGISTRATION_COMPLETE_FIELD, "Registration Form"),
+    *CORE_BATTERY_INSTRUMENTS,
+    ("ssrs_child", SSRS_CHILD_COMPLETE_FIELD, "SSRS Child"),
+    ("ssrs_teacher", SSRS_TEACHER_COMPLETE_FIELD, "SSRS Teacher"),
+)
+
 PROGRESSION_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus("Assessment Progress", "registered", True, "child_id", "registration_form"),
     LiveFieldStatus("Assessment Progress", "core_assessment_battery", True, None, "screening_rural, dseq, child_illness_history, paq_a, dietary_intake, ssrs_parent", CORE_BATTERY_DESCRIPTION),

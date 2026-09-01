@@ -44,6 +44,7 @@ class InstrumentCoverage(BaseModel):
     label: str
     completed_count: int
     percent_of_registered: float
+    coverage_tier: str
 
 
 # --- Overview ---
@@ -60,6 +61,7 @@ class OverviewResponse(BaseModel):
     ssrs_teacher_count: int
     ssrs_teacher_percent: float
     instrument_coverage: list[InstrumentCoverage]
+    all_instrument_coverage: list[InstrumentCoverage]
     sex_distribution: SexDistribution
     age_distribution: list[AgeBucket]
     udai_pareek_category_distribution: list[CategoryCount]

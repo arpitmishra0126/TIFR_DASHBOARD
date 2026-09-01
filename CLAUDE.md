@@ -223,21 +223,25 @@ Do not fabricate a value.
 
 ## FRONTEND STRUCTURE
 
-Current navigation:
+**Navigation redesign (2026-09-01):** the persistent left sidebar was
+replaced with a **top navigation bar** (`frontend/src/components/Layout.tsx`,
+rewritten; the collapsible-sidebar mechanic and its ~270 lines of CSS were
+removed, not preserved as dead code). Current top nav:
 
-Overview
-Participants
-Assessment Progress
-Demographics & SES
+Overview | Registry | Assessments ▾ | Progress | Exports
 
-ASSESSMENT MODULES
-
-- Health & Screening
-- Physical Activity
-- Screen Time
-- Neurodevelopment
-
-The sidebar is collapsible.
+"Assessments" is a click-toggle dropdown (closes on outside click, on
+navigation, on Escape via the standard link click) listing the 4 assessment
+modules (Health & Screening, Physical Activity, Screen Time,
+Neurodevelopment) — these no longer have permanently-visible nav entries.
+"Exports" deliberately links to the same `/registry` route as "Registry" —
+there is no separate exports page/route; the existing Export Active
+Cases (Excel/CSV) buttons still live only on the Registry page,
+unchanged. All 8 existing routes/paths are unchanged; only `Layout.tsx` and
+`app.css` changed. Below ~900px, the full nav collapses into a hamburger
+menu (`.topnav-mobile-menu`) with the same 8 links flattened (no dropdown on
+mobile). `frontend/src/components/Topbar.tsx` (refresh button, last-updated,
+theme toggle) is unchanged and still renders inside `app-content`.
 
 The dashboard should look like a polished modern clinical/research analytics dashboard, not a Streamlit/admin template.
 
@@ -249,27 +253,75 @@ The dashboard should look like a polished modern clinical/research analytics das
 
 Study-level summary.
 
-Show, as separate KPI cards, each independently live-calculated from REDCap:
+Show, as separate top-level KPI cards (kept deliberately small in number —
+NOT one per instrument), each independently live-calculated from REDCap:
 
 - Registered
-- Completed Assessment Set (**UI label only**, updated 2026-09-01 — see
-  "UI TERMINOLOGY" note below; underlying strict all-six-instruments
-  calculation is unchanged)
-- SSRS Parent (calculated independently from `ssrs_parent_complete` —
-  **not** derived from/limited to the Completed Assessment Set count, since
-  a child can complete SSRS Parent without completing the other five
-  instruments)
+- Completed Assessment Set (**UI label only** — see "UI TERMINOLOGY" below;
+  underlying strict all-six-instruments calculation is unchanged)
 - SSRS Child
 - SSRS Teacher
-- assessment progress/coverage
+
+**Overview restructure (2026-09-01):** below the "Study snapshot" KPI row,
+the page now has three further sections, each answering a distinct
+question (no section repeats another's numbers):
+
+- **Assessment Instrument Coverage** — one unified panel (reuses the
+  existing `ChartCard` + `CoverageBar` components — no new chart components
+  were built) showing all **nine** live REDCap instruments as individual
+  rows — Registration Form, SES, DSEQ, Child Illness History, PAQ-A,
+  Dietary Intake, SSRS Parent, SSRS Child, SSRS Teacher — each independently
+  calculated from its own `*_complete` field (never derived from another
+  instrument or from the Completed Assessment Set aggregate). Subtly
+  grouped (label only, same unified card) into Registration / Study
+  Assessments / Social Skills Assessments. Each row also shows a
+  High/Partial/No Data coverage-tier `StatusBadge` (see API section below).
+  This is the only place SSRS Parent's own completion count is surfaced on
+  Overview — there is deliberately no separate top-level "SSRS Parent" KPI
+  card.
+- **Study Progress** — the `Funnel` component only (registered → Completed
+  Assessment Set → SSRS Child → SSRS Teacher), reusing the same
+  `ProgressResponse.stages` the Assessment Progress page uses. The old
+  Overview-only 4-card `ProgressStageCard` grid (which repeated the
+  Snapshot's own numbers in a 3rd visual format) was removed from this
+  page. `ProgressStageCard.tsx` itself is intentionally left in the
+  codebase, currently unused anywhere — kept per an explicit decision to
+  defer dead-code cleanup until after the redesign is verified; do not
+  delete it without asking first, and do not "helpfully" re-wire it back in.
+- **Data Collection & Quality Status** — a compact stat panel (new
+  `.status-stat-grid`/`.status-stat` CSS, not more KPI cards): total
+  instrument-completions collected across all 9 instruments, count of
+  instruments at High coverage, count needing attention (Partial or No
+  Data), and last-refresh time (from the existing `useRefresh()` context —
+  no new state). When any instrument is Partial or No-Data, a short flagged
+  line names them (e.g. "No completed assessments yet: SSRS Teacher").
+  Every figure here is derived from `all_instrument_coverage` plus the
+  existing refresh timestamp — no new backend data beyond `coverage_tier`
+  (see API section below).
 
 Do NOT duplicate detailed demographic analysis here.
 
 Do NOT show the large Module Integration Status section on Overview.
 
-#### UI TERMINOLOGY (temporary, 2026-09-01)
+**Assessment Progress page:** the duplicate 4-KPI-card row above the funnel
+(same numbers as Overview's Snapshot) was removed — the page now opens
+directly with the funnel, then the "Completed Assessment Set instruments"
+6-row breakdown (unchanged calculation, now also shows `coverage_tier`).
 
-"Core Assessment Battery" was renamed to **"Completed Assessment Set"** in
+**Assessment module pages (Health & Screening / Physical Activity / Screen
+Time):** the standalone "Instrument Completion" `KpiCard` was replaced with
+a compact `.module-status-line` (a `StatusBadge` + one line of text) above
+each page's real analysis, so the page opens into its actual chart(s)
+rather than a one-card preamble. Genuinely distinct KPIs on these pages
+(PAQ-A's 3 score summaries, Screen Time's 3 yes/no items) are unchanged.
+Neurodevelopment was left as-is — its per-instrument "children with any
+data" KPI is a different metric, not a literal completion/tier card, so the
+"remove the standalone Instrument Completion KPI" change doesn't apply
+there.
+
+#### UI TERMINOLOGY (temporary, since 2026-09-01)
+
+"Core Assessment Battery" is displayed as **"Completed Assessment Set"** in
 all user-facing text on the Overview KPI cards and the Assessment Progress
 funnel/stage-instrument-breakdown (`frontend/src/routes/Overview.tsx`,
 `frontend/src/routes/AssessmentProgress.tsx`, and the `ProgressStage.label`/
@@ -287,24 +339,56 @@ Parent complete for the same child — `CORE_BATTERY_COMPLETE_FIELDS`) is
 `core_assessment_battery`) were deliberately left as-is — internal
 identifiers, not user-facing text.
 
-`OverviewResponse` gained `ssrs_parent_count`/`ssrs_parent_percent`
-(backend/app/schemas/dashboard.py, mirrored in
-frontend/src/types/liveDashboard.ts), computed in `get_overview()` via
-`_unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)` —
-independent of `_core_battery_ids()`. `SSRS_PARENT_COMPLETE_FIELD` was
-extracted as a named constant in `live_field_map.py` (previously an inline
-string literal inside `CORE_BATTERY_INSTRUMENTS`).
+#### API — Overview instrument data (as of 2026-09-01)
 
-Verified: backend 107/107 tests pass (added
-`test_overview_ssrs_parent_counted_independently_of_core_battery` +
-percentage test, using existing fixture record REC004 which has
-`ssrs_parent_complete="2"` but an incomplete Dietary Intake, proving
-SSRS Parent's count (4) differs from Completed Assessment Set's count (3)).
-Frontend `tsc --noEmit` and `npm run build` both succeed. Live-checked
-against REDCap: at time of check `ssrs_parent_count` and
-`core_assessment_count` both read 32/212 (they can coincide when no child
-has independently completed only SSRS Parent — not a bug, confirmed by the
-fixture test above which forces the divergent case deterministically).
+`OverviewResponse` (backend/app/schemas/dashboard.py) carries two distinct
+per-instrument breakdowns, both `list[InstrumentCoverage]` (`key`, `label`,
+`completed_count`, `percent_of_registered`, and — added 2026-09-01 —
+`coverage_tier: "High"|"Partial"|"No Data"`, computed via the
+**already-existing** `module_analytics.coverage_tier()` helper, same ≥50%/
+>0%/0% thresholds already used by the 4 assessment-module endpoints and the
+Excel export's DATA COVERAGE section — no new calculation logic was
+introduced, only reuse):
+
+- `instrument_coverage` — the original 6 Completed-Assessment-Set
+  instruments only (SES, DSEQ, Child Illness History, PAQ-A, Dietary
+  Intake, SSRS Parent). Still used by the Assessment Progress page's
+  "Completed Assessment Set instruments" breakdown — unchanged.
+- `all_instrument_coverage` — **new**, all 9 live instruments (adds
+  Registration Form, SSRS Child, SSRS Teacher), each computed independently
+  via `_all_instrument_coverage()` / `ALL_INSTRUMENTS` in
+  `live_field_map.py`. Powers the new Overview "Assessment Instrument
+  Coverage" panel. SSRS Child/Teacher here are **raw** independent
+  completion counts (not gated by Completed-Assessment-Set membership like
+  the cumulative `ssrs_child_count`/`ssrs_teacher_count` progression
+  fields) — a deliberate difference from the funnel's cumulative logic,
+  since this panel answers "how many completed this instrument on its own,"
+  not "how many progressed through the pipeline."
+
+`OverviewResponse` also still carries the standalone `ssrs_parent_count`/
+`ssrs_parent_percent` fields (added same rename effort) — independently
+computed from `ssrs_parent_complete`, not derived from the Completed
+Assessment Set. No longer shown as its own top-level KPI card (see above);
+its value is also the `ssrs_parent` row in `all_instrument_coverage`. Both
+are computed from the same `_unique_ids_with_complete_field(records,
+SSRS_PARENT_COMPLETE_FIELD)` call, so they can never diverge.
+
+Verified: backend **113/113** tests pass, including
+`test_overview_all_instrument_coverage_includes_all_nine_instruments`,
+`test_overview_all_instrument_coverage_counts_are_independent` (uses fixture
+record REC004 — `ssrs_parent_complete="2"` but incomplete Dietary Intake —
+to prove per-instrument counts never collapse into the Completed Assessment
+Set aggregate), a zero-completion percent-formula check, and (2026-09-01)
+`test_overview_all_instrument_coverage_includes_coverage_tier` +
+`test_overview_instrument_coverage_includes_coverage_tier`. Frontend
+`tsc --noEmit` and `npm run build` both succeed. Live-checked against
+REDCap (212 registered at time of check): Registration Form 212/100%/High,
+SES/DSEQ/Child Illness History/PAQ-A/Dietary Intake/SSRS Parent each
+32/15.09%/Partial, SSRS Child 17/8.02%/Partial, SSRS Teacher 0/0%/No Data —
+all read directly from the live `/api/v1/dashboard/overview` response, not
+asserted from memory. All 8 routes, both export formats (xlsx/csv), and
+every dashboard endpoint re-checked with 200 OK against a live local
+backend after the navigation/Overview redesign.
 
 ### Participants
 

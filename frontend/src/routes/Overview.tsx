@@ -1,26 +1,35 @@
 import { useEffect, useState } from "react";
 
 import { getOverview, getProgress } from "../api/dashboard";
-import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
-import KpiCard, { type KpiTone } from "../components/KpiCard";
+import ChartCard from "../components/ChartCard";
+import CoverageBar from "../components/CoverageBar";
+import Funnel from "../components/Funnel";
+import { IconClipboardCheck, IconGraduationCap, IconUserCheck, IconUsers } from "../components/icons";
+import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
-import ProgressStageCard from "../components/ProgressStageCard";
 import SectionHeader from "../components/SectionHeader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
-const STAGE_VISUALS: Record<string, { icon: typeof IconUsers; tone: KpiTone }> = {
-  registered: { icon: IconUsers, tone: "blue" },
-  core_assessment_battery: { icon: IconClipboardCheck, tone: "aqua" },
-  ssrs_child: { icon: IconUserCheck, tone: "violet" },
-  ssrs_teacher: { icon: IconGraduationCap, tone: "amber" },
+// Subtle grouping for the Assessment Instrument Coverage panel — a group
+// label is rendered above the first row whose key appears here. Order
+// matches the backend's ALL_INSTRUMENTS order exactly, so no re-sorting
+// is needed.
+const COVERAGE_GROUP_STARTS: Record<string, string> = {
+  registration: "Registration",
+  ses: "Study Assessments",
+  ssrs_parent: "Social Skills Assessments",
 };
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString("en-GB", { hour12: false });
+}
 
 export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [progress, setProgress] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { version } = useRefresh();
+  const { version, lastUpdated } = useRefresh();
 
   useEffect(() => {
     Promise.all([getOverview(), getProgress()])
@@ -34,7 +43,10 @@ export default function Overview() {
   if (error) return <p className="error-text">Could not reach backend: {error}</p>;
   if (!overview || !progress) return <p className="loading-text">Loading live study data…</p>;
 
-  const showRegistrationCompletion = overview.registration_complete_percent < 100;
+  const totalDataPoints = overview.all_instrument_coverage.reduce((sum, i) => sum + i.completed_count, 0);
+  const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");
+  const noDataCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "No Data");
+  const highCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "High");
 
   return (
     <section>
@@ -44,30 +56,15 @@ export default function Overview() {
         subtitle="Live snapshot of study registration and assessment progress."
       />
 
+      <SectionHeader title="Study snapshot" note="Headline counts, each independently live-calculated from REDCap" />
       <div className="kpi-row">
         <KpiCard label="Registered" value={overview.total_registered.toLocaleString()} icon={IconUsers} tone="blue" />
-        {showRegistrationCompletion && (
-          <KpiCard
-            label="Registration Complete"
-            value={overview.registration_complete_count.toLocaleString()}
-            sublabel={`${overview.registration_complete_percent}% of registered`}
-            icon={IconUsers}
-            tone="blue"
-          />
-        )}
         <KpiCard
           label="Completed Assessment Set"
           value={overview.core_assessment_count.toLocaleString()}
           sublabel={`${overview.core_assessment_percent}% of registered`}
           icon={IconClipboardCheck}
           tone="aqua"
-        />
-        <KpiCard
-          label="SSRS Parent"
-          value={overview.ssrs_parent_count.toLocaleString()}
-          sublabel={`${overview.ssrs_parent_percent}% of registered`}
-          icon={IconHeart}
-          tone="neutral"
         />
         <KpiCard
           label="SSRS Child"
@@ -87,19 +84,78 @@ export default function Overview() {
       <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
         Completed Assessment Set (temporary working label, pending official study terminology) = SES,
         DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent all completed for the same
-        child. SSRS Parent above is counted independently and is not limited to that set.
+        child. See Assessment Instrument Coverage below for every instrument's own completion count,
+        including SSRS Parent counted independently.
       </p>
 
-      <SectionHeader
-        title="Assessment progress"
-        note="Each stage counts only children who also completed every prior stage — see Assessment Progress for instrument-level detail"
-      />
-      <div className="stage-grid">
-        {progress.stages.map((stage) => {
-          const visual = STAGE_VISUALS[stage.key] ?? { icon: IconUsers, tone: "neutral" as KpiTone };
-          return <ProgressStageCard key={stage.key} stage={stage} icon={visual.icon} tone={visual.tone} />;
-        })}
-      </div>
+      <ChartCard title="Assessment Instrument Coverage" subtitle="Individual instrument completion across registered children">
+        <div className="coverage-list">
+          {overview.all_instrument_coverage.map((instrument) => {
+            const groupLabel = COVERAGE_GROUP_STARTS[instrument.key];
+            return (
+              <div key={instrument.key}>
+                {groupLabel && <div className="coverage-group-label">{groupLabel}</div>}
+                <CoverageBar
+                  label={instrument.label}
+                  count={instrument.completed_count}
+                  total={overview.total_registered}
+                  percent={instrument.percent_of_registered}
+                  tier={instrument.coverage_tier}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </ChartCard>
+
+      <ChartCard
+        title="Study Progress"
+        subtitle="Each stage counts only children who also completed every prior stage"
+      >
+        <Funnel stages={progress.stages} />
+      </ChartCard>
+
+      <ChartCard title="Data Collection & Quality Status" subtitle="Where collection currently stands, and where it is lagging">
+        <div className="status-stat-grid">
+          <div className="status-stat">
+            <div className="status-stat-value">{totalDataPoints.toLocaleString()}</div>
+            <div className="status-stat-label">Instrument completions collected (across all 9 instruments)</div>
+          </div>
+          <div className="status-stat">
+            <div className="status-stat-value">
+              {highCoverage.length} / {overview.all_instrument_coverage.length}
+            </div>
+            <div className="status-stat-label">Instruments at High coverage (≥50% of registered)</div>
+          </div>
+          <div className="status-stat">
+            <div className="status-stat-value">
+              {partialCoverage.length + noDataCoverage.length} / {overview.all_instrument_coverage.length}
+            </div>
+            <div className="status-stat-label">Instruments needing attention (Partial or No Data)</div>
+          </div>
+          <div className="status-stat">
+            <div className="status-stat-value">{lastUpdated ? formatTime(lastUpdated) : "—"}</div>
+            <div className="status-stat-label">Last refresh</div>
+          </div>
+        </div>
+
+        {(partialCoverage.length > 0 || noDataCoverage.length > 0) && (
+          <div className="status-flag-list">
+            {partialCoverage.length > 0 && (
+              <p className="status-flag-row">
+                <span className="status-flag-tag status-flag-tag-warning">Partial coverage</span>
+                {partialCoverage.map((i) => i.label).join(", ")}
+              </p>
+            )}
+            {noDataCoverage.length > 0 && (
+              <p className="status-flag-row">
+                <span className="status-flag-tag status-flag-tag-neutral">No completed assessments yet</span>
+                {noDataCoverage.map((i) => i.label).join(", ")}
+              </p>
+            )}
+          </div>
+        )}
+      </ChartCard>
     </section>
   );
 }

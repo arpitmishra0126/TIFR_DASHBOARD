@@ -27,6 +27,18 @@ def test_overview_endpoint_returns_core_battery_progression():
     assert body["core_assessment_count"] == 3
     assert body["ssrs_parent_count"] == 4  # independent of core_assessment_count — see fixture REC004
     assert body["ssrs_child_count"] == 2
+    all_coverage_keys = {c["key"] for c in body["all_instrument_coverage"]}
+    assert all_coverage_keys == {
+        "registration",
+        "ses",
+        "dseq",
+        "child_illness_history",
+        "paq_a",
+        "dietary_intake",
+        "ssrs_parent",
+        "ssrs_child",
+        "ssrs_teacher",
+    }
     assert body["ssrs_teacher_count"] == 1
     assert "physical_activity" in body["modules_pending_integration"]
 

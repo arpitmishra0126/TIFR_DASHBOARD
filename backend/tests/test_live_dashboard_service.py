@@ -162,6 +162,112 @@ async def test_overview_instrument_coverage_uses_readable_labels(service: LiveDa
     assert labels["ssrs_parent"] == "SSRS Parent"
 
 
+# --- Overview: all-nine-instrument coverage panel (Assessment Instrument Coverage) ---
+
+
+@pytest.mark.asyncio
+async def test_overview_all_instrument_coverage_includes_all_nine_instruments(service: LiveDashboardService):
+    result = await service.get_overview()
+    keys = {c.key for c in result.all_instrument_coverage}
+    assert keys == {
+        "registration",
+        "ses",
+        "dseq",
+        "child_illness_history",
+        "paq_a",
+        "dietary_intake",
+        "ssrs_parent",
+        "ssrs_child",
+        "ssrs_teacher",
+    }
+    assert len(result.all_instrument_coverage) == 9
+
+
+@pytest.mark.asyncio
+async def test_overview_all_instrument_coverage_counts_are_independent(service: LiveDashboardService):
+    result = await service.get_overview()
+    counts = {c.key: c.completed_count for c in result.all_instrument_coverage}
+    # Registration: 5 of 6 (REC006 has registration_form_complete == "0").
+    # ses/dseq/child_illness_history/paq_a/ssrs_parent: 4 each (REC001-004).
+    # dietary_intake: 3 (REC004 is deliberately missing this one field alone).
+    # ssrs_child: 2 (REC001, REC002 only — NOT gated by core-battery completion here).
+    # ssrs_teacher: 1 (REC002 only).
+    assert counts == {
+        "registration": 5,
+        "ses": 4,
+        "dseq": 4,
+        "child_illness_history": 4,
+        "paq_a": 4,
+        "dietary_intake": 3,
+        "ssrs_parent": 4,
+        "ssrs_child": 2,
+        "ssrs_teacher": 1,
+    }
+    # SSRS Child/Teacher here are raw independent completion counts, distinct
+    # from the cumulative (gated) ssrs_child_count/ssrs_teacher_count used by
+    # the progression funnel — both of which happen to equal these same raw
+    # values in this fixture, since every SSRS Child/Teacher completion here
+    # already sits within the core-battery cohort.
+    assert result.ssrs_child_count == counts["ssrs_child"]
+    assert result.ssrs_teacher_count == counts["ssrs_teacher"]
+    # An individual instrument's count must never be silently overwritten by
+    # (or forced to equal) the Completed Assessment Set aggregate.
+    assert counts["ses"] != result.core_assessment_count
+
+
+@pytest.mark.asyncio
+async def test_overview_all_instrument_coverage_percentages_use_total_registered(service: LiveDashboardService):
+    result = await service.get_overview()
+    percents = {c.key: c.percent_of_registered for c in result.all_instrument_coverage}
+    assert percents["registration"] == round(5 / 6 * 100, 2)
+    assert percents["dietary_intake"] == round(3 / 6 * 100, 2)
+    assert percents["ssrs_teacher"] == round(1 / 6 * 100, 2)
+
+
+@pytest.mark.asyncio
+async def test_overview_all_instrument_coverage_includes_coverage_tier(service: LiveDashboardService):
+    result = await service.get_overview()
+    tiers = {c.key: c.coverage_tier for c in result.all_instrument_coverage}
+    # High: ratio >= 50% (registration 5/6, ses/dseq/child_illness_history/
+    # paq_a/ssrs_parent 4/6, dietary_intake exactly 3/6). Partial: ratio > 0%
+    # but < 50% (ssrs_child 2/6, ssrs_teacher 1/6). Same thresholds as the
+    # Excel export's DATA COVERAGE section (module_analytics.coverage_tier).
+    assert tiers == {
+        "registration": "High",
+        "ses": "High",
+        "dseq": "High",
+        "child_illness_history": "High",
+        "paq_a": "High",
+        "dietary_intake": "High",
+        "ssrs_parent": "High",
+        "ssrs_child": "Partial",
+        "ssrs_teacher": "Partial",
+    }
+
+
+@pytest.mark.asyncio
+async def test_overview_instrument_coverage_includes_coverage_tier(service: LiveDashboardService):
+    # The original 6-instrument instrument_coverage list (used by the
+    # Assessment Progress "Completed Assessment Set instruments" panel) also
+    # gained coverage_tier — same helper, same thresholds.
+    result = await service.get_overview()
+    tiers = {c.key: c.coverage_tier for c in result.instrument_coverage}
+    assert tiers["ses"] == "High"
+    assert tiers["dietary_intake"] == "High"
+
+
+@pytest.mark.asyncio
+async def test_overview_all_instrument_coverage_zero_completion_handled(service: LiveDashboardService):
+    # Every child in the fixture has visit_date == "" for a field not used
+    # here; to exercise the zero-completion path directly (mirroring live
+    # SSRS Teacher = 0/212 today) we assert the percent formula itself
+    # produces a clean 0.0%, not a division error, when count is 0.
+    from app.services.live_dashboard_service import _percent
+
+    assert _percent(0, 6) == 0.0
+    assert _percent(0, 0) == 0.0
+
+
 # --- Progress pipeline (stage-by-stage) ---
 
 

@@ -2,17 +2,16 @@ import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
-import { IconHeart } from "../components/icons";
 import HorizontalBarChart from "../components/HorizontalBarChart";
-import KpiCard, { type KpiTone } from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StatusBadge from "../components/StatusBadge";
 import { useRefresh } from "../context/RefreshContext";
 import type { HealthScreeningResponse } from "../types/liveDashboard";
 
-const TIER_TONE: Record<string, KpiTone> = {
-  High: "aqua",
-  Partial: "amber",
+const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
+  High: "good",
+  Partial: "warning",
   "No Data": "neutral",
 };
 
@@ -43,14 +42,12 @@ export default function HealthScreening() {
         subtitle="Child Illness History — live REDCap instrument."
       />
 
-      <div className="kpi-row">
-        <KpiCard
-          label="Instrument Completion"
-          value={`${completion.completed} / ${completion.total_registered}`}
-          sublabel={`${completion.percent}% of registered — ${completion.coverage_tier} coverage`}
-          icon={IconHeart}
-          tone={TIER_TONE[completion.coverage_tier] ?? "neutral"}
-        />
+      <div className="module-status-line">
+        <StatusBadge label={`${completion.coverage_tier} coverage`} tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"} />
+        <span>
+          {completion.completed} / {completion.total_registered} registered children completed this instrument (
+          {completion.percent}%)
+        </span>
       </div>
 
       <SectionHeader

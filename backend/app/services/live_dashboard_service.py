@@ -18,6 +18,7 @@ from statistics import mean
 
 from app.ingestion.choice_maps import ChoiceMap, build_choice_maps
 from app.ingestion.live_field_map import (
+    ALL_INSTRUMENTS,
     CORE_BATTERY_COMPLETE_FIELDS,
     CORE_BATTERY_DESCRIPTION,
     CORE_BATTERY_INSTRUMENTS,
@@ -40,6 +41,7 @@ from app.services.module_analytics import (
     build_neurodevelopment_analysis,
     build_physical_activity_analysis,
     build_screen_time_analysis,
+    coverage_tier,
 )
 from app.schemas.dashboard import (
     AgeBucket,
@@ -168,6 +170,28 @@ def _instrument_coverage(records: list[dict], total_registered: int) -> list[Ins
                 label=label,
                 completed_count=completed,
                 percent_of_registered=_percent(completed, total_registered),
+                coverage_tier=coverage_tier(completed, total_registered),
+            )
+        )
+    return coverage
+
+
+def _all_instrument_coverage(records: list[dict], total_registered: int) -> list[InstrumentCoverage]:
+    """Live completion count + percentage for each of the nine live REDCap
+    instruments individually (Registration + all eight assessment
+    instruments), each calculated independently from its own completion
+    field — never derived from another instrument's count. For the
+    Overview 'Assessment Instrument Coverage' panel."""
+    coverage = []
+    for key, field, label in ALL_INSTRUMENTS:
+        completed = len(_unique_ids_with_complete_field(records, field))
+        coverage.append(
+            InstrumentCoverage(
+                key=key,
+                label=label,
+                completed_count=completed,
+                percent_of_registered=_percent(completed, total_registered),
+                coverage_tier=coverage_tier(completed, total_registered),
             )
         )
     return coverage
@@ -300,6 +324,7 @@ class LiveDashboardService:
             ssrs_teacher_count=len(ssrs_teacher_ids),
             ssrs_teacher_percent=_percent(len(ssrs_teacher_ids), total_registered),
             instrument_coverage=_instrument_coverage(records, total_registered),
+            all_instrument_coverage=_all_instrument_coverage(records, total_registered),
             sex_distribution=_sex_distribution(children),
             age_distribution=_age_distribution(children),
             udai_pareek_category_distribution=_category_distribution(udai_categories),
