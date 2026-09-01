@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 
 import { getNeurodevelopment } from "../api/dashboard";
+import DataLoadError from "../components/DataLoadError";
 import { IconBrain } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { ScoreSummary, SSRSInstrumentSummary } from "../types/liveDashboard";
 
@@ -42,6 +44,7 @@ function InstrumentSection({ summary }: { summary: SSRSInstrumentSummary }) {
 export default function Neurodevelopment() {
   const [data, setData] = useState<Awaited<ReturnType<typeof getNeurodevelopment>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   useEffect(() => {
@@ -49,10 +52,10 @@ export default function Neurodevelopment() {
     getNeurodevelopment()
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!data) return <p className="loading-text">Loading…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   return (
     <section>

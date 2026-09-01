@@ -3,9 +3,11 @@ import { useEffect, useState } from "react";
 import { getOverview, getProgress } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
 import CoverageBar from "../components/CoverageBar";
+import DataLoadError from "../components/DataLoadError";
 import Funnel from "../components/Funnel";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
@@ -13,19 +15,21 @@ export default function AssessmentProgress() {
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   useEffect(() => {
+    setError(null);
     Promise.all([getProgress(), getOverview()])
       .then(([p, o]) => {
         setData(p);
         setOverview(o);
       })
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!data || !overview) return <p className="loading-text">Loading…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data || !overview) return <StudyDataLoader label="Loading assessment progress" />;
 
   return (
     <section>

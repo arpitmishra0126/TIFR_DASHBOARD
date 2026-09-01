@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { getOverview, getProgress } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
 import CoverageBar from "../components/CoverageBar";
+import DataLoadError from "../components/DataLoadError";
 import Funnel from "../components/Funnel";
 import { IconClipboardCheck, IconGraduationCap, IconUserCheck, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
@@ -29,19 +31,21 @@ export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [progress, setProgress] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version, lastUpdated } = useRefresh();
 
   useEffect(() => {
+    setError(null);
     Promise.all([getOverview(), getProgress()])
       .then(([o, p]) => {
         setOverview(o);
         setProgress(p);
       })
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!overview || !progress) return <p className="loading-text">Loading live study data…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!overview || !progress) return <StudyDataLoader />;
 
   const totalDataPoints = overview.all_instrument_coverage.reduce((sum, i) => sum + i.completed_count, 0);
   const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");

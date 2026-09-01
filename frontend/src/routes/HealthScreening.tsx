@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
+import DataLoadError from "../components/DataLoadError";
 import HorizontalBarChart from "../components/HorizontalBarChart";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { HealthScreeningResponse } from "../types/liveDashboard";
 
@@ -18,6 +20,7 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
 export default function HealthScreening() {
   const [data, setData] = useState<HealthScreeningResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   useEffect(() => {
@@ -25,10 +28,10 @@ export default function HealthScreening() {
     getHealthScreening()
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!data) return <p className="loading-text">Loading…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
   const namedConditions = data.named_conditions.map((c) => ({ label: c.code, count: c.count }));

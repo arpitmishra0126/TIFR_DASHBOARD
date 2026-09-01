@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { exportActiveCases, exportActiveCasesCsv, getRegistry } from "../api/dashboard";
+import DataLoadError from "../components/DataLoadError";
 import PageHeader from "../components/PageHeader";
 import StatusBadge from "../components/StatusBadge";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { RegistryResponse } from "../types/liveDashboard";
 
@@ -14,6 +16,7 @@ export default function Registry() {
   const [offset, setOffset] = useState(0);
   const [data, setData] = useState<RegistryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   const [exporting, setExporting] = useState(false);
@@ -27,7 +30,7 @@ export default function Registry() {
     getRegistry({ search: search || undefined, sex: sex || undefined, limit: PAGE_SIZE, offset })
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [search, sex, offset, version]);
+  }, [search, sex, offset, version, retryCount]);
 
   async function handleExport() {
     setExporting(true);
@@ -108,8 +111,8 @@ export default function Registry() {
         </select>
       </div>
 
-      {error && <p className="error-text">Could not reach backend: {error}</p>}
-      {!error && !data && <p className="loading-text">Loading…</p>}
+      {error && <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />}
+      {!error && !data && <StudyDataLoader label="Loading participant registry" subLabel="Connecting to live REDCap data…" />}
 
       {data && (
         <div className="table-card">

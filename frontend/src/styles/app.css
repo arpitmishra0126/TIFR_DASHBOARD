@@ -1229,9 +1229,105 @@ table.data-table tbody tr:hover {
   background: var(--status-neutral-bg);
 }
 
-.loading-text {
+.data-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+}
+
+/* --- Study data loader: hexagon-ring node network, occupies only the
+   space it needs (no full-screen takeover). --- */
+.study-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-4);
+  text-align: center;
+}
+
+.study-loader-graph {
+  display: block;
+}
+
+.study-loader-edges {
+  fill: none;
+  stroke: var(--border-hairline-strong);
+  stroke-width: 1.5;
+}
+
+.study-loader-flow {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: 0.85;
+  stroke-dasharray: 14 190;
+  stroke-dashoffset: 0;
+}
+
+.study-loader-node {
+  fill: var(--series-1);
+  opacity: 0.55;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .study-loader-flow {
+    animation: study-loader-flow-move 3.6s linear infinite;
+  }
+
+  .study-loader-node {
+    animation: study-loader-node-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes study-loader-flow-move {
+  to {
+    stroke-dashoffset: -204;
+  }
+}
+
+@keyframes study-loader-node-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+.study-loader-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.study-loader-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.study-loader-sublabel {
+  font-size: 0.8rem;
   color: var(--text-muted);
-  font-size: 0.88rem;
+}
+
+.study-loader-note {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.8;
+  margin-top: 2px;
 }
 
 /* --- Responsive top navigation (small screens) --- */

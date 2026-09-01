@@ -245,6 +245,38 @@ theme toggle) is unchanged and still renders inside `app-content`.
 
 The dashboard should look like a polished modern clinical/research analytics dashboard, not a Streamlit/admin template.
 
+**Loading/error state (2026-09-01):** every page that fetches live REDCap
+data (Overview, Registry, Demographics, Assessment Progress, and all 4
+assessment modules) now uses two small reusable components instead of the
+old plain `<p className="loading-text">Loading…</p>` /
+`<p className="error-text">...</p>` text:
+
+- `frontend/src/components/StudyDataLoader.tsx` — a compact "study data /
+  neural network" loader: an inline SVG hexagon-ring of 6 nodes with a
+  looping dash animation tracing the ring (`.study-loader-flow`) and nodes
+  that pulse in sequence (staggered `animation-delay`), plus "Loading study
+  data" / "Connecting to live REDCap data…" / "Preparing dashboard" text
+  (all overridable via props). Occupies only its own vertical space — no
+  full-screen takeover. All animation is CSS-only, wrapped in
+  `@media (prefers-reduced-motion: no-preference)`, so a reduced-motion
+  preference yields a fully static hexagon instead of no loader at all.
+  Animation duration is fixed regardless of how long the request takes —
+  deliberately does not escalate/intensify on a slow request.
+- `frontend/src/components/DataLoadError.tsx` — the error state, now with a
+  **Retry** button (reuses the existing `.refresh-button` style) that
+  re-triggers that page's own fetch via a local `retryCount` state included
+  in the page's `useEffect` dependency array. This does not call the
+  global "Refresh data" REDCap-cache-busting action — it's a plain re-fetch
+  of the same (possibly still-cached) data, appropriate for recovering from
+  a transient network/request failure.
+
+Old `.loading-text` CSS rule was removed (no longer referenced anywhere).
+No REDCap API logic, dashboard calculations, or routes were touched — this
+is purely a loading/error UI change, reused identically across all 8 pages
+that fetch live data. Verified: frontend `tsc --noEmit` and `npm run build`
+both succeed; a temporary local backend + `vite preview` of the production
+build served the app with 200 OK and valid HTML.
+
 ---
 
 ## PAGE RESPONSIBILITIES

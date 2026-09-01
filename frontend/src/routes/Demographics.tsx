@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { getDemographics } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
+import DataLoadError from "../components/DataLoadError";
 import FilterBar from "../components/FilterBar";
 import HorizontalBarChart from "../components/HorizontalBarChart";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import { usePopulation } from "../hooks/usePopulation";
 import {
@@ -23,22 +25,24 @@ import type { DemographicsResponse } from "../types/liveDashboard";
 export default function Demographics() {
   const [data, setData] = useState<DemographicsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [filters, setFilters] = useState<PopulationFilters>({});
   const { children, error: populationError } = usePopulation();
   const { version } = useRefresh();
 
   useEffect(() => {
+    setError(null);
     getDemographics()
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
   const filtered = useMemo(() => (children ? applyFilters(children, filters) : []), [children, filters]);
   const villageOptions = useMemo(() => (children ? distinctVillages(children) : []), [children]);
   const isFiltered = Boolean(filters.sex || filters.ageGroup || filters.village || filters.status);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!data) return <p className="loading-text">Loading…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data) return <StudyDataLoader label="Loading demographics data" subLabel="Connecting to live REDCap data…" />;
 
   const udaiData = data.udai_pareek_category_distribution.map((c) => ({ label: `Category ${c.code}`, count: c.count }));
   const prasadData = data.bg_prasad_category_distribution.map((c) => ({ label: `Category ${c.code}`, count: c.count }));

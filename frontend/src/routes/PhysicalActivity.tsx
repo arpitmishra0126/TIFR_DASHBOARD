@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { getPhysicalActivity } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
+import DataLoadError from "../components/DataLoadError";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
+import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { PhysicalActivityResponse, ScoreSummary } from "../types/liveDashboard";
 
@@ -28,6 +30,7 @@ function scoreSublabel(summary: ScoreSummary): string {
 export default function PhysicalActivity() {
   const [data, setData] = useState<PhysicalActivityResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   useEffect(() => {
@@ -35,10 +38,10 @@ export default function PhysicalActivity() {
     getPhysicalActivity()
       .then(setData)
       .catch((err: Error) => setError(err.message));
-  }, [version]);
+  }, [version, retryCount]);
 
-  if (error) return <p className="error-text">Could not reach backend: {error}</p>;
-  if (!data) return <p className="loading-text">Loading…</p>;
+  if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
   const distribution = data.total_score_distribution.map((c) => ({ label: c.code, count: c.count }));
