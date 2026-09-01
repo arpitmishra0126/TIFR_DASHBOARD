@@ -28,7 +28,7 @@ export default function Topbar() {
           <span className={`refresh-icon${refreshing ? " spinning" : ""}`}>
             <IconRefresh width={15} height={15} />
           </span>
-          {refreshing ? "Refreshing…" : "Refresh data"}
+          <span className="refresh-button-label">{refreshing ? "Refreshing…" : "Refresh data"}</span>
         </button>
 
         <button

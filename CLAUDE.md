@@ -223,25 +223,55 @@ Do not fabricate a value.
 
 ## FRONTEND STRUCTURE
 
-**Navigation redesign (2026-09-01):** the persistent left sidebar was
-replaced with a **top navigation bar** (`frontend/src/components/Layout.tsx`,
-rewritten; the collapsible-sidebar mechanic and its ~270 lines of CSS were
-removed, not preserved as dead code). Current top nav:
+**Navigation redesign (2026-09-01, two passes):** the persistent left
+sidebar was replaced with a **top navigation bar**
+(`frontend/src/components/Layout.tsx`, rewritten; the collapsible-sidebar
+mechanic and its ~270 lines of CSS were removed, not preserved as dead
+code). A same-day follow-up pass restructured it into two stacked rows —
+brand identity on top, nav centered below — and trimmed the nav items:
 
-Overview | Registry | Assessments ▾ | Progress | Exports
+```
+ICMR Neurodevelopment Study Dashboard
+     [ Overview | Registry | Assessments ▾ | Progress ]
+```
 
-"Assessments" is a click-toggle dropdown (closes on outside click, on
-navigation, on Escape via the standard link click) listing the 4 assessment
-modules (Health & Screening, Physical Activity, Screen Time,
-Neurodevelopment) — these no longer have permanently-visible nav entries.
-"Exports" deliberately links to the same `/registry` route as "Registry" —
-there is no separate exports page/route; the existing Export Active
-Cases (Excel/CSV) buttons still live only on the Registry page,
-unchanged. All 8 existing routes/paths are unchanged; only `Layout.tsx` and
-`app.css` changed. Below ~900px, the full nav collapses into a hamburger
-menu (`.topnav-mobile-menu`) with the same 8 links flattened (no dropdown on
-mobile). `frontend/src/components/Topbar.tsx` (refresh button, last-updated,
-theme toggle) is unchanged and still renders inside `app-content`.
+- Row 1 (`.topnav-header-row`): brand mark/title (left), live-REDCap badge
+  (right on desktop), mobile menu button (right, mobile only).
+- Row 2 (`.topnav-links`): centered nav — Overview, Registry, Assessments
+  dropdown, Progress. **"Exports" was removed as a separate nav item** — it
+  pointed at the same `/registry` route as "Registry" already does, so it
+  was redundant; there is still no separate exports page/route, and the
+  Export Active Cases (Excel/CSV) buttons still live only on the Registry
+  page, unchanged.
+- "Assessments" is a click-toggle dropdown (closes on outside click, on
+  navigation) listing **3** modules: Health & Screening, Physical Activity,
+  Screen Time. **Neurodevelopment was deliberately removed from this nav
+  list** (information-architecture decision only) — its route
+  (`/neurodevelopment`), page component, and backend endpoint are
+  completely unchanged and still fully reachable by URL; live-verified
+  200 OK after this change. Do not delete or further hide it without being
+  asked.
+
+All 8 existing routes/paths are unchanged; only `Layout.tsx` and `app.css`
+changed. Below ~900px, row 2 and the live badge hide and the mobile
+hamburger menu (`.topnav-mobile-menu`) takes over, listing the same
+(now-7-link) set flattened, Assessments as a labeled sub-group. No
+horizontal overflow on narrow screens (nav wraps via `flex-wrap: wrap` on
+desktop widths where it doesn't yet hit the mobile breakpoint).
+**Header consolidation (2026-09-01, third pass):** `Topbar.tsx` (refresh
+button, last-updated, theme toggle) moved from floating at the top of
+`app-content` (a separate bar above every page's own `PageHeader`) into
+`.topnav-header-row` itself, next to the brand and live badge — one
+cohesive branded header instead of a page-content bar that felt like a
+separate application shell. `Topbar.tsx`'s internal logic is unchanged
+(still reads `useRefresh`/`useTheme` the same way); only where it renders
+moved, plus its refresh-button label text was wrapped in a
+`.refresh-button-label` span (structural only, no behavior change) so it
+can be hidden below 900px — at that width the header keeps the refresh and
+theme-toggle buttons as icon-only controls (functionality preserved) and
+drops the last-updated text and nav links in favor of the hamburger menu.
+Brand title truncates with an ellipsis rather than wrapping/overflowing on
+very narrow screens.
 
 The dashboard should look like a polished modern clinical/research analytics dashboard, not a Streamlit/admin template.
 
@@ -275,7 +305,34 @@ No REDCap API logic, dashboard calculations, or routes were touched — this
 is purely a loading/error UI change, reused identically across all 8 pages
 that fetch live data. Verified: frontend `tsc --noEmit` and `npm run build`
 both succeed; a temporary local backend + `vite preview` of the production
-build served the app with 200 OK and valid HTML.
+build served the app with 200 OK and valid HTML. `StudyDataLoader` /
+`DataLoadError` were already in place from this pass — a later refinement
+pass (same day) reused them unchanged; no loader rework was needed.
+
+**Content trim for senior-facing readability (2026-09-01, same day):**
+removed long implementation/governance-note paragraphs that were rendering
+directly in the UI — e.g. Health & Screening's/Screen Time's
+`data.notes.scope`, Physical Activity's `data.notes.scores`,
+Neurodevelopment's `data.notes.scope`/`data.notes.ssrs_teacher` (dated
+approval notes, Excel-export cross-references, field-availability caveats).
+The underlying `notes` fields **still exist unchanged in the API
+responses** (`backend/app/schemas/dashboard.py`) — only the frontend
+`<p className="chart-card-note">{data.notes.x}</p>` lines that rendered
+them were removed from `HealthScreening.tsx`, `PhysicalActivity.tsx`,
+`ScreenTime.tsx`, `Neurodevelopment.tsx`. Also replaced the raw
+full-precision score-range sublabel (e.g. "n=31/212 acquired (14.6%) ·
+range 1.1111111111111112–1.5555555555555556") with a concise
+"31 participants · 14.6% coverage" in `PhysicalActivity.tsx`'s and
+`Neurodevelopment.tsx`'s local `scoreSublabel()` helpers — `percent_valid`
+was already rounded server-side; only the unrounded `minimum`/`maximum`
+range clause was dropped from display (those raw values are still in the
+API response for anyone who needs them, just not shown on this page).
+`SectionHeader`/`ChartCard` note props with genuinely interpretive text
+(e.g. "DSEQ Q10, among children who completed the instrument") were kept —
+only internal-process/documentation-style paragraphs were removed.
+Demographics' short per-chart notes (e.g. explaining Udai Pareek/BG Prasad
+are numeric category codes) were left as-is — same day, out of scope for
+this pass, and short/attached rather than a standalone long paragraph.
 
 ---
 
@@ -291,49 +348,62 @@ NOT one per instrument), each independently live-calculated from REDCap:
 - Registered
 - Completed Assessment Set (**UI label only** — see "UI TERMINOLOGY" below;
   underlying strict all-six-instruments calculation is unchanged)
+- SSRS Parent
 - SSRS Child
 - SSRS Teacher
 
-**Overview restructure (2026-09-01):** below the "Study snapshot" KPI row,
-the page now has three further sections, each answering a distinct
-question (no section repeats another's numbers):
+**Overview restructure (2026-09-01, second pass — analytical layout):**
+below the "Study snapshot" KPI row, the page now has four further
+sections, each answering a distinct question (no section repeats another's
+numbers in more than one additional format):
 
-- **Assessment Instrument Coverage** — one unified panel (reuses the
-  existing `ChartCard` + `CoverageBar` components — no new chart components
-  were built) showing all **nine** live REDCap instruments as individual
-  rows — Registration Form, SES, DSEQ, Child Illness History, PAQ-A,
-  Dietary Intake, SSRS Parent, SSRS Child, SSRS Teacher — each independently
-  calculated from its own `*_complete` field (never derived from another
-  instrument or from the Completed Assessment Set aggregate). Subtly
-  grouped (label only, same unified card) into Registration / Study
-  Assessments / Social Skills Assessments. Each row also shows a
-  High/Partial/No Data coverage-tier `StatusBadge` (see API section below).
-  This is the only place SSRS Parent's own completion count is surfaced on
-  Overview — there is deliberately no separate top-level "SSRS Parent" KPI
-  card.
-- **Study Progress** — the `Funnel` component only (registered → Completed
-  Assessment Set → SSRS Child → SSRS Teacher), reusing the same
-  `ProgressResponse.stages` the Assessment Progress page uses. The old
-  Overview-only 4-card `ProgressStageCard` grid (which repeated the
-  Snapshot's own numbers in a 3rd visual format) was removed from this
-  page. `ProgressStageCard.tsx` itself is intentionally left in the
-  codebase, currently unused anywhere — kept per an explicit decision to
-  defer dead-code cleanup until after the redesign is verified; do not
-  delete it without asking first, and do not "helpfully" re-wire it back in.
-- **Data Collection & Quality Status** — a compact stat panel (new
-  `.status-stat-grid`/`.status-stat` CSS, not more KPI cards): total
-  instrument-completions collected across all 9 instruments, count of
-  instruments at High coverage, count needing attention (Partial or No
-  Data), and last-refresh time (from the existing `useRefresh()` context —
-  no new state). When any instrument is Partial or No-Data, a short flagged
-  line names them (e.g. "No completed assessments yet: SSRS Teacher").
-  Every figure here is derived from `all_instrument_coverage` plus the
-  existing refresh timestamp — no new backend data beyond `coverage_tier`
-  (see API section below).
+- **Study Profile** (new) — three compact charts using `OverviewResponse`
+  fields that were already being fetched but not charted on this page:
+  `sex_distribution` as a donut (new `frontend/src/components/DonutChart.tsx`
+  — thin Recharts `Pie`/`Cell` wrapper matching the existing chart
+  components' styling conventions; recharts was already a dependency, no
+  new chart library added), `age_distribution` as a bar chart (existing
+  `CategoryBarChart`, `mode="sequential"`), and
+  `udai_pareek_category_distribution` as a horizontal bar chart (existing
+  `HorizontalBarChart`) — the same data Demographics also charts, shown
+  here as a compact population snapshot rather than the detailed page.
+- **Assessment Coverage** — the previous 9-row `CoverageBar` panel (9 large
+  progress bars, visually repetitive) was replaced with a **compact table**
+  (reuses the existing `.table-card`/`table.data-table` styling from the
+  Registry page — no new table component) — one row per instrument:
+  Assessment Instrument | Completed | Coverage | Status
+  (`StatusBadge` for High/Partial/No Data). Still all **nine** live
+  instruments from `all_instrument_coverage`, still each independently
+  calculated from its own `*_complete` field — only the presentation
+  changed, not the data or calculation. The old subtle
+  Registration/Study Assessments/Social Skills Assessments row-grouping was
+  dropped (a flat table doesn't need it); `CoverageBar.tsx` itself is
+  unchanged and still used by the Assessment Progress page's own
+  instrument breakdown (see below).
+- **Study Progress** — unchanged: the `Funnel` component only (registered →
+  Completed Assessment Set → SSRS Child → SSRS Teacher), reusing
+  `ProgressResponse.stages`. (An earlier pass had already removed a
+  duplicate 4-card `ProgressStageCard` KPI grid from this page — see prior
+  entry below; `ProgressStageCard.tsx` remains intentionally unused in the
+  codebase, kept pending an explicit dead-code-cleanup decision.)
+- **Data Collection & Quality Status** — unchanged: the compact
+  `.status-stat-grid` panel (total instrument-completions collected, count
+  at High coverage, count needing attention, last refresh) plus the
+  Partial/No-Data flag list.
 
 Do NOT duplicate detailed demographic analysis here.
 
 Do NOT show the large Module Integration Status section on Overview.
+
+Verified (this pass): backend **113/113** tests pass (unchanged — no
+backend files were touched); frontend `tsc --noEmit` and `npm run build`
+both succeed. Live-checked against REDCap (212 registered): sex 110
+male/102 female/0 unknown, age buckets 0/188/24/0 across 0-4/5-9/10-14/15+,
+Udai Pareek categories 3→7, 4→24, 5→1 — all read directly from the live
+`/api/v1/dashboard/overview` response. The 9-row coverage table's live
+values matched exactly: Registration Form 212/100%/High; SES, DSEQ, Child
+Illness History, PAQ-A, Dietary Intake, SSRS Parent each 32/15.09%/Partial;
+SSRS Child 17/8.02%/Partial; SSRS Teacher 0/0%/No Data.
 
 **Assessment Progress page:** the duplicate 4-KPI-card row above the funnel
 (same numbers as Overview's Snapshot) was removed — the page now opens

@@ -65,10 +65,6 @@ export default function HealthScreening() {
           <HorizontalBarChart data={generalFlags} />
         </ChartCard>
       </div>
-
-      <p className="chart-card-note" style={{ marginTop: "var(--space-2)" }}>
-        {data.notes.scope}
-      </p>
     </section>
   );
 }

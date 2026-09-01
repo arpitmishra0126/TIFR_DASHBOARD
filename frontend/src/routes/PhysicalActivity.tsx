@@ -24,7 +24,7 @@ function scoreValue(summary: ScoreSummary): string {
 
 function scoreSublabel(summary: ScoreSummary): string {
   if (summary.valid_n === 0) return `No data acquired (0/${summary.total})`;
-  return `n=${summary.valid_n}/${summary.total} acquired (${summary.percent_valid}%) · range ${summary.minimum}–${summary.maximum}`;
+  return `${summary.valid_n} participants · ${summary.percent_valid}% coverage`;
 }
 
 export default function PhysicalActivity() {
@@ -74,10 +74,6 @@ export default function PhysicalActivity() {
           <CategoryBarChart data={distribution} mode="sequential" />
         </ChartCard>
       </div>
-
-      <p className="chart-card-note" style={{ marginTop: "var(--space-2)" }}>
-        {data.notes.scores}
-      </p>
     </section>
   );
 }

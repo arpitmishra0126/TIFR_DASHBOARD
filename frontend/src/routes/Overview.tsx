@@ -1,26 +1,25 @@
 import { useEffect, useState } from "react";
 
 import { getOverview, getProgress } from "../api/dashboard";
+import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
-import CoverageBar from "../components/CoverageBar";
 import DataLoadError from "../components/DataLoadError";
+import DonutChart from "../components/DonutChart";
 import Funnel from "../components/Funnel";
-import { IconClipboardCheck, IconGraduationCap, IconUserCheck, IconUsers } from "../components/icons";
+import HorizontalBarChart from "../components/HorizontalBarChart";
+import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
+import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
-// Subtle grouping for the Assessment Instrument Coverage panel — a group
-// label is rendered above the first row whose key appears here. Order
-// matches the backend's ALL_INSTRUMENTS order exactly, so no re-sorting
-// is needed.
-const COVERAGE_GROUP_STARTS: Record<string, string> = {
-  registration: "Registration",
-  ses: "Study Assessments",
-  ssrs_parent: "Social Skills Assessments",
+const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
+  High: "good",
+  Partial: "warning",
+  "No Data": "neutral",
 };
 
 function formatTime(date: Date): string {
@@ -47,10 +46,23 @@ export default function Overview() {
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
   if (!overview || !progress) return <StudyDataLoader />;
 
-  const totalDataPoints = overview.all_instrument_coverage.reduce((sum, i) => sum + i.completed_count, 0);
   const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");
   const noDataCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "No Data");
   const highCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "High");
+  const totalDataPoints = overview.all_instrument_coverage.reduce((sum, i) => sum + i.completed_count, 0);
+
+  const sexData = [
+    { label: "Male", count: overview.sex_distribution.male },
+    { label: "Female", count: overview.sex_distribution.female },
+    { label: "Unknown", count: overview.sex_distribution.unknown },
+  ].filter((d) => d.count > 0);
+
+  const ageData = overview.age_distribution.map((b) => ({ label: b.label, count: b.count }));
+
+  const udaiData = overview.udai_pareek_category_distribution.map((c) => ({
+    label: `Category ${c.code}`,
+    count: c.count,
+  }));
 
   return (
     <section>
@@ -71,6 +83,13 @@ export default function Overview() {
           tone="aqua"
         />
         <KpiCard
+          label="SSRS Parent"
+          value={overview.ssrs_parent_count.toLocaleString()}
+          sublabel={`${overview.ssrs_parent_percent}% of registered`}
+          icon={IconHeart}
+          tone="neutral"
+        />
+        <KpiCard
           label="SSRS Child"
           value={overview.ssrs_child_count.toLocaleString()}
           sublabel={`${overview.ssrs_child_percent}% of registered`}
@@ -86,31 +105,50 @@ export default function Overview() {
         />
       </div>
       <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
-        Completed Assessment Set (temporary working label, pending official study terminology) = SES,
-        DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent all completed for the same
-        child. See Assessment Instrument Coverage below for every instrument's own completion count,
-        including SSRS Parent counted independently.
+        Completed Assessment Set = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS
+        Parent all completed for the same child.
       </p>
 
-      <ChartCard title="Assessment Instrument Coverage" subtitle="Individual instrument completion across registered children">
-        <div className="coverage-list">
-          {overview.all_instrument_coverage.map((instrument) => {
-            const groupLabel = COVERAGE_GROUP_STARTS[instrument.key];
-            return (
-              <div key={instrument.key}>
-                {groupLabel && <div className="coverage-group-label">{groupLabel}</div>}
-                <CoverageBar
-                  label={instrument.label}
-                  count={instrument.completed_count}
-                  total={overview.total_registered}
-                  percent={instrument.percent_of_registered}
-                  tier={instrument.coverage_tier}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </ChartCard>
+      <SectionHeader title="Study profile" note="Who is registered in the study" />
+      <div className="chart-grid three-col">
+        <ChartCard title="Sex Distribution">
+          <DonutChart data={sexData} />
+        </ChartCard>
+        <ChartCard title="Age Distribution">
+          <CategoryBarChart data={ageData} mode="sequential" />
+        </ChartCard>
+        <ChartCard title="SES Category (Udai Pareek)">
+          <HorizontalBarChart data={udaiData} />
+        </ChartCard>
+      </div>
+
+      <SectionHeader title="Assessment coverage" note="Completion of each of the 9 live instruments, independently calculated" />
+      <div className="table-card">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Assessment Instrument</th>
+              <th>Completed</th>
+              <th>Coverage</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {overview.all_instrument_coverage.map((instrument) => (
+              <tr key={instrument.key}>
+                <td>{instrument.label}</td>
+                <td>
+                  {instrument.completed_count} / {overview.total_registered}
+                </td>
+                <td>{instrument.percent_of_registered}%</td>
+                <td>
+                  <StatusBadge label={instrument.coverage_tier} tone={TIER_BADGE_TONE[instrument.coverage_tier] ?? "neutral"} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <ChartCard
         title="Study Progress"

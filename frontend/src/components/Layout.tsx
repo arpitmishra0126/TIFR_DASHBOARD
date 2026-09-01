@@ -3,7 +3,6 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import {
   IconActivity,
-  IconBrain,
   IconChevron,
   IconClose,
   IconHeart,
@@ -22,11 +21,13 @@ interface NavItem {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
+// Neurodevelopment keeps its route/API/implementation untouched — it is
+// deliberately left out of this nav list only (information-architecture
+// decision), not deleted.
 const MODULE_NAV: NavItem[] = [
   { to: "/health-screening", label: "Health & Screening", icon: IconHeart },
   { to: "/physical-activity", label: "Physical Activity", icon: IconActivity },
   { to: "/screen-time", label: "Screen Time", icon: IconMonitor },
-  { to: "/neurodevelopment", label: "Neurodevelopment", icon: IconBrain },
 ];
 
 export default function Layout() {
@@ -56,67 +57,13 @@ export default function Layout() {
   return (
     <div className="app-shell">
       <header className="app-topnav">
-        <div className="topnav-inner">
+        <div className="topnav-header-row">
           <div className="topnav-brand">
             <span className="topnav-brand-mark">IN</span>
             <div className="topnav-brand-text">
-              <div className="topnav-brand-title">ICMR Neurodevelopment</div>
-              <div className="topnav-brand-subtitle">Study Dashboard</div>
+              <div className="topnav-brand-title">ICMR Neurodevelopment Study Dashboard</div>
             </div>
           </div>
-
-          <nav className="topnav-links">
-            <NavLink to="/" end className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
-              <IconHome width={15} height={15} />
-              Overview
-            </NavLink>
-            <NavLink to="/registry" className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
-              <IconUsers width={15} height={15} />
-              Registry
-            </NavLink>
-
-            <div className="topnav-dropdown" ref={dropdownRef}>
-              <button
-                type="button"
-                className={`topnav-link topnav-dropdown-trigger${isModuleActive ? " active" : ""}`}
-                onClick={() => setAssessmentsOpen((v) => !v)}
-                aria-expanded={assessmentsOpen}
-                aria-haspopup="true"
-              >
-                Assessments
-                <IconChevron
-                  width={12}
-                  height={12}
-                  style={{ transform: assessmentsOpen ? "rotate(-90deg)" : "rotate(90deg)" }}
-                />
-              </button>
-              {assessmentsOpen && (
-                <div className="topnav-dropdown-menu">
-                  {MODULE_NAV.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        className={({ isActive }) => `topnav-dropdown-item${isActive ? " active" : ""}`}
-                      >
-                        <Icon width={15} height={15} />
-                        {item.label}
-                      </NavLink>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <NavLink to="/progress" className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
-              <IconProgress width={15} height={15} />
-              Progress
-            </NavLink>
-            <NavLink to="/registry" className="topnav-link">
-              Exports
-            </NavLink>
-          </nav>
 
           <div className="topnav-status">
             <span className="live-badge">
@@ -124,6 +71,8 @@ export default function Layout() {
               Live REDCap data
             </span>
           </div>
+
+          <Topbar />
 
           <button
             type="button"
@@ -134,6 +83,56 @@ export default function Layout() {
             {mobileOpen ? <IconClose width={18} height={18} /> : <IconMenu width={18} height={18} />}
           </button>
         </div>
+
+        <nav className="topnav-links">
+          <NavLink to="/" end className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
+            <IconHome width={15} height={15} />
+            Overview
+          </NavLink>
+          <NavLink to="/registry" className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
+            <IconUsers width={15} height={15} />
+            Registry
+          </NavLink>
+
+          <div className="topnav-dropdown" ref={dropdownRef}>
+            <button
+              type="button"
+              className={`topnav-link topnav-dropdown-trigger${isModuleActive ? " active" : ""}`}
+              onClick={() => setAssessmentsOpen((v) => !v)}
+              aria-expanded={assessmentsOpen}
+              aria-haspopup="true"
+            >
+              Assessments
+              <IconChevron
+                width={12}
+                height={12}
+                style={{ transform: assessmentsOpen ? "rotate(-90deg)" : "rotate(90deg)" }}
+              />
+            </button>
+            {assessmentsOpen && (
+              <div className="topnav-dropdown-menu">
+                {MODULE_NAV.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) => `topnav-dropdown-item${isActive ? " active" : ""}`}
+                    >
+                      <Icon width={15} height={15} />
+                      {item.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <NavLink to="/progress" className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
+            <IconProgress width={15} height={15} />
+            Progress
+          </NavLink>
+        </nav>
 
         {mobileOpen && (
           <nav className="topnav-mobile-menu">
@@ -156,15 +155,11 @@ export default function Layout() {
             <NavLink to="/progress" className={({ isActive }) => `topnav-mobile-link${isActive ? " active" : ""}`}>
               Progress
             </NavLink>
-            <NavLink to="/registry" className="topnav-mobile-link">
-              Exports
-            </NavLink>
           </nav>
         )}
       </header>
 
       <main className="app-content">
-        <Topbar />
         <RouteErrorBoundary key={location.pathname}>
           <Outlet />
         </RouteErrorBoundary>

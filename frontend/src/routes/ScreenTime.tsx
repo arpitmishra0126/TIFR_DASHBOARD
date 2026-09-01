@@ -65,10 +65,6 @@ export default function ScreenTime() {
           <CategoryBarChart data={distribution} mode="categorical" />
         </ChartCard>
       </div>
-
-      <p className="chart-card-note" style={{ marginTop: "var(--space-2)" }}>
-        {data.notes.scope}
-      </p>
     </section>
   );
 }

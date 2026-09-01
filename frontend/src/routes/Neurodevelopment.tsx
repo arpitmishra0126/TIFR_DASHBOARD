@@ -16,7 +16,7 @@ function scoreValue(summary: ScoreSummary): string {
 
 function scoreSublabel(summary: ScoreSummary): string {
   if (summary.valid_n === 0) return `No data acquired (0/${summary.total})`;
-  return `n=${summary.valid_n}/${summary.total} acquired (${summary.percent_valid}%)`;
+  return `${summary.valid_n} participants · ${summary.percent_valid}% coverage`;
 }
 
 function InstrumentSection({ summary }: { summary: SSRSInstrumentSummary }) {
@@ -68,9 +68,6 @@ export default function Neurodevelopment() {
       <InstrumentSection summary={data.parent} />
       <InstrumentSection summary={data.child} />
       <InstrumentSection summary={data.teacher} />
-
-      <p className="chart-card-note">{data.notes.scope}</p>
-      <p className="chart-card-note">{data.notes.ssrs_teacher}</p>
     </section>
   );
 }
