@@ -249,10 +249,16 @@ The dashboard should look like a polished modern clinical/research analytics das
 
 Study-level summary.
 
-Show:
+Show, as separate KPI cards, each independently live-calculated from REDCap:
 
 - Registered
-- Core Assessment Battery
+- Completed Assessment Set (**UI label only**, updated 2026-09-01 — see
+  "UI TERMINOLOGY" note below; underlying strict all-six-instruments
+  calculation is unchanged)
+- SSRS Parent (calculated independently from `ssrs_parent_complete` —
+  **not** derived from/limited to the Completed Assessment Set count, since
+  a child can complete SSRS Parent without completing the other five
+  instruments)
 - SSRS Child
 - SSRS Teacher
 - assessment progress/coverage
@@ -260,6 +266,45 @@ Show:
 Do NOT duplicate detailed demographic analysis here.
 
 Do NOT show the large Module Integration Status section on Overview.
+
+#### UI TERMINOLOGY (temporary, 2026-09-01)
+
+"Core Assessment Battery" was renamed to **"Completed Assessment Set"** in
+all user-facing text on the Overview KPI cards and the Assessment Progress
+funnel/stage-instrument-breakdown (`frontend/src/routes/Overview.tsx`,
+`frontend/src/routes/AssessmentProgress.tsx`, and the `ProgressStage.label`/
+`description` strings built in
+`backend/app/services/live_dashboard_service.py::get_progress`/`get_overview`).
+This is a **temporary neutral placeholder label** pending official
+terminology from the study team — do not treat it as an approved study name,
+and do not propagate it elsewhere (the Active Cases Excel/CSV export in
+`export_service.py` intentionally still says "Core Assessment Battery" —
+out of scope for this rename, left unchanged). The underlying calculation
+(all six of SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake, SSRS
+Parent complete for the same child — `CORE_BATTERY_COMPLETE_FIELDS`) is
+**unchanged**; only the display label moved. Backend field/key names
+(`core_assessment_count`, `core_assessment_percent`, stage key
+`core_assessment_battery`) were deliberately left as-is — internal
+identifiers, not user-facing text.
+
+`OverviewResponse` gained `ssrs_parent_count`/`ssrs_parent_percent`
+(backend/app/schemas/dashboard.py, mirrored in
+frontend/src/types/liveDashboard.ts), computed in `get_overview()` via
+`_unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)` —
+independent of `_core_battery_ids()`. `SSRS_PARENT_COMPLETE_FIELD` was
+extracted as a named constant in `live_field_map.py` (previously an inline
+string literal inside `CORE_BATTERY_INSTRUMENTS`).
+
+Verified: backend 107/107 tests pass (added
+`test_overview_ssrs_parent_counted_independently_of_core_battery` +
+percentage test, using existing fixture record REC004 which has
+`ssrs_parent_complete="2"` but an incomplete Dietary Intake, proving
+SSRS Parent's count (4) differs from Completed Assessment Set's count (3)).
+Frontend `tsc --noEmit` and `npm run build` both succeed. Live-checked
+against REDCap: at time of check `ssrs_parent_count` and
+`core_assessment_count` both read 32/212 (they can coincide when no child
+has independently completed only SSRS Parent — not a bug, confirmed by the
+fixture test above which forces the divergent case deterministically).
 
 ### Participants
 

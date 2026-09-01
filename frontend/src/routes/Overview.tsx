@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getOverview, getProgress } from "../api/dashboard";
-import { IconClipboardCheck, IconGraduationCap, IconUserCheck, IconUsers } from "../components/icons";
+import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
 import KpiCard, { type KpiTone } from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import ProgressStageCard from "../components/ProgressStageCard";
@@ -56,11 +56,18 @@ export default function Overview() {
           />
         )}
         <KpiCard
-          label="Core Assessment Battery"
+          label="Completed Assessment Set"
           value={overview.core_assessment_count.toLocaleString()}
           sublabel={`${overview.core_assessment_percent}% of registered`}
           icon={IconClipboardCheck}
           tone="aqua"
+        />
+        <KpiCard
+          label="SSRS Parent"
+          value={overview.ssrs_parent_count.toLocaleString()}
+          sublabel={`${overview.ssrs_parent_percent}% of registered`}
+          icon={IconHeart}
+          tone="neutral"
         />
         <KpiCard
           label="SSRS Child"
@@ -78,8 +85,9 @@ export default function Overview() {
         />
       </div>
       <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
-        Core Assessment Battery = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS
-        Parent all completed for the same child.
+        Completed Assessment Set (temporary working label, pending official study terminology) = SES,
+        DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent all completed for the same
+        child. SSRS Parent above is counted independently and is not limited to that set.
       </p>
 
       <SectionHeader

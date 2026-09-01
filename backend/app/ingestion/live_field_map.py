@@ -151,6 +151,10 @@ REGISTRATION_COMPLETE_FIELD = "registration_form_complete"
 
 # The six instruments that together make up the "Core Assessment Battery",
 # paired with their user-facing labels (for the Assessment Coverage section).
+SSRS_PARENT_COMPLETE_FIELD = "ssrs_parent_complete"
+SSRS_CHILD_COMPLETE_FIELD = "ssrs_child_complete"
+SSRS_TEACHER_COMPLETE_FIELD = "ssrs_teacher_complete"
+
 CORE_BATTERY_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
     # (key, completion field, display label)
     ("ses", "screening_rural_complete", "SES"),
@@ -158,13 +162,10 @@ CORE_BATTERY_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
     ("child_illness_history", "child_illness_history_complete", "Child Illness History"),
     ("paq_a", "paq_a_complete", "PAQ-A"),
     ("dietary_intake", "dietary_intake_complete", "Dietary Intake"),
-    ("ssrs_parent", "ssrs_parent_complete", "SSRS Parent"),
+    ("ssrs_parent", SSRS_PARENT_COMPLETE_FIELD, "SSRS Parent"),
 )
 
 CORE_BATTERY_COMPLETE_FIELDS: tuple[str, ...] = tuple(field for _, field, _ in CORE_BATTERY_INSTRUMENTS)
-
-SSRS_CHILD_COMPLETE_FIELD = "ssrs_child_complete"
-SSRS_TEACHER_COMPLETE_FIELD = "ssrs_teacher_complete"
 
 CORE_BATTERY_DESCRIPTION = (
     "SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent completed."

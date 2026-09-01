@@ -53,6 +53,8 @@ class OverviewResponse(BaseModel):
     registration_complete_percent: float
     core_assessment_count: int
     core_assessment_percent: float
+    ssrs_parent_count: int
+    ssrs_parent_percent: float
     ssrs_child_count: int
     ssrs_child_percent: float
     ssrs_teacher_count: int

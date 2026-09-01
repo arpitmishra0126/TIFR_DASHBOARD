@@ -25,6 +25,7 @@ from app.ingestion.live_field_map import (
     SSRS_CHILD_COMPLETE_FIELD,
     SSRS_CHILD_FREQ_FIELDS,
     SSRS_CHILD_IMP_FIELDS,
+    SSRS_PARENT_COMPLETE_FIELD,
     SSRS_PARENT_FREQ_FIELDS,
     SSRS_PARENT_IMP_FIELDS,
     SSRS_TEACHER_COMPLETE_FIELD,
@@ -274,6 +275,10 @@ class LiveDashboardService:
         total_registered = len(children)
 
         core_ids = _core_battery_ids(records)
+        # SSRS Parent is computed independently from ssrs_parent_complete —
+        # NOT derived from core_ids — even though SSRS Parent is also one of
+        # the six instruments required for the Completed Assessment Set.
+        ssrs_parent_ids = _unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)
         ssrs_child_ids = core_ids & _unique_ids_with_complete_field(records, SSRS_CHILD_COMPLETE_FIELD)
         ssrs_teacher_ids = ssrs_child_ids & _unique_ids_with_complete_field(records, SSRS_TEACHER_COMPLETE_FIELD)
 
@@ -288,6 +293,8 @@ class LiveDashboardService:
             registration_complete_percent=_percent(registration_complete_count, total_registered),
             core_assessment_count=len(core_ids),
             core_assessment_percent=_percent(len(core_ids), total_registered),
+            ssrs_parent_count=len(ssrs_parent_ids),
+            ssrs_parent_percent=_percent(len(ssrs_parent_ids), total_registered),
             ssrs_child_count=len(ssrs_child_ids),
             ssrs_child_percent=_percent(len(ssrs_child_ids), total_registered),
             ssrs_teacher_count=len(ssrs_teacher_ids),
@@ -329,7 +336,10 @@ class LiveDashboardService:
             ),
             ProgressStage(
                 key="core_assessment_battery",
-                label="Core Assessment Battery",
+                # UI label only — temporary neutral wording pending official
+                # study terminology. The strict all-six-instruments
+                # calculation (CORE_BATTERY_COMPLETE_FIELDS) is unchanged.
+                label="Completed Assessment Set",
                 description=CORE_BATTERY_DESCRIPTION,
                 count=core_count,
                 percent_of_registered=_percent(core_count, total_registered),
@@ -339,7 +349,7 @@ class LiveDashboardService:
                 key="ssrs_child",
                 label="SSRS Child",
                 description="Social Skills Rating System (Child self-report) completed, "
-                "among children who also completed the Core Assessment Battery.",
+                "among children who also completed the Completed Assessment Set.",
                 count=ssrs_child_count,
                 percent_of_registered=_percent(ssrs_child_count, total_registered),
                 percent_of_previous_stage=_percent(ssrs_child_count, core_count),

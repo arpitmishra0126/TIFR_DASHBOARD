@@ -67,6 +67,25 @@ async def test_overview_core_battery_requires_all_six_instruments(service: LiveD
 
 
 @pytest.mark.asyncio
+async def test_overview_ssrs_parent_counted_independently_of_core_battery(service: LiveDashboardService):
+    result = await service.get_overview()
+    # REC001, REC002, REC003 (in the core-battery set) AND REC004 (which has
+    # ssrs_parent_complete == "2" but is NOT in the core-battery set, since
+    # its dietary_intake is incomplete) must all count toward SSRS Parent.
+    # This proves ssrs_parent_count is derived from ssrs_parent_complete
+    # directly, not from the core_assessment_count intersection.
+    assert result.ssrs_parent_count == 4
+    assert result.core_assessment_count == 3
+    assert result.ssrs_parent_count != result.core_assessment_count
+
+
+@pytest.mark.asyncio
+async def test_overview_ssrs_parent_percentage_computed_dynamically(service: LiveDashboardService):
+    result = await service.get_overview()
+    assert result.ssrs_parent_percent == round(4 / 6 * 100, 2)
+
+
+@pytest.mark.asyncio
 async def test_overview_ssrs_child_counts_only_within_core_battery_cohort(service: LiveDashboardService):
     result = await service.get_overview()
     # REC001 and REC002 have ssrs_child complete AND are in the core-battery set.

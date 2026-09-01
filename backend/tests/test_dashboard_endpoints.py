@@ -25,6 +25,7 @@ def test_overview_endpoint_returns_core_battery_progression():
     body = response.json()
     assert body["total_registered"] == 6
     assert body["core_assessment_count"] == 3
+    assert body["ssrs_parent_count"] == 4  # independent of core_assessment_count — see fixture REC004
     assert body["ssrs_child_count"] == 2
     assert body["ssrs_teacher_count"] == 1
     assert "physical_activity" in body["modules_pending_integration"]

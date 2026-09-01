@@ -46,6 +46,8 @@ export interface OverviewResponse {
   registration_complete_percent: number;
   core_assessment_count: number;
   core_assessment_percent: number;
+  ssrs_parent_count: number;
+  ssrs_parent_percent: number;
   ssrs_child_count: number;
   ssrs_child_percent: number;
   ssrs_teacher_count: number;
