@@ -7,6 +7,7 @@ import {
   IconActivity,
   IconBrain,
   IconChart,
+  IconChevron,
   IconClipboardCheck,
   IconGraduationCap,
   IconHeart,
@@ -115,19 +116,27 @@ function AvailableInstrumentCard({ instrument, overview }: { instrument: Availab
   const Icon = instrument.icon;
 
   return (
-    <Link to={instrument.route} className="instrument-card">
-      <div className="instrument-card-icon">
-        <Icon width={18} height={18} />
+    <Link to={instrument.route} className="instrument-card instrument-card-available">
+      <div className="instrument-card-top">
+        <div className="instrument-card-icon">
+          <Icon width={18} height={18} />
+        </div>
+        <IconChevron width={13} height={13} className="instrument-card-chevron" />
       </div>
       <div className="instrument-card-name">{instrument.name}</div>
       <div className="instrument-card-purpose">{instrument.purpose}</div>
-      <div className="instrument-card-status-row">
-        <StatusBadge label={status} tone={STATUS_BADGE_TONE[status]} />
-        <span className="instrument-card-figure">
-          {completed}/{total} ({percent}%)
+      <div className="instrument-card-body">
+        <div className="instrument-card-status-row">
+          <StatusBadge label={status} tone={STATUS_BADGE_TONE[status]} />
+          <span className="instrument-card-figure">
+            {completed}/{total} ({percent}%)
+          </span>
+        </div>
+        <ProportionBar value={completed} total={total} color={status === "No Data Available" ? "var(--baseline)" : "var(--series-1)"} />
+        <span className="instrument-card-affordance">
+          View assessment <IconChevron width={10} height={10} />
         </span>
       </div>
-      <ProportionBar value={completed} total={total} color={status === "No Data Available" ? "var(--baseline)" : "var(--series-1)"} />
     </Link>
   );
 }
@@ -136,22 +145,36 @@ function PlaceholderInstrumentCard({ instrument }: { instrument: PlaceholderInst
   const [expanded, setExpanded] = useState(false);
   const Icon = instrument.icon;
   return (
-    <button type="button" className="instrument-card instrument-card-placeholder" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
-      <div className="instrument-card-icon">
-        <Icon width={18} height={18} />
+    <button
+      type="button"
+      className="instrument-card instrument-card-placeholder"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+    >
+      <div className="instrument-card-top">
+        <div className="instrument-card-icon instrument-card-icon-muted">
+          <Icon width={18} height={18} />
+        </div>
+        <IconChevron width={13} height={13} className={`instrument-card-chevron${expanded ? " expanded" : ""}`} />
       </div>
       <div className="instrument-card-name">{instrument.name}</div>
       <div className="instrument-card-purpose">{instrument.purpose}</div>
-      <div className="instrument-card-status-row">
-        <StatusBadge label="Under Development" tone="neutral" />
-      </div>
-      {expanded && (
-        <div className="instrument-card-expanded">
-          <strong>Under Development</strong>
-          <br />
-          Data for this assessment is not currently available in the dashboard.
+      <div className="instrument-card-body">
+        <div className="instrument-card-status-row">
+          <StatusBadge label="Under Development" tone="neutral" />
         </div>
-      )}
+        {expanded ? (
+          <div className="instrument-card-expanded">
+            <strong>Under Development</strong>
+            <br />
+            Data for this assessment is not currently available in the dashboard.
+          </div>
+        ) : (
+          <span className="instrument-card-affordance instrument-card-affordance-muted">
+            Click for details <IconChevron width={10} height={10} />
+          </span>
+        )}
+      </div>
     </button>
   );
 }

@@ -917,10 +917,17 @@ a, button {
   border-color: var(--border-hairline-strong);
 }
 
-/* --- Assessment instrument hub (catalogue cards) --- */
+/* --- Assessment instrument hub (catalogue cards) ---
+ * Deliberately flex-wrap, not CSS grid: a grid's auto-fill tracks are
+ * allocated for the widest possible row regardless of how many cards a
+ * group actually has, so a 2-card group (e.g. Core / Baseline) reads as
+ * "half-empty" next to a 4-card group. Flex-wrap with a capped
+ * grow/basis gives every card the same width across every group (so
+ * columns still visually line up between groups) without stretching a
+ * short group's cards to fill the leftover row. */
 .instrument-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
@@ -929,6 +936,9 @@ a, button {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1 1 232px;
+  max-width: 272px;
+  min-height: 184px;
   background: var(--surface-1);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
@@ -939,14 +949,30 @@ a, button {
   color: inherit;
   font: inherit;
   cursor: pointer;
-  width: 100%;
-  transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition-fast);
+  transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition-fast), background var(--transition-fast);
 }
 
-.instrument-card:hover {
+.instrument-card-available:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--series-1);
+  transform: translateY(-2px);
+}
+
+.instrument-card-available:hover .instrument-card-name {
+  color: var(--series-1);
+}
+
+.instrument-card-placeholder:hover {
   box-shadow: var(--shadow-card-hover);
   border-color: var(--border-hairline-strong);
+  background: var(--surface-2);
   transform: translateY(-1px);
+}
+
+.instrument-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .instrument-card-icon {
@@ -961,11 +987,34 @@ a, button {
   margin-bottom: 2px;
 }
 
+.instrument-card-icon-muted {
+  color: var(--text-muted);
+}
+
+.instrument-card-chevron {
+  color: var(--text-muted);
+  margin-top: 8px;
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.instrument-card:hover .instrument-card-chevron {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.instrument-card-chevron.expanded {
+  opacity: 1;
+  transform: rotate(90deg);
+}
+
 .instrument-card-name {
   font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.005em;
+  transition: color var(--transition-fast);
 }
 
 .instrument-card-purpose {
@@ -975,12 +1024,18 @@ a, button {
   min-height: 2.1em;
 }
 
+.instrument-card-body {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .instrument-card-status-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin-top: 4px;
 }
 
 .instrument-card-figure {
@@ -991,12 +1046,18 @@ a, button {
   white-space: nowrap;
 }
 
-.instrument-card-placeholder {
-  opacity: 0.8;
+.instrument-card-affordance {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--series-1);
+  margin-top: 2px;
 }
 
-.instrument-card-placeholder:hover {
-  opacity: 1;
+.instrument-card-affordance-muted {
+  color: var(--text-muted);
 }
 
 .instrument-card-expanded {
