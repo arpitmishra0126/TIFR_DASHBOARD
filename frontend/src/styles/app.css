@@ -428,40 +428,52 @@ a, button {
   box-shadow: var(--shadow-card);
 }
 
-/* --- Global contextual back navigation (every non-Overview page) --- */
+/* --- Global contextual back navigation (every non-Overview page) ---
+ * Same bordered/filled button treatment as .refresh-button/.export-button,
+ * for visual consistency with the rest of the dashboard's actual buttons. */
 .page-back-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
 
-.back-nav-link {
+.back-nav-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-decoration: none;
-  background: none;
-  border: none;
-  padding: 0;
+  gap: 6px;
+  padding: 0.46rem 0.9rem;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-hairline-strong);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
   font-family: inherit;
+  text-decoration: none;
   cursor: pointer;
-  transition: color var(--transition-fast), gap var(--transition-fast);
+  box-shadow: var(--shadow-xs);
+  transition: border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
-.back-nav-link:hover {
+.back-nav-button:hover {
+  border-color: var(--series-1);
   color: var(--series-1);
-  gap: 8px;
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
-.back-nav-divider {
-  width: 1px;
-  height: 12px;
-  background: var(--border-hairline-strong);
-  flex-shrink: 0;
+@media (max-width: 480px) {
+  .page-back-nav {
+    justify-content: flex-start;
+  }
+
+  .back-nav-button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
 }
 
 /* --- Page header --- */

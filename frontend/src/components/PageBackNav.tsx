@@ -10,12 +10,11 @@ export default function PageBackNav() {
 
   return (
     <div className="page-back-nav">
-      <button type="button" className="back-nav-link" onClick={() => navigate(-1)}>
-        ← Back
+      <button type="button" className="back-nav-button" onClick={() => navigate(-1)}>
+        <span aria-hidden="true">←</span> Back
       </button>
-      <span className="back-nav-divider" aria-hidden="true" />
-      <Link to="/" className="back-nav-link">
-        ⌂ Back to Home
+      <Link to="/" className="back-nav-button">
+        <span aria-hidden="true">🏠</span> Back to Home
       </Link>
     </div>
   );
