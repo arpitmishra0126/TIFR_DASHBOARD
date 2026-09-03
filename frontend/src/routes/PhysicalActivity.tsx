@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 
 import { getPhysicalActivity } from "../api/dashboard";
-import BackToAssessments from "../components/BackToAssessments";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
@@ -49,7 +48,6 @@ export default function PhysicalActivity() {
 
   return (
     <section>
-      <BackToAssessments />
       <PageHeader
         eyebrow="Study Assessment"
         title="Physical Activity (PAQ-A)"

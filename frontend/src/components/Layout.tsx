@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { IconChart, IconClose, IconHome, IconMenu, IconUsers } from "./icons";
+import PageBackNav from "./PageBackNav";
 import RouteErrorBoundary from "./RouteErrorBoundary";
 import Topbar from "./Topbar";
 
@@ -93,6 +94,7 @@ export default function Layout() {
       </header>
 
       <main className="app-content">
+        {location.pathname !== "/" && <PageBackNav />}
         <RouteErrorBoundary key={location.pathname}>
           <Outlet />
         </RouteErrorBoundary>

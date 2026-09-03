@@ -428,8 +428,15 @@ a, button {
   box-shadow: var(--shadow-card);
 }
 
-/* --- Back-to-hub link (instrument detail pages) --- */
-.back-link {
+/* --- Global contextual back navigation (every non-Overview page) --- */
+.page-back-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.back-nav-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -437,13 +444,24 @@ a, button {
   font-weight: 600;
   color: var(--text-muted);
   text-decoration: none;
-  margin-bottom: var(--space-4);
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
   transition: color var(--transition-fast), gap var(--transition-fast);
 }
 
-.back-link:hover {
+.back-nav-link:hover {
   color: var(--series-1);
   gap: 8px;
+}
+
+.back-nav-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--border-hairline-strong);
+  flex-shrink: 0;
 }
 
 /* --- Page header --- */
