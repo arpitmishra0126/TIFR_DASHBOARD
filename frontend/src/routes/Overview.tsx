@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getOverview, getProgress } from "../api/dashboard";
+import { getOverview } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import { percentOf } from "../components/charts/chartHelpers";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
-import Funnel from "../components/Funnel";
 import HorizontalBarChart from "../components/HorizontalBarChart";
 import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
@@ -17,7 +16,7 @@ import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
-import type { ConditionIndicator, OverviewResponse, ProgressResponse } from "../types/liveDashboard";
+import type { ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
@@ -41,23 +40,19 @@ function topReportedItems(named: ConditionIndicator[], general: ConditionIndicat
 
 export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
-  const [progress, setProgress] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const { version, lastUpdated } = useRefresh();
 
   useEffect(() => {
     setError(null);
-    Promise.all([getOverview(), getProgress()])
-      .then(([o, p]) => {
-        setOverview(o);
-        setProgress(p);
-      })
+    getOverview()
+      .then(setOverview)
       .catch((err: Error) => setError(err.message));
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!overview || !progress) return <StudyDataLoader />;
+  if (!overview) return <StudyDataLoader />;
 
   const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");
   const noDataCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "No Data");
@@ -128,17 +123,17 @@ export default function Overview() {
       </p>
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
-      <div className="chart-grid three-col">
+      <div className="chart-grid two-col">
         <ChartCard title="Sex Distribution" subtitle="Registered children, by sex">
-          <DonutChart data={sexData} centerValue={overview.total_registered} centerLabel="Registered" />
+          <DonutChart data={sexData} height={168} centerValue={overview.total_registered} centerLabel="Registered" />
         </ChartCard>
         <ChartCard title="Age Distribution" subtitle="Registered children, by study age group">
-          <CategoryBarChart data={ageData} mode="sequential" />
-        </ChartCard>
-        <ChartCard title="SES Category (Udai Pareek)" subtitle="Registered children with an SES score">
-          <HorizontalBarChart data={udaiData} mode="sequential" />
+          <CategoryBarChart data={ageData} mode="sequential" height={190} />
         </ChartCard>
       </div>
+      <ChartCard title="SES Category (Udai Pareek)" subtitle="Registered children with an SES score">
+        <HorizontalBarChart data={udaiData} mode="sequential" />
+      </ChartCard>
 
       <SectionHeader title="Assessment coverage" note="Completion of each of the 9 live instruments, independently calculated" />
       <div className="table-card">
@@ -184,13 +179,6 @@ export default function Overview() {
           </tbody>
         </table>
       </div>
-
-      <ChartCard
-        title="Study Progress"
-        subtitle="Each stage counts only children who also completed every prior stage"
-      >
-        <Funnel stages={progress.stages} />
-      </ChartCard>
 
       <SectionHeader title="Broad health signal" note="Child Illness History — high-level summary; full item-by-item analysis lives on its own page" />
       <ChartCard

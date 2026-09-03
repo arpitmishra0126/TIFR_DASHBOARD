@@ -34,7 +34,7 @@ export default function HorizontalBarChart({ data, height, mode = "categorical" 
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 4, right: 46, left: 0, bottom: 4 }}
+        margin={{ top: 4, right: 68, left: 0, bottom: 4 }}
         barCategoryGap="30%"
       >
         <CartesianGrid horizontal={false} stroke="var(--gridline)" strokeDasharray="3 4" />

@@ -366,15 +366,43 @@ per-instrument completion now visible on the Assessments hub. The
 `/progress` route/`AssessmentProgress.tsx` page and its
 `GET /dashboard/progress` endpoint are **unchanged and still reachable by
 direct URL** — same precedent as Neurodevelopment being nav-hidden-but-not-
-deleted. The "Assessments" topnav dropdown was trimmed from a near-complete
-instrument list to genuine quick navigation — `frontend/src/components/Layout.tsx`'s
-`QUICK_NAV` — "All Study Instruments" (the hub) plus the 3 most-used
-instrument pages (Child Illness History, Screen Time, Physical Activity);
-Dietary Intake and Neurodevelopment are reachable via the hub or direct URL
-but no longer duplicated in the dropdown. A separate `ASSESSMENT_ROUTES`
-list (broader than `QUICK_NAV`) still correctly highlights the "Assessments"
-nav trigger when any assessment-area route is active, including ones no
-longer in the trimmed dropdown.
+deleted.
+
+**Navigation simplification (2026-09-03, fourth pass — dropdown removed)**:
+the "Assessments" topnav item is no longer a dropdown at all — top
+navigation is now exactly **Overview | Registry | Assessments**, each a
+plain link (`frontend/src/components/Layout.tsx`; the `QUICK_NAV` array and
+outside-click dropdown state/logic from the third pass were removed, not
+just hidden, since the hub page now fully replaces that role). Clicking
+"Assessments" goes straight to the `/assessments` hub, which is the single
+authoritative instrument catalogue. A `ASSESSMENT_ROUTES` list still keeps
+the "Assessments" nav item visually active while browsing any individual
+assessment page (Child Illness History, Screen Time, Physical Activity,
+Dietary Intake, Neurodevelopment), computed manually against
+`location.pathname` since a plain `NavLink` would otherwise only match
+`/assessments` exactly.
+
+**Overview cleanup (2026-09-03, fourth pass)**: the "Study Progress" funnel
+card was removed from Overview entirely (it duplicated the Assessment
+Coverage table's per-instrument numbers and the Snapshot's headline counts;
+the dedicated `/progress` page — still reachable by direct URL — keeps the
+full funnel view). Study Profile's three charts were rebalanced: Sex
+Distribution and Age Distribution now share a `two-col` row (donut height
+168, age chart height 190 — more compact, matching "balanced, not
+oversized"), and SES Category (Udai Pareek) was moved to its own full-width
+card below rather than squeezed into a three-column row, since its
+descriptive category labels ("Upper-middle", "Lower-middle") and
+end-of-bar "n (%)" labels need more horizontal room than a one-third
+column reliably provides.
+
+**Shared chart layout fix**: `frontend/src/components/HorizontalBarChart.tsx`'s
+right margin was increased from 46px to 68px — the fix lives in the shared
+component (used by Overview's and Demographics' SES charts alike), not as
+a one-off page-level patch. The previous 46px margin was tight enough that
+the trailing `"n (%)"` end-of-bar label (e.g. `"34 (16.0%)"`) could clip
+against the chart's right edge, especially in a narrower column; this was
+the root cause of the "squeezed" SES chart, not a ResponsiveContainer or
+grid sizing defect.
 
 **Known data characteristic (not a bug, flagged for the study team)**: the
 10 Dietary Intake frequency fields' (`die_*_freq`) REDCap choice labels are
@@ -401,6 +429,10 @@ brand identity on top, nav centered below — and trimmed the nav items:
 ICMR Neurodevelopment Study Dashboard
      [ Overview | Registry | Assessments ▾ | Progress ]
 ```
+
+*(superseded 2026-09-03, fourth pass — see "Navigation simplification" above:
+the nav is now exactly `Overview | Registry | Assessments`, no dropdown, no
+Progress item. The description below is kept for history/provenance.)*
 
 - Row 1 (`.topnav-header-row`): brand mark/title (left), live-REDCap badge
   (right on desktop), mobile menu button (right, mobile only).
