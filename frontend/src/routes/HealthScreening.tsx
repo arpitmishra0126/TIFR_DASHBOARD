@@ -1,21 +1,50 @@
 import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
-import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
-import HorizontalBarChart from "../components/HorizontalBarChart";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
-import type { HealthScreeningResponse } from "../types/liveDashboard";
+import type { ConditionIndicator, HealthScreeningResponse } from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
   Partial: "warning",
   "No Data": "neutral",
 };
+
+function ConditionTable({ title, rows }: { title: string; rows: ConditionIndicator[] }) {
+  return (
+    <div className="table-card">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>{title}</th>
+            <th>Yes</th>
+            <th>No</th>
+            <th>Don't know</th>
+            <th>Valid N</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((c) => (
+            <tr key={c.label}>
+              <td>{c.label}</td>
+              <td>
+                {c.yes_count} ({c.percent_yes}%)
+              </td>
+              <td>{c.no_count}</td>
+              <td>{c.dont_know_count}</td>
+              <td>{c.valid_n}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function HealthScreening() {
   const [data, setData] = useState<HealthScreeningResponse | null>(null);
@@ -34,36 +63,29 @@ export default function HealthScreening() {
   if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
-  const namedConditions = data.named_conditions.map((c) => ({ label: c.code, count: c.count }));
-  const generalFlags = data.general_flags.map((c) => ({ label: c.code, count: c.count }));
 
   return (
     <section>
       <PageHeader
         eyebrow="Study Assessment"
-        title="Health & Screening"
+        title="Child Illness History"
         subtitle="Child Illness History — live REDCap instrument."
       />
 
       <div className="module-status-line">
-        <StatusBadge label={`${completion.coverage_tier} coverage`} tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"} />
-        <span>
-          {completion.completed} / {completion.total_registered} registered children completed this instrument (
-          {completion.percent}%)
-        </span>
+        <StatusBadge
+          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
+        />
       </div>
 
       <SectionHeader
-        title="Named conditions"
-        note={`Children answering "Yes" — n=${completion.completed}/${completion.total_registered} completed the instrument`}
+        title="Reported conditions and indicators"
+        note="Percentages use each item's own valid respondents (children who actually answered that question), not the full registered cohort."
       />
-      <div className="chart-grid">
-        <ChartCard title="Named conditions (Yes counts)" subtitle="Child Illness History, item 8">
-          <HorizontalBarChart data={namedConditions} />
-        </ChartCard>
-        <ChartCard title="General health flags (Yes counts)" subtitle="Illness, chronic condition, hospitalisation, etc.">
-          <HorizontalBarChart data={generalFlags} />
-        </ChartCard>
+      <div className="chart-grid two-col">
+        <ConditionTable title="Reported Health Conditions, n (%)" rows={data.named_conditions} />
+        <ConditionTable title="Reported Health and Medical-History Indicators, n (%)" rows={data.general_flags} />
       </div>
     </section>
   );

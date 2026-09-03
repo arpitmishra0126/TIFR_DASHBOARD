@@ -130,10 +130,50 @@ def test_health_screening_analysis_counts_and_completion():
     assert result["completion"]["total_registered"] == 2
     assert result["completion"]["completed"] == 1
     assert result["completion"]["coverage_tier"] == "High"
-    named = dict(result["named_conditions"])
-    assert named["Asthma"] == 1
-    general = dict(result["general_flags"])
-    assert general["Currently ill"] == 0
+    named = {c["label"]: c for c in result["named_conditions"]}
+    assert named["Asthma"]["yes_count"] == 1
+    assert named["Asthma"]["percent_yes"] == ma.percent(1, named["Asthma"]["valid_n"])
+    general = {c["label"]: c for c in result["general_flags"]}
+    assert general["Currently ill"]["yes_count"] == 0
+
+
+def test_ordered_category_counts_preserves_choice_code_order_and_zero_categories():
+    choice_maps = {"q10": {"1": "Less than 30 minutes", "2": "30 minutes-1 hour", "3": "1-2 hours"}}
+    records = [{"q10": "2"}, {"q10": "2"}, {"q10": "1"}]
+    result = ma.ordered_category_counts(records, "q10", choice_maps)
+    assert result == [("Less than 30 minutes", 1), ("30 minutes-1 hour", 2), ("1-2 hours", 0)]
+
+
+def test_response_breakdown_separates_dont_know_from_no():
+    choice_maps = {"f": {"0": "No", "1": "Yes", "9": "Don't know"}}
+    records = [{"f": "1"}, {"f": "0"}, {"f": "9"}, {"f": ""}]
+    result = ma.response_breakdown(records, "f", choice_maps)
+    assert result == {"yes": 1, "no": 1, "dont_know": 1, "valid_n": 3}
+
+
+def test_build_condition_indicator_uses_valid_respondents_as_percent_denominator():
+    choice_maps = {"f": {"0": "No", "1": "Yes", "9": "Don't know"}}
+    records = [{"f": "1"}, {"f": "1"}, {"f": "9"}, {"f": ""}]
+    indicator = ma.build_condition_indicator(records, "f", "Test Item", choice_maps, asked_n=4)
+    assert indicator["yes_count"] == 2
+    assert indicator["dont_know_count"] == 1
+    assert indicator["valid_n"] == 3  # 2 yes + 1 dont_know, blank excluded
+    assert indicator["missing_count"] == 1  # asked_n(4) - valid_n(3)
+    assert indicator["percent_yes"] == ma.percent(2, 3)  # NOT percent(2, 4)
+
+
+def test_build_dietary_analysis_reports_per_food_group_distribution():
+    choice_maps = {"die_grains_freq": {"1": "Daily", "2": "Rarely/Never"}}
+    records = [
+        {"child_id": "A", "dietary_intake_complete": "2", "die_grains_freq": "1"},
+        {"child_id": "B", "dietary_intake_complete": "0", "die_grains_freq": ""},
+    ]
+    result = ma.build_dietary_analysis(records, choice_maps)
+    assert result["completion"]["completed"] == 1
+    grains = next(i for i in result["items"] if i["field_label"] == "Grains / Roots / Tubers")
+    assert dict(grains["distribution"])["Daily"] == 1
+    assert grains["valid_n"] == 1
+    assert grains["missing_n"] == 1
 
 
 def test_physical_activity_analysis_missing_stays_missing():

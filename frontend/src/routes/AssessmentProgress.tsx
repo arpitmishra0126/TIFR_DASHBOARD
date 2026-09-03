@@ -47,7 +47,7 @@ export default function AssessmentProgress() {
       </ChartCard>
 
       <SectionHeader title="Instrument-level completion" note="Completion of each core instrument, individually" />
-      <ChartCard title="Completed Assessment Set instruments" subtitle={`Out of ${overview.total_registered} registered children`}>
+      <ChartCard title="Core REDCap Instruments Completed — by instrument" subtitle={`Out of ${overview.total_registered} registered children`}>
         <div className="coverage-list">
           {overview.instrument_coverage.map((c) => (
             <CoverageBar

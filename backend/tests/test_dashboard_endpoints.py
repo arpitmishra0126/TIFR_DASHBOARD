@@ -40,7 +40,10 @@ def test_overview_endpoint_returns_core_battery_progression():
         "ssrs_teacher",
     }
     assert body["ssrs_teacher_count"] == 1
-    assert "physical_activity" in body["modules_pending_integration"]
+    # All four assessment modules are field-mapped; nothing pending integration.
+    assert body["modules_pending_integration"] == []
+    assert body["chh_completion"]["instrument"] == "Child Illness History"
+    assert body["dseq_completion"]["instrument"] == "DSEQ"
 
 
 def test_overview_endpoint_accepts_refresh_query_param():
@@ -90,10 +93,10 @@ def test_health_endpoint_returns_real_named_conditions_and_completion():
     assert body["instrument"] == "Child Illness History"
     assert body["completion"]["total_registered"] == 6
     assert body["completion"]["completed"] == 4
-    conditions = {c["code"]: c["count"] for c in body["named_conditions"]}
-    assert conditions["Asthma"] == 1
-    flags = {c["code"]: c["count"] for c in body["general_flags"]}
-    assert flags["Currently ill"] == 0
+    conditions = {c["label"]: c for c in body["named_conditions"]}
+    assert conditions["Asthma"]["yes_count"] == 1
+    flags = {c["label"]: c for c in body["general_flags"]}
+    assert flags["Currently ill"]["yes_count"] == 0
 
 
 def test_physical_activity_endpoint_returns_real_score_summaries():
@@ -111,10 +114,23 @@ def test_screen_time_endpoint_returns_real_distribution():
     assert response.status_code == 200
     body = response.json()
     assert body["instrument"] == "DSEQ"
-    dist = {c["code"]: c["count"] for c in body["total_screen_time_distribution"]}
-    assert dist == {"30 minutes-1 hour": 1}
+    # Ordered by REDCap choice-code order (fixture defines codes 1, 2), not
+    # by descending frequency — every defined category appears, zero-count included.
+    dist_list = [(c["code"], c["count"]) for c in body["total_screen_time_distribution"]]
+    assert dist_list == [("Less than 30 minutes", 0), ("30 minutes-1 hour", 1)]
     yes_no = {c["code"]: c["count"] for c in body["yes_no_items"]}
     assert yes_no["Household has screen-use rules (Q9)"] == 1
+
+
+def test_dietary_intake_endpoint_returns_per_food_group_distribution():
+    response = client.get("/api/v1/dashboard/dietary-intake")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["instrument"] == "Dietary Intake"
+    assert body["completion"]["total_registered"] == 6
+    labels = [item["field_label"] for item in body["items"]]
+    assert "Grains / Roots / Tubers" in labels
+    assert len(body["items"]) == 10
 
 
 def test_neurodevelopment_endpoint_shows_teacher_with_no_acquired_data():

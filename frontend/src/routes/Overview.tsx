@@ -60,9 +60,11 @@ export default function Overview() {
   const ageData = overview.age_distribution.map((b) => ({ label: b.label, count: b.count }));
 
   const udaiData = overview.udai_pareek_category_distribution.map((c) => ({
-    label: `Category ${c.code}`,
+    label: c.code,
     count: c.count,
   }));
+
+  const dseqDistribution = overview.dseq_screen_time_distribution.map((c) => ({ label: c.code, count: c.count }));
 
   return (
     <section>
@@ -76,7 +78,7 @@ export default function Overview() {
       <div className="kpi-row">
         <KpiCard label="Registered" value={overview.total_registered.toLocaleString()} icon={IconUsers} tone="blue" />
         <KpiCard
-          label="Completed Assessment Set"
+          label="Core REDCap Instruments Completed"
           value={overview.core_assessment_count.toLocaleString()}
           sublabel={`${overview.core_assessment_percent}% of registered`}
           icon={IconClipboardCheck}
@@ -105,8 +107,8 @@ export default function Overview() {
         />
       </div>
       <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
-        Completed Assessment Set = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS
-        Parent all completed for the same child.
+        Core REDCap Instruments Completed = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and
+        SSRS Parent all completed for the same child.
       </p>
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
@@ -156,6 +158,75 @@ export default function Overview() {
       >
         <Funnel stages={progress.stages} />
       </ChartCard>
+
+      <SectionHeader
+        title="Child Illness History"
+        note={`${overview.chh_completion.completed}/${overview.chh_completion.total_registered} registered children completed this instrument (${overview.chh_completion.percent}%) — percentages below use each item's own valid respondents`}
+      />
+      <div className="chart-grid two-col">
+        <div className="table-card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Reported Health Conditions, n (%)</th>
+                <th>Yes</th>
+                <th>No</th>
+                <th>Don't know</th>
+                <th>Valid N</th>
+              </tr>
+            </thead>
+            <tbody>
+              {overview.chh_named_conditions.map((c) => (
+                <tr key={c.label}>
+                  <td>{c.label}</td>
+                  <td>
+                    {c.yes_count} ({c.percent_yes}%)
+                  </td>
+                  <td>{c.no_count}</td>
+                  <td>{c.dont_know_count}</td>
+                  <td>{c.valid_n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="table-card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Reported Health and Medical-History Indicators, n (%)</th>
+                <th>Yes</th>
+                <th>No</th>
+                <th>Don't know</th>
+                <th>Valid N</th>
+              </tr>
+            </thead>
+            <tbody>
+              {overview.chh_general_flags.map((c) => (
+                <tr key={c.label}>
+                  <td>{c.label}</td>
+                  <td>
+                    {c.yes_count} ({c.percent_yes}%)
+                  </td>
+                  <td>{c.no_count}</td>
+                  <td>{c.dont_know_count}</td>
+                  <td>{c.valid_n}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <SectionHeader
+        title="Screen Time (DSEQ)"
+        note={`${overview.dseq_completion.completed}/${overview.dseq_completion.total_registered} registered children completed this instrument (${overview.dseq_completion.percent}%)`}
+      />
+      <div className="chart-grid">
+        <ChartCard title="Distribution of Total Daily Screen Time" subtitle="DSEQ Q10, ordered low to high">
+          <CategoryBarChart data={dseqDistribution} mode="categorical" />
+        </ChartCard>
+      </div>
 
       <ChartCard title="Data Collection & Quality Status" subtitle="Where collection currently stands, and where it is lagging">
         <div className="status-stat-grid">

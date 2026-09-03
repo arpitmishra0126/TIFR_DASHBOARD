@@ -6,7 +6,7 @@ interface FilterBarProps {
   villageOptions: string[];
 }
 
-const AGE_GROUP_OPTIONS = ["0-4", "5-9", "10-14", "15+"];
+const AGE_GROUP_OPTIONS = ["8 years", "9 years", "10 years", "Other (outside 8-10 years)"];
 
 export default function FilterBar({ filters, onChange, villageOptions }: FilterBarProps) {
   const hasActiveFilter = Boolean(filters.sex || filters.ageGroup || filters.village || filters.status);

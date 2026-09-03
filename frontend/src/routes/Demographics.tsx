@@ -44,8 +44,8 @@ export default function Demographics() {
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
   if (!data) return <StudyDataLoader label="Loading demographics data" subLabel="Connecting to live REDCap data…" />;
 
-  const udaiData = data.udai_pareek_category_distribution.map((c) => ({ label: `Category ${c.code}`, count: c.count }));
-  const prasadData = data.bg_prasad_category_distribution.map((c) => ({ label: `Category ${c.code}`, count: c.count }));
+  const udaiData = data.udai_pareek_category_distribution.map((c) => ({ label: c.code, count: c.count }));
+  const prasadData = data.bg_prasad_category_distribution.map((c) => ({ label: c.code, count: c.count }));
 
   return (
     <section>

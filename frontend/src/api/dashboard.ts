@@ -1,6 +1,7 @@
 import { apiDownload, apiGet, withRefresh } from "./client";
 import type {
   DemographicsResponse,
+  DietaryIntakeResponse,
   HealthScreeningResponse,
   NeurodevelopmentResponse,
   OverviewResponse,
@@ -47,6 +48,10 @@ export function getPhysicalActivity(opts?: { force?: boolean }): Promise<Physica
 
 export function getScreenTime(opts?: { force?: boolean }): Promise<ScreenTimeResponse> {
   return apiGet<ScreenTimeResponse>(withRefresh("/dashboard/screen-time", opts?.force));
+}
+
+export function getDietaryIntake(opts?: { force?: boolean }): Promise<DietaryIntakeResponse> {
+  return apiGet<DietaryIntakeResponse>(withRefresh("/dashboard/dietary-intake", opts?.force));
 }
 
 export function getNeurodevelopment(opts?: { force?: boolean }): Promise<NeurodevelopmentResponse> {

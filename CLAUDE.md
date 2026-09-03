@@ -65,9 +65,11 @@ corrected to match this section (it previously described the obsolete
 PostgreSQL-based V1 architecture).
 
 Actual current routes (for reference — task briefs sometimes list slightly
-different paths): `/`, `/registry`, `/demographics`, `/health-screening`,
-`/physical-activity`, `/screen-time`, `/neurodevelopment`, `/progress` — all
-under `frontend/src/App.tsx`.
+different paths): `/`, `/registry`, `/demographics`, `/health-screening`
+(page title "Child Illness History" since 2026-09-03 — route/path unchanged),
+`/physical-activity`, `/screen-time`, `/dietary-intake` (new 2026-09-03),
+`/assessments` (new 2026-09-03 — "All Study Instruments" hub), `/neurodevelopment`,
+`/progress` — all under `frontend/src/App.tsx`.
 
 Verified before this config was written (2026-09-01): backend 105/105 tests
 pass; frontend `npm run build` succeeds; a temporary local backend instance
@@ -152,11 +154,11 @@ Do not hardcode participant counts.
 
 ## CURRENT LIVE DATA OBSERVATION
 
-The current live project has approximately:
+The current live project has approximately (checked 2026-09-03):
 
 Registered: 212
-Core Assessment Battery: 20
-SSRS Child after Core Battery: 3
+Core REDCap Instruments Completed (formerly "Core Assessment Battery" internally, "Completed Assessment Set" in the UI — see 2026-09-03 REVISION section): 33
+SSRS Child after Core instruments: 21
 SSRS Teacher after SSRS Child: 0
 
 These are LIVE observations, NOT constants.
@@ -218,6 +220,146 @@ If a metric is unavailable:
 say it is unavailable.
 
 Do not fabricate a value.
+
+---
+
+## 2026-09-03 REVISION — SENIOR REQUIREMENTS AUDIT + IMPLEMENTATION
+
+A full audit (against live REDCap metadata/data, read-only) was run against a
+senior stakeholder's requested revisions, then implemented. Backend
+**121/121** tests pass (up from 105 — new tests cover the additions below);
+frontend `tsc --noEmit` and `npm run build` both succeed. Verified live
+against REDCap (212 registered) after implementation.
+
+**Age**: replaced the old 0-4/5-9/10-14/15+ bands everywhere (Overview,
+Demographics, the Demographics age filter) with study-specific exact-year
+groups — "8 years" / "9 years" / "10 years" / "Other (outside 8-10 years)"
+(only shown if non-zero) / "Unknown" (only shown if non-zero). Source is
+still `child_dob` via the existing `compute_age_years`; the reference date
+is unchanged ("as of today") since no REDCap metadata establishes a
+different convention — this is now a single named constant
+(`_AGE_REFERENCE_DATE` in `live_dashboard_service.py`) so it can be changed
+to e.g. each child's `visit_date` later without touching bucket logic. This
+remains a **flagged clarification item** — not resolved by this change.
+
+**SES category labels**: Udai Pareek (`scr_pareek_category`) and BG Prasad
+(`scr_prasad_category`) are REDCap `calc` fields, so the API never returns a
+choice list for them — but both fields' own `field_note` text documents
+named categories (confirmed live 2026-09-03: `"1=I Upper >43; 2=II
+Upper-middle 33-42; 3=III Middle 24-32; 4=IV Lower-middle 13-23; 5=V Lower
+<13"`, same convention for both fields). `app/ingestion/choice_maps.py` now
+has `parse_calc_category_note()`/`build_calc_category_maps()`, which parse
+this documented convention into a normal `{code: label}` map; the result is
+merged into the same `choice_maps` dict used everywhere else
+(`LiveDashboardService._load()`), so these two fields resolve to real text
+labels ("Upper", "Upper-middle", "Middle", "Lower-middle", "Lower")
+anywhere a category is displayed (Overview, Demographics), ordered by the
+underlying numeric code (not alphabetically) via the new
+`_ordered_labeled_category_distribution()` helper. No label is invented —
+a field_note that doesn't match the pattern yields no entry and the raw
+code is shown unchanged (same fallback behavior as any other choice field).
+
+**Overview — Child Illness History + DSEQ**: `OverviewResponse` gained
+`chh_completion`/`chh_named_conditions`/`chh_general_flags` and
+`dseq_completion`/`dseq_screen_time_distribution`, built by reusing the
+existing `build_health_screening_analysis()`/`build_screen_time_analysis()`
+— no parallel calculation engine. Overview now renders two compact tables
+("Reported Health Conditions, n (%)" / "Reported Health and
+Medical-History Indicators, n (%)") and a "Distribution of Total Daily
+Screen Time" chart, positioned between Study Progress and Data Collection
+& Quality Status.
+
+**Named/general CHH indicators — denominator model rewrite**: each item in
+`named_conditions`/`general_flags` (`HealthScreeningResponse` and the new
+Overview fields) changed from a bare Yes-count (`CategoryCount`) to a full
+`ConditionIndicator`: `yes_count`, `no_count`, `dont_know_count`
+(surfaced as its own bucket wherever a field's REDCap choices actually
+include a "don't know"-shaped option — never inferred for fields that don't
+offer it), `valid_n` (children who answered THIS question — the correct
+percentage denominator), `asked_n` (children who completed the CHH
+instrument — kept as a separate, non-substituted denominator), and
+`missing_count` (`asked_n - valid_n`). `percent_yes` is `yes_count /
+valid_n`, never `/ asked_n` or `/ total_registered`. New helpers:
+`response_breakdown()`, `build_condition_indicator()` in
+`module_analytics.py`.
+
+**DSEQ ordinal ordering fix**: `module_analytics.py` gained
+`ordered_category_counts()`, which orders a field's categories by REDCap
+choice-code order (ascending) instead of `category_counts()`'s
+descending-frequency sort, and includes every defined category at zero
+count so the full ordinal scale is always visible. `q10_total_screen_time`
+(DSEQ Screen Time page and the new Overview DSEQ section) now uses this —
+confirmed live: `<30min(8) → 30min-1h(12) → 1-2h(13) → 2-4h(1) → >4h(0)`,
+correctly ascending instead of the old descending-by-count order. The
+Active Cases Excel/CSV export's own Summary-sheet chart for this field is
+**unchanged** (still frequency-sorted via `category_counts()`) — out of
+scope, same precedent as the export's frozen "Core Assessment Battery"
+wording.
+
+**Dietary Intake dashboard (new)**: previously export-only. New
+`build_dietary_analysis()` in `module_analytics.py` (reuses the existing
+`DIETARY_LABELS`/`ordered_category_counts`), new `DietaryFoodItem`/
+`DietaryIntakeResponse` schemas, new `LiveDashboardService.get_dietary_intake()`,
+new `GET /api/v1/dashboard/dietary-intake` endpoint, new
+`frontend/src/routes/DietaryIntake.tsx` page (route `/dietary-intake`) — one
+compact chart per food group with n/N/% and category order preserved.
+
+**"Completed Assessment Set" → "Core REDCap Instruments Completed"**: this
+UI label (Overview KPI card, Overview footnote, Assessment Progress funnel
+stage + instrument-table title) is renamed again — the six-instrument
+intersection is a genuine, justified dashboard-level grouping (it gates the
+SSRS Child/Teacher funnel stages), so this name honestly describes what it
+measures without implying a validated clinical milestone. Internal
+identifiers (`core_assessment_count`, stage key `core_assessment_battery`,
+`CORE_BATTERY_*` constants) are unchanged. The Excel/CSV export still says
+"Core Assessment Battery" — unchanged, out of scope (same established
+precedent as the prior rename).
+
+**Terminology renames applied** (dashboard UI only — the Active Cases
+Excel/CSV export's own headers/chart titles are deliberately unchanged,
+same precedent as above):
+- "Health & Screening" → "Child Illness History" (page title, nav item;
+  route `/health-screening` and the API path `/dashboard/health` are
+  unchanged — only user-facing text moved).
+- "Average Total Daily Screen Time" → "Distribution of Total Daily Screen
+  Time" (Screen Time page section + chart title; also used on the new
+  Overview DSEQ section).
+- Module-status badges (Health & Screening / Screen Time / Physical
+  Activity / Dietary Intake pages) changed from an ambiguous `"{tier}
+  coverage"` badge (e.g. "Partial coverage") to `"Instrument Completion:
+  n/N (%)"`.
+- PhysicalActivity.tsx's invented subtitle gloss "Physical Activity
+  Questionnaire for Adolescents" (not present anywhere in REDCap metadata —
+  the live REDCap instrument label is literally "PAQ A") was removed and
+  replaced with a neutral, metadata-accurate subtitle. No UI claim was
+  added resolving whether PAQ-A or PAQ-C is the more age-appropriate
+  version for this ~9-10-year-old cohort — that remains an open
+  confirmation item for the study team, not a code decision.
+
+**Assessment instrument structure (new)**: `frontend/src/routes/AssessmentsHub.tsx`
+(route `/assessments`, linked from the nav's Assessments dropdown as "All
+Study Instruments") lists all instruments the study team named. The 9
+that exist in REDCap link to their existing pages (Registration→Registry,
+SES→Demographics, CHH→Child Illness History page, DSEQ→Screen Time,
+PAQ→Physical Activity, Dietary Intake, SSRS Parent/Child/Teacher→
+Neurodevelopment). The 6 that do **not** exist in REDCap today (ASER
+Literacy and Numeracy, SANGIAN, Visual Working Memory, DCCS, Colour
+Detection Task, Anthropometry/BIA) render as clickable "Under Development"
+placeholder cards — clicking expands an inline panel reading "Under
+Development / Data for this assessment is not currently available in the
+dashboard." No route navigation, no API call, no fake chart or zero-filled
+statistic is produced for these six; this is a UI/product-status
+representation only and does not imply any of the six exist in REDCap.
+
+**Known data characteristic (not a bug, flagged for the study team)**: the
+10 Dietary Intake frequency fields' (`die_*_freq`) REDCap choice labels are
+**Hindi-only** (no English segment at all, confirmed live 2026-09-03 —
+unlike most other bilingual fields in this project, which are "English
+/Hindi"). `choice_maps.py`'s English-segment extraction has nothing English
+to extract for these, so the Dietary Intake page currently displays these
+category labels in Hindi, exactly as REDCap defines them — no English
+label was invented. This needs a study-team decision (translate on the
+REDCap form, or accept Hindi-only category labels on this one page).
 
 ---
 
@@ -346,7 +488,7 @@ Show, as separate top-level KPI cards (kept deliberately small in number —
 NOT one per instrument), each independently live-calculated from REDCap:
 
 - Registered
-- Completed Assessment Set (**UI label only** — see "UI TERMINOLOGY" below;
+- Core REDCap Instruments Completed (**UI label only** — see "UI TERMINOLOGY" below;
   underlying strict all-six-instruments calculation is unchanged)
 - SSRS Parent
 - SSRS Child
@@ -421,19 +563,22 @@ data" KPI is a different metric, not a literal completion/tier card, so the
 "remove the standalone Instrument Completion KPI" change doesn't apply
 there.
 
-#### UI TERMINOLOGY (temporary, since 2026-09-01)
+#### UI TERMINOLOGY (updated 2026-09-03; originally 2026-09-01)
 
-"Core Assessment Battery" is displayed as **"Completed Assessment Set"** in
-all user-facing text on the Overview KPI cards and the Assessment Progress
-funnel/stage-instrument-breakdown (`frontend/src/routes/Overview.tsx`,
-`frontend/src/routes/AssessmentProgress.tsx`, and the `ProgressStage.label`/
-`description` strings built in
+"Core Assessment Battery" is displayed as **"Core REDCap Instruments
+Completed"** (renamed 2026-09-03 from the earlier placeholder "Completed
+Assessment Set" — see the 2026-09-03 REVISION section above) in all
+user-facing text on the Overview KPI cards, the new Overview footnote, and
+the Assessment Progress funnel/stage-instrument-breakdown
+(`frontend/src/routes/Overview.tsx`, `frontend/src/routes/AssessmentProgress.tsx`,
+and the `ProgressStage.label`/`description` strings built in
 `backend/app/services/live_dashboard_service.py::get_progress`/`get_overview`).
-This is a **temporary neutral placeholder label** pending official
-terminology from the study team — do not treat it as an approved study name,
-and do not propagate it elsewhere (the Active Cases Excel/CSV export in
-`export_service.py` intentionally still says "Core Assessment Battery" —
-out of scope for this rename, left unchanged). The underlying calculation
+This name was chosen because the six-instrument intersection genuinely is a
+dashboard-level "core instruments" grouping (it gates the SSRS Child/Teacher
+funnel stages) — do not propagate it elsewhere without re-confirming (the
+Active Cases Excel/CSV export in `export_service.py` intentionally still
+says "Core Assessment Battery" — out of scope for this rename, left
+unchanged). The underlying calculation
 (all six of SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake, SSRS
 Parent complete for the same child — `CORE_BATTERY_COMPLETE_FIELDS`) is
 **unchanged**; only the display label moved. Backend field/key names
@@ -677,7 +822,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **105/105 passing** (as of the four assessment-module analytics build, 2026-08-26). Frontend `npm run build` succeeds.
+Backend test count: **121/121 passing** (as of the 2026-09-03 senior-requirements audit + implementation — see that section above). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes — run the tests.
 

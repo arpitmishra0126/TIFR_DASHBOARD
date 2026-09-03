@@ -4,7 +4,9 @@ import Layout from "./components/Layout";
 import { RefreshProvider } from "./context/RefreshContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import AssessmentProgress from "./routes/AssessmentProgress";
+import AssessmentsHub from "./routes/AssessmentsHub";
 import Demographics from "./routes/Demographics";
+import DietaryIntake from "./routes/DietaryIntake";
 import HealthScreening from "./routes/HealthScreening";
 import Neurodevelopment from "./routes/Neurodevelopment";
 import Overview from "./routes/Overview";
@@ -24,6 +26,8 @@ export default function App() {
             <Route path="/health-screening" element={<HealthScreening />} />
             <Route path="/physical-activity" element={<PhysicalActivity />} />
             <Route path="/screen-time" element={<ScreenTime />} />
+            <Route path="/dietary-intake" element={<DietaryIntake />} />
+            <Route path="/assessments" element={<AssessmentsHub />} />
             <Route path="/neurodevelopment" element={<Neurodevelopment />} />
             <Route path="/progress" element={<AssessmentProgress />} />
           </Route>

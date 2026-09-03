@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 
-import { getScreenTime } from "../api/dashboard";
+import { getDietaryIntake } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
-import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
-import type { ScreenTimeResponse } from "../types/liveDashboard";
+import type { DietaryIntakeResponse } from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
@@ -18,15 +17,15 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   "No Data": "neutral",
 };
 
-export default function ScreenTime() {
-  const [data, setData] = useState<ScreenTimeResponse | null>(null);
+export default function DietaryIntake() {
+  const [data, setData] = useState<DietaryIntakeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
 
   useEffect(() => {
     setError(null);
-    getScreenTime()
+    getDietaryIntake()
       .then(setData)
       .catch((err: Error) => setError(err.message));
   }, [version, retryCount]);
@@ -35,14 +34,13 @@ export default function ScreenTime() {
   if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
-  const distribution = data.total_screen_time_distribution.map((c) => ({ label: c.code, count: c.count }));
 
   return (
     <section>
       <PageHeader
         eyebrow="Study Assessment"
-        title="Screen Time"
-        subtitle="Digital Screen Exposure Questionnaire (DSEQ) — live REDCap instrument."
+        title="Dietary Intake"
+        subtitle="Food-group consumption frequency — live REDCap instrument."
       />
 
       <div className="module-status-line">
@@ -52,20 +50,20 @@ export default function ScreenTime() {
         />
       </div>
 
-      <div className="kpi-row">
-        {data.yes_no_items.map((item) => (
-          <KpiCard key={item.code} label={item.code} value={item.count} sublabel={`of ${completion.total_registered} registered`} />
-        ))}
-      </div>
-
       <SectionHeader
-        title="Distribution of Total Daily Screen Time"
-        note="DSEQ Q10, ordered low to high, among children who completed the instrument"
+        title="Consumption frequency by food group"
+        note="Each food group's category order follows the REDCap frequency scale (Daily → ... → Rarely/Never); valid N shown per item"
       />
-      <div className="chart-grid">
-        <ChartCard title="Distribution of Total Daily Screen Time" subtitle="Self/parent-reported category">
-          <CategoryBarChart data={distribution} mode="categorical" />
-        </ChartCard>
+      <div className="chart-grid two-col">
+        {data.items.map((item) => (
+          <ChartCard
+            key={item.field_label}
+            title={item.field_label}
+            subtitle={`n=${item.valid_n}/${completion.total_registered} answered (${item.percent_valid}%)`}
+          >
+            <CategoryBarChart data={item.distribution.map((c) => ({ label: c.code, count: c.count }))} mode="categorical" />
+          </ChartCard>
+        ))}
       </div>
     </section>
   );

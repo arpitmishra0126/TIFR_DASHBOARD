@@ -125,6 +125,24 @@ def category_counts(records: list[dict], field: str, choice_maps: dict[str, Choi
     return sorted(counts.items(), key=lambda kv: (-kv[1], str(kv[0])))
 
 
+def ordered_category_counts(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> list[tuple[str, int]]:
+    """Same as category_counts, but preserves the field's REDCap choice-code
+    order (ascending numeric code) instead of sorting by descending
+    frequency. Use this for ordinal fields (e.g. DSEQ Q10 total daily screen
+    time) where the category order itself carries meaning. Every category
+    defined in the field's choice list is included, even at zero count, so
+    the full ordinal scale is always visible rather than only the categories
+    that happen to have live responses."""
+    field_choices = choice_maps.get(field, {})
+    counts: Counter = Counter()
+    for record in records:
+        value = resolve_value(field, record.get(field), choice_maps)
+        if value:
+            counts[value] += 1
+    ordered_codes = sorted(field_choices.keys(), key=lambda c: (parse_float(c) if parse_float(c) is not None else 0.0, c))
+    return [(field_choices[code], counts.get(field_choices[code], 0)) for code in ordered_codes]
+
+
 def numeric_values(records: list[dict], field: str, parser: Callable[[str | None], float | int | None]) -> list[float]:
     values: list[float] = []
     for record in records:
@@ -150,6 +168,47 @@ def bucket_counts(values: list[float], edges: list[float], labels: list[str]) ->
 
 def yes_count(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> int:
     return sum(1 for r in records if resolve_value(field, r.get(field), choice_maps).strip().lower() == "yes")
+
+
+def response_breakdown(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> dict:
+    """Yes/No/Don't-know/unanswered counts for one coded Yes/No(/Don't know)
+    field, resolved from whatever choice labels the field's own REDCap
+    metadata actually defines — "don't know" is only ever counted if a
+    record's resolved value textually says so; it is never inferred or
+    fabricated for fields that don't offer that choice."""
+    yes = no = dont_know = 0
+    for record in records:
+        value = resolve_value(field, record.get(field), choice_maps).strip().lower()
+        if value == "yes":
+            yes += 1
+        elif value == "no":
+            no += 1
+        elif "know" in value:  # e.g. "don't know" / "do not know"
+            dont_know += 1
+    return {"yes": yes, "no": no, "dont_know": dont_know, "valid_n": yes + no + dont_know}
+
+
+def build_condition_indicator(
+    records: list[dict], field: str, label: str, choice_maps: dict[str, ChoiceMap], asked_n: int,
+) -> dict:
+    """One coded health/history item as a fully-denominated indicator:
+    Yes/No/Don't-know counts, the valid respondent count for THIS question
+    (the correct percentage denominator per the audit's denominator rule),
+    and missing count against `asked_n` (the number of children who
+    completed the instrument this question belongs to — the instrument-level
+    denominator, kept distinct from the question-level one)."""
+    breakdown = response_breakdown(records, field, choice_maps)
+    valid_n = breakdown["valid_n"]
+    return {
+        "label": label,
+        "yes_count": breakdown["yes"],
+        "no_count": breakdown["no"],
+        "dont_know_count": breakdown["dont_know"],
+        "valid_n": valid_n,
+        "asked_n": asked_n,
+        "missing_count": max(asked_n - valid_n, 0),
+        "percent_yes": percent(breakdown["yes"], valid_n),
+    }
 
 
 def complete_count(records: list[dict], field: str) -> int:
@@ -232,8 +291,12 @@ def build_health_screening_analysis(records: list[dict], choice_maps: dict[str, 
             "percent": percent(completed, total),
             "coverage_tier": coverage_tier(completed, total),
         },
-        "named_conditions": [(label, yes_count(reg, field, choice_maps)) for field, label in CHH_NAMED_CONDITIONS],
-        "general_flags": [(label, yes_count(reg, field, choice_maps)) for field, label in CHH_GENERAL_FLAGS],
+        "named_conditions": [
+            build_condition_indicator(reg, field, label, choice_maps, completed) for field, label in CHH_NAMED_CONDITIONS
+        ],
+        "general_flags": [
+            build_condition_indicator(reg, field, label, choice_maps, completed) for field, label in CHH_GENERAL_FLAGS
+        ],
     }
 
 
@@ -276,8 +339,40 @@ def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, Choic
             "percent": percent(completed, total),
             "coverage_tier": coverage_tier(completed, total),
         },
-        "total_screen_time_distribution": category_counts(reg, "q10_total_screen_time", choice_maps),
+        "total_screen_time_distribution": ordered_category_counts(reg, "q10_total_screen_time", choice_maps),
         "yes_no_items": [(label, yes_count(reg, field, choice_maps)) for field, label in DSEQ_YES_NO_ITEMS],
+    }
+
+
+def build_dietary_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
+    reg = registered_records(records)
+    total = len(reg)
+    completed = complete_count(reg, "dietary_intake_complete")
+
+    items = []
+    for field, label in DIETARY_LABELS:
+        distribution = ordered_category_counts(reg, field, choice_maps)
+        valid_n = sum(count for _, count in distribution)
+        items.append(
+            {
+                "field_label": label,
+                "distribution": distribution,
+                "valid_n": valid_n,
+                "missing_n": max(total - valid_n, 0),
+                "percent_valid": percent(valid_n, total),
+            }
+        )
+
+    return {
+        "instrument": "Dietary Intake",
+        "completion": {
+            "instrument": "Dietary Intake",
+            "completed": completed,
+            "total_registered": total,
+            "percent": percent(completed, total),
+            "coverage_tier": coverage_tier(completed, total),
+        },
+        "items": items,
     }
 
 

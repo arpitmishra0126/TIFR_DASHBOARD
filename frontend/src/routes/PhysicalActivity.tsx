@@ -51,15 +51,14 @@ export default function PhysicalActivity() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Physical Activity (PAQ-A)"
-        subtitle="Physical Activity Questionnaire for Adolescents — live REDCap instrument."
+        subtitle="Live REDCap instrument (recorded in REDCap as “PAQ A”)."
       />
 
       <div className="module-status-line">
-        <StatusBadge label={`${completion.coverage_tier} coverage`} tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"} />
-        <span>
-          {completion.completed} / {completion.total_registered} registered children completed this instrument (
-          {completion.percent}%)
-        </span>
+        <StatusBadge
+          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
+        />
       </div>
 
       <div className="kpi-row">
@@ -67,6 +66,11 @@ export default function PhysicalActivity() {
         <KpiCard label="Item 8 composite score" value={scoreValue(data.item8_summary)} sublabel={scoreSublabel(data.item8_summary)} />
         <KpiCard label="Total score" value={scoreValue(data.total_summary)} sublabel={scoreSublabel(data.total_summary)} tone="violet" />
       </div>
+      <p className="chart-card-note" style={{ marginBottom: "var(--space-4)" }}>
+        Instrument completion ({completion.completed}/{completion.total_registered}) and each score's valid N above
+        are reported separately and are not forced to match — a completed instrument can still yield a blank
+        calculated score if a dependent item was skipped.
+      </p>
 
       <SectionHeader title="Total score distribution" note="REDCap-calculated field (paq_total_score)" />
       <div className="chart-grid">

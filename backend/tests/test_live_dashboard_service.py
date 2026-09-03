@@ -317,9 +317,12 @@ async def test_demographics_age_and_sex_distribution(service: LiveDashboardServi
     assert result.sex_distribution.male == 5
     assert result.sex_distribution.female == 1
     buckets = {b.label: b.count for b in result.age_distribution}
-    assert buckets["0-4"] == 1  # REC006
-    assert buckets["5-9"] == 3  # REC001, REC003, REC004
-    assert buckets["10-14"] == 1  # REC002
+    # Study-specific age groups: REC004 is exactly 8, REC003 is exactly 9;
+    # REC001 (6), REC002 (11), REC006 (4) fall outside 8-10 -> "Other".
+    assert buckets["8 years"] == 1  # REC004
+    assert buckets["9 years"] == 1  # REC003
+    assert buckets["10 years"] == 0
+    assert buckets["Other (outside 8-10 years)"] == 3  # REC001, REC002, REC006
     assert buckets["Unknown"] == 1  # REC005, no dob
 
 
@@ -341,8 +344,8 @@ async def test_health_screening_reports_real_completion_and_conditions(service: 
     assert result.completion.total_registered == 6
     assert result.completion.completed == 4
     assert result.completion.coverage_tier == "High"
-    conditions = {c.code: c.count for c in result.named_conditions}
-    assert conditions["Asthma"] == 1
+    conditions = {c.label: c for c in result.named_conditions}
+    assert conditions["Asthma"].yes_count == 1
 
 
 @pytest.mark.asyncio
@@ -362,8 +365,8 @@ async def test_physical_activity_reports_real_score_summaries(service: LiveDashb
 async def test_screen_time_reports_real_distribution_and_yes_no_items(service: LiveDashboardService):
     result = await service.get_screen_time()
     assert result.instrument == "DSEQ"
-    dist = {c.code: c.count for c in result.total_screen_time_distribution}
-    assert dist == {"30 minutes-1 hour": 1}
+    dist_list = [(c.code, c.count) for c in result.total_screen_time_distribution]
+    assert dist_list == [("Less than 30 minutes", 0), ("30 minutes-1 hour", 1)]
     yes_no = {c.code: c.count for c in result.yes_no_items}
     assert yes_no["Household has screen-use rules (Q9)"] == 1
     assert yes_no["Uses screens for school/homework (Q14)"] == 0

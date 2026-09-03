@@ -16,7 +16,7 @@ Assessment Battery" pipeline stage.
 from collections import Counter
 from statistics import mean
 
-from app.ingestion.choice_maps import ChoiceMap, build_choice_maps
+from app.ingestion.choice_maps import ChoiceMap, build_calc_category_maps, build_choice_maps
 from app.ingestion.live_field_map import (
     ALL_INSTRUMENTS,
     CORE_BATTERY_COMPLETE_FIELDS,
@@ -37,6 +37,7 @@ from app.ingestion.normalize import capitalize_label, compute_age_years, parse_c
 from app.redcap.live_repository import LiveRedCapRepository
 from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
 from app.services.module_analytics import (
+    build_dietary_analysis,
     build_health_screening_analysis,
     build_neurodevelopment_analysis,
     build_physical_activity_analysis,
@@ -46,7 +47,10 @@ from app.services.module_analytics import (
 from app.schemas.dashboard import (
     AgeBucket,
     CategoryCount,
+    ConditionIndicator,
     DemographicsResponse,
+    DietaryFoodItem,
+    DietaryIntakeResponse,
     HealthScreeningResponse,
     InstrumentCompletion,
     InstrumentCoverage,
@@ -64,12 +68,20 @@ from app.schemas.dashboard import (
     SSRSInstrumentSummary,
 )
 
-_AGE_BUCKETS = [
-    ("0-4", 0, 4),
-    ("5-9", 5, 9),
-    ("10-14", 10, 14),
-    ("15+", 15, 200),
-]
+# Study-specific age groups (replacing the previous broad 0-4/5-9/10-14/15+
+# bands) — the cohort's target ages per the study team's 2026-09-03 request.
+# "Other" is only shown when a registered child's computed age genuinely
+# falls outside 8-10 (data-integrity visibility, not an expected bucket).
+_STUDY_AGE_BUCKETS = [("8 years", 8), ("9 years", 9), ("10 years", 10)]
+
+# Reference date used for age = (reference - child_dob) in whole years.
+# The audit found no REDCap field/metadata establishing a different
+# convention, so the dashboard's existing "as of today" behavior is
+# preserved unchanged here (see app.ingestion.normalize.compute_age_years,
+# which already accepts an explicit `as_of` and defaults to date.today()).
+# If the study team later confirms a different reference (e.g. each child's
+# `visit_date`), change this single constant rather than the bucket logic.
+_AGE_REFERENCE_DATE = None
 
 
 def _resolve_or_raw(field_name: str, raw_value: str | None, choice_maps: dict[str, ChoiceMap]) -> str | None:
@@ -102,7 +114,7 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
         redcap_child_id=child_id,
         sex=capitalize_label(_resolve_or_raw("baby_gender", record.get("baby_gender"), choice_maps)),
         dob=dob.isoformat() if dob else None,
-        age_years=compute_age_years(dob),
+        age_years=compute_age_years(dob, as_of=_AGE_REFERENCE_DATE),
         village=_resolve_or_raw("village_name", record.get("village_name"), choice_maps),
         child_status=_resolve_or_raw("baby_status", record.get("baby_status"), choice_maps),
         visit_date=visit_date.isoformat() if visit_date else None,
@@ -120,17 +132,24 @@ def _sex_distribution(children: list[RegistryChild]) -> SexDistribution:
 
 
 def _age_distribution(children: list[RegistryChild]) -> list[AgeBucket]:
-    buckets = {label: 0 for label, _, _ in _AGE_BUCKETS}
+    buckets = {label: 0 for label, _ in _STUDY_AGE_BUCKETS}
+    other = 0
     unknown = 0
     for child in children:
         if child.age_years is None:
             unknown += 1
             continue
-        for label, low, high in _AGE_BUCKETS:
-            if low <= child.age_years <= high:
+        matched = False
+        for label, year in _STUDY_AGE_BUCKETS:
+            if child.age_years == year:
                 buckets[label] += 1
+                matched = True
                 break
-    result = [AgeBucket(label=label, count=buckets[label]) for label, _, _ in _AGE_BUCKETS]
+        if not matched:
+            other += 1
+    result = [AgeBucket(label=label, count=buckets[label]) for label, _ in _STUDY_AGE_BUCKETS]
+    if other:
+        result.append(AgeBucket(label="Other (outside 8-10 years)", count=other))
     if unknown:
         result.append(AgeBucket(label="Unknown", count=unknown))
     return result
@@ -139,6 +158,22 @@ def _age_distribution(children: list[RegistryChild]) -> list[AgeBucket]:
 def _category_distribution(values: list[str | None]) -> list[CategoryCount]:
     counts = Counter(v for v in values if v)
     return [CategoryCount(code=code, count=count) for code, count in sorted(counts.items())]
+
+
+def _ordered_labeled_category_distribution(
+    raw_values: list[str | None], field_name: str, choice_maps: dict[str, ChoiceMap],
+) -> list[CategoryCount]:
+    """Category distribution for a numerically-coded field (e.g. an SES
+    category), ordered by the underlying numeric code (preserving logical
+    category ordering) and displayed using the field's resolved label — via
+    the same choice_maps mechanism used everywhere else, so a calc field's
+    documented field_note labels (see build_calc_category_maps) are used
+    when available, and the raw code is shown unchanged otherwise (never an
+    invented label)."""
+    counts = Counter(v for v in raw_values if v)
+    field_choices = choice_maps.get(field_name, {})
+    ordered_codes = sorted(counts.keys(), key=lambda c: (parse_float(c) if parse_float(c) is not None else 0.0, c))
+    return [CategoryCount(code=field_choices.get(code, code), count=counts[code]) for code in ordered_codes]
 
 
 def _numeric_summary(values: list[float]) -> NumericSummary | None:
@@ -215,7 +250,9 @@ class LiveDashboardService:
     async def _load(self, force: bool = False) -> tuple[list[dict], dict[str, ChoiceMap]]:
         metadata = await self._repository.get_metadata(force=force)
         records = await self._repository.get_records(force=force)
-        return records, build_choice_maps(metadata)
+        choice_maps = build_choice_maps(metadata)
+        choice_maps.update(build_calc_category_maps(metadata))
+        return records, choice_maps
 
     def _normalize_children(self, records: list[dict], choice_maps: dict[str, ChoiceMap]) -> list[RegistryChild]:
         return [c for r in records if (c := _normalize_child(r, choice_maps)) is not None]
@@ -278,16 +315,21 @@ class LiveDashboardService:
         return DemographicsResponse(
             sex_distribution=_sex_distribution(children),
             age_distribution=_age_distribution(children),
-            udai_pareek_category_distribution=_category_distribution(udai_categories),
-            bg_prasad_category_distribution=_category_distribution(bg_categories),
+            udai_pareek_category_distribution=_ordered_labeled_category_distribution(
+                udai_categories, "scr_pareek_category", choice_maps
+            ),
+            bg_prasad_category_distribution=_ordered_labeled_category_distribution(
+                bg_categories, "scr_prasad_category", choice_maps
+            ),
             per_capita_income_summary=_numeric_summary(per_capita_incomes),
             household_size_summary=_numeric_summary(household_sizes),
             ses_profile_count=ses_profile_count,
             total_registered=len(children),
             notes={
-                "udai_pareek_category": "Numeric category code (1-5) — REDCap does not expose text "
-                "labels for calculated fields via the API.",
-                "bg_prasad_category": "Numeric category code (1-5) — same API limitation.",
+                "udai_pareek_category": "Category labels (Upper/Upper-middle/Middle/Lower-middle/Lower) "
+                "are parsed from the REDCap calc field's own documented field_note text.",
+                "bg_prasad_category": "Category labels parsed the same way from the REDCap calc field's "
+                "field_note text.",
                 "ses_coverage": f"The SES questionnaire is complete for {ses_profile_count} of "
                 f"{len(children)} registered children.",
             },
@@ -309,7 +351,8 @@ class LiveDashboardService:
         udai_categories = [r.get("scr_pareek_category") or None for r in records]
         registration_complete_count = sum(1 for c in children if c.registration_complete)
 
-        modules_pending = ["health_screening", "physical_activity", "screen_time", "neurodevelopment"]
+        chh_analysis = build_health_screening_analysis(records, choice_maps)
+        dseq_analysis = build_screen_time_analysis(records, choice_maps)
 
         return OverviewResponse(
             total_registered=total_registered,
@@ -327,14 +370,18 @@ class LiveDashboardService:
             all_instrument_coverage=_all_instrument_coverage(records, total_registered),
             sex_distribution=_sex_distribution(children),
             age_distribution=_age_distribution(children),
-            udai_pareek_category_distribution=_category_distribution(udai_categories),
-            modules_pending_integration=modules_pending,
-            notes={
-                "health_screening": "Child Illness History instrument exists but is not yet field-mapped into this dashboard.",
-                "physical_activity": "PAQ-A instrument exists but is not yet field-mapped into this dashboard.",
-                "screen_time": "DSEQ instrument exists but is not yet field-mapped into this dashboard.",
-                "neurodevelopment": "SSRS Teacher instrument exists but is not yet field-mapped into this dashboard.",
-            },
+            udai_pareek_category_distribution=_ordered_labeled_category_distribution(
+                udai_categories, "scr_pareek_category", choice_maps
+            ),
+            chh_completion=InstrumentCompletion(**chh_analysis["completion"]),
+            chh_named_conditions=[ConditionIndicator(**c) for c in chh_analysis["named_conditions"]],
+            chh_general_flags=[ConditionIndicator(**c) for c in chh_analysis["general_flags"]],
+            dseq_completion=InstrumentCompletion(**dseq_analysis["completion"]),
+            dseq_screen_time_distribution=[
+                CategoryCount(code=label, count=count) for label, count in dseq_analysis["total_screen_time_distribution"]
+            ],
+            modules_pending_integration=[],
+            notes={},
         )
 
     async def get_progress(self, force: bool = False) -> ProgressResponse:
@@ -361,10 +408,13 @@ class LiveDashboardService:
             ),
             ProgressStage(
                 key="core_assessment_battery",
-                # UI label only — temporary neutral wording pending official
-                # study terminology. The strict all-six-instruments
-                # calculation (CORE_BATTERY_COMPLETE_FIELDS) is unchanged.
-                label="Completed Assessment Set",
+                # This grouping IS the genuine six-instrument intersection
+                # (CORE_BATTERY_COMPLETE_FIELDS) used as the gate for the
+                # SSRS Child/Teacher stages below, so "Core REDCap
+                # Instruments Completed" honestly names what it measures —
+                # unlike the earlier placeholder "Completed Assessment Set"
+                # wording, it doesn't imply a validated clinical milestone.
+                label="Core REDCap Instruments Completed",
                 description=CORE_BATTERY_DESCRIPTION,
                 count=core_count,
                 percent_of_registered=_percent(core_count, total_registered),
@@ -374,7 +424,7 @@ class LiveDashboardService:
                 key="ssrs_child",
                 label="SSRS Child",
                 description="Social Skills Rating System (Child self-report) completed, "
-                "among children who also completed the Completed Assessment Set.",
+                "among children who also completed the core REDCap instruments.",
                 count=ssrs_child_count,
                 percent_of_registered=_percent(ssrs_child_count, total_registered),
                 percent_of_previous_stage=_percent(ssrs_child_count, core_count),
@@ -398,8 +448,8 @@ class LiveDashboardService:
         return HealthScreeningResponse(
             instrument=analysis["instrument"],
             completion=InstrumentCompletion(**analysis["completion"]),
-            named_conditions=[CategoryCount(code=label, count=count) for label, count in analysis["named_conditions"]],
-            general_flags=[CategoryCount(code=label, count=count) for label, count in analysis["general_flags"]],
+            named_conditions=[ConditionIndicator(**c) for c in analysis["named_conditions"]],
+            general_flags=[ConditionIndicator(**c) for c in analysis["general_flags"]],
             notes={
                 "scope": "Named conditions and general flags approved 2026-08-26; item-level Child Illness "
                 "History fields not in this list (e.g. health rating, fit-for-assessment) are exported in the "
@@ -435,6 +485,28 @@ class LiveDashboardService:
                 "scope": "Q10 total daily screen time distribution and 3 Yes/No items (Q9, Q14, Q15) approved "
                 "2026-08-26; per-item TV/phone/laptop frequency breakdowns are exported in the Active Cases "
                 "Excel sheet but not part of the approved dashboard analysis.",
+            },
+        )
+
+    async def get_dietary_intake(self, force: bool = False) -> DietaryIntakeResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_dietary_analysis(records, choice_maps)
+        return DietaryIntakeResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            items=[
+                DietaryFoodItem(
+                    field_label=item["field_label"],
+                    distribution=[CategoryCount(code=label, count=count) for label, count in item["distribution"]],
+                    valid_n=item["valid_n"],
+                    missing_n=item["missing_n"],
+                    percent_valid=item["percent_valid"],
+                )
+                for item in analysis["items"]
+            ],
+            notes={
+                "scope": "10 food-group frequency items from the Dietary Intake instrument, each shown as "
+                "its own 8-point frequency distribution. Portion-size free-text fields are excluded.",
             },
         )
 

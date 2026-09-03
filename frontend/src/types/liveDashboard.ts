@@ -43,6 +43,17 @@ export interface InstrumentCoverage {
   coverage_tier: CoverageTier;
 }
 
+export interface ConditionIndicator {
+  label: string;
+  yes_count: number;
+  no_count: number;
+  dont_know_count: number;
+  valid_n: number;
+  asked_n: number;
+  missing_count: number;
+  percent_yes: number;
+}
+
 export interface OverviewResponse {
   total_registered: number;
   registration_complete_count: number;
@@ -60,6 +71,11 @@ export interface OverviewResponse {
   sex_distribution: SexDistribution;
   age_distribution: AgeBucket[];
   udai_pareek_category_distribution: CategoryCount[];
+  chh_completion: InstrumentCompletion;
+  chh_named_conditions: ConditionIndicator[];
+  chh_general_flags: ConditionIndicator[];
+  dseq_completion: InstrumentCompletion;
+  dseq_screen_time_distribution: CategoryCount[];
   modules_pending_integration: string[];
   notes: Record<string, string>;
 }
@@ -119,8 +135,8 @@ export interface ScoreSummary {
 export interface HealthScreeningResponse {
   instrument: string;
   completion: InstrumentCompletion;
-  named_conditions: CategoryCount[];
-  general_flags: CategoryCount[];
+  named_conditions: ConditionIndicator[];
+  general_flags: ConditionIndicator[];
   notes: Record<string, string>;
 }
 
@@ -156,6 +172,21 @@ export interface NeurodevelopmentResponse {
   parent: SSRSInstrumentSummary;
   child: SSRSInstrumentSummary;
   teacher: SSRSInstrumentSummary;
+  notes: Record<string, string>;
+}
+
+export interface DietaryFoodItem {
+  field_label: string;
+  distribution: CategoryCount[];
+  valid_n: number;
+  missing_n: number;
+  percent_valid: number;
+}
+
+export interface DietaryIntakeResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  items: DietaryFoodItem[];
   notes: Record<string, string>;
 }
 

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import {
   IconActivity,
+  IconChart,
   IconChevron,
   IconClose,
   IconHeart,
@@ -23,11 +24,14 @@ interface NavItem {
 
 // Neurodevelopment keeps its route/API/implementation untouched — it is
 // deliberately left out of this nav list only (information-architecture
-// decision), not deleted.
+// decision), not deleted. "Health & Screening" renamed to "Child Illness
+// History" per the terminology audit — the route/API are unchanged.
 const MODULE_NAV: NavItem[] = [
-  { to: "/health-screening", label: "Health & Screening", icon: IconHeart },
+  { to: "/health-screening", label: "Child Illness History", icon: IconHeart },
   { to: "/physical-activity", label: "Physical Activity", icon: IconActivity },
   { to: "/screen-time", label: "Screen Time", icon: IconMonitor },
+  { to: "/dietary-intake", label: "Dietary Intake", icon: IconChart },
+  { to: "/assessments", label: "All Study Instruments", icon: IconChart },
 ];
 
 export default function Layout() {

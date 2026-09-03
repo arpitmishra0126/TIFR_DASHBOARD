@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from app.api.deps import get_live_dashboard_service
 from app.schemas.dashboard import (
     DemographicsResponse,
+    DietaryIntakeResponse,
     HealthScreeningResponse,
     NeurodevelopmentResponse,
     OverviewResponse,
@@ -81,6 +82,14 @@ async def get_screen_time(
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> ScreenTimeResponse:
     return await service.get_screen_time(force=refresh)
+
+
+@router.get("/dietary-intake", response_model=DietaryIntakeResponse)
+async def get_dietary_intake(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> DietaryIntakeResponse:
+    return await service.get_dietary_intake(force=refresh)
 
 
 @router.get("/neurodevelopment", response_model=NeurodevelopmentResponse)

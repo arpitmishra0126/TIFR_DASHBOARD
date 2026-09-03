@@ -65,6 +65,11 @@ class OverviewResponse(BaseModel):
     sex_distribution: SexDistribution
     age_distribution: list[AgeBucket]
     udai_pareek_category_distribution: list[CategoryCount]
+    chh_completion: "InstrumentCompletion"
+    chh_named_conditions: list["ConditionIndicator"]
+    chh_general_flags: list["ConditionIndicator"]
+    dseq_completion: "InstrumentCompletion"
+    dseq_screen_time_distribution: list[CategoryCount]
     modules_pending_integration: list[str]
     notes: dict[str, str]
 
@@ -127,11 +132,28 @@ class ScoreSummary(BaseModel):
     maximum: float | None
 
 
+class ConditionIndicator(BaseModel):
+    """One coded health/history item, fully denominated per the audit's
+    denominator rule: `valid_n` (question-level — children who actually
+    answered THIS item) is the correct percentage denominator; `asked_n`
+    (instrument-level — children who completed the instrument this item
+    belongs to) is kept separate and never substituted for it."""
+
+    label: str
+    yes_count: int
+    no_count: int
+    dont_know_count: int
+    valid_n: int
+    asked_n: int
+    missing_count: int
+    percent_yes: float
+
+
 class HealthScreeningResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
-    named_conditions: list[CategoryCount]
-    general_flags: list[CategoryCount]
+    named_conditions: list[ConditionIndicator]
+    general_flags: list[ConditionIndicator]
     notes: dict[str, str]
 
 
@@ -170,6 +192,22 @@ class NeurodevelopmentResponse(BaseModel):
     notes: dict[str, str]
 
 
+# --- Dietary Intake ---
+class DietaryFoodItem(BaseModel):
+    field_label: str
+    distribution: list[CategoryCount]
+    valid_n: int
+    missing_n: int
+    percent_valid: float
+
+
+class DietaryIntakeResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    items: list[DietaryFoodItem]
+    notes: dict[str, str]
+
+
 # --- Assessment Progress pipeline ---
 class ProgressStage(BaseModel):
     key: str
@@ -183,3 +221,8 @@ class ProgressStage(BaseModel):
 class ProgressResponse(BaseModel):
     total_registered: int
     stages: list[ProgressStage]
+
+
+# OverviewResponse forward-references InstrumentCompletion/ConditionIndicator,
+# which are defined later in this file (after the assessment-module section).
+OverviewResponse.model_rebuild()

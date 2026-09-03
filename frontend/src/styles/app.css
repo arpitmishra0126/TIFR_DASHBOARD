@@ -809,6 +809,24 @@ a, button {
   border-color: var(--border-hairline-strong);
 }
 
+a.chart-card.assessment-instrument-card,
+button.chart-card.assessment-placeholder-card {
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+
+button.chart-card.assessment-placeholder-card {
+  opacity: 0.85;
+}
+
+button.chart-card.assessment-placeholder-card:hover {
+  opacity: 1;
+}
+
 .chart-card-title {
   font-size: 0.9rem;
   font-weight: 700;

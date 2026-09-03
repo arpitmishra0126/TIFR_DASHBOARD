@@ -66,12 +66,15 @@ SES_STATUS: tuple[LiveFieldStatus, ...] = (
     ),
     LiveFieldStatus(
         "Demographics & SES", "udai_pareek_category", True, "scr_pareek_category", "screening_rural",
-        "Numeric category code (1-5); REDCap does not expose text choice labels for "
-        "calculated fields via the API, so no category name is invented.",
+        "Category label (Upper/Upper-middle/Middle/Lower-middle/Lower) parsed from the calc field's own "
+        "field_note text (confirmed live 2026-09-03: 'field_note': \"1=I Upper >43; 2=II Upper-middle "
+        "33-42; ...\") via app.ingestion.choice_maps.build_calc_category_maps — not a hardcoded/invented "
+        "label. Falls back to the raw numeric code only if field_note is ever removed/changed upstream.",
     ),
     LiveFieldStatus(
         "Demographics & SES", "bg_prasad_category", True, "scr_prasad_category", "screening_rural",
-        "Numeric category code (1-5); same API limitation.",
+        "Category label parsed the same way from the field's own field_note text (confirmed live "
+        "2026-09-03: same Upper/Upper-middle/Middle/Lower-middle/Lower convention as Udai Pareek).",
     ),
     LiveFieldStatus("Demographics & SES", "per_capita_income", True, "scr_pci", "screening_rural"),
     LiveFieldStatus(
