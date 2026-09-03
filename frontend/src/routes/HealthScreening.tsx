@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
+import ChartCard from "../components/ChartCard";
+import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
 import DataLoadError from "../components/DataLoadError";
+import DetailDisclosure from "../components/DetailDisclosure";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -15,17 +18,38 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   "No Data": "neutral",
 };
 
-function ConditionTable({ title, rows }: { title: string; rows: ConditionIndicator[] }) {
+function CompositionLegend() {
+  return (
+    <div className="composition-legend">
+      <span className="composition-legend-item">
+        <span className="composition-legend-swatch" style={{ background: "var(--series-1)" }} />
+        Yes
+      </span>
+      <span className="composition-legend-item">
+        <span className="composition-legend-swatch" style={{ background: "var(--baseline)" }} />
+        No
+      </span>
+      <span className="composition-legend-item">
+        <span className="composition-legend-swatch" style={{ background: "var(--series-4)" }} />
+        Don't know
+      </span>
+      <span>— each bar is 100% of that item's own valid respondents</span>
+    </div>
+  );
+}
+
+function DetailTable({ rows }: { rows: ConditionIndicator[] }) {
   return (
     <div className="table-card">
       <table className="data-table">
         <thead>
           <tr>
-            <th>{title}</th>
+            <th>Item</th>
             <th>Yes</th>
             <th>No</th>
             <th>Don't know</th>
             <th>Valid N</th>
+            <th>Asked N</th>
           </tr>
         </thead>
         <tbody>
@@ -38,6 +62,7 @@ function ConditionTable({ title, rows }: { title: string; rows: ConditionIndicat
               <td>{c.no_count}</td>
               <td>{c.dont_know_count}</td>
               <td>{c.valid_n}</td>
+              <td>{c.asked_n}</td>
             </tr>
           ))}
         </tbody>
@@ -80,13 +105,31 @@ export default function HealthScreening() {
       </div>
 
       <SectionHeader
-        title="Reported conditions and indicators"
-        note="Percentages use each item's own valid respondents (children who actually answered that question), not the full registered cohort."
+        title="Reported Health Conditions, n (%)"
+        note="Percentages use each condition's own valid respondents, not the full registered cohort"
       />
-      <div className="chart-grid two-col">
-        <ConditionTable title="Reported Health Conditions, n (%)" rows={data.named_conditions} />
-        <ConditionTable title="Reported Health and Medical-History Indicators, n (%)" rows={data.general_flags} />
-      </div>
+      <ChartCard title="Reported Health Conditions" subtitle={`Among ${completion.completed} children who completed this instrument`}>
+        <CompositionLegend />
+        <ConditionCompositionChart items={data.named_conditions} />
+      </ChartCard>
+      <DetailDisclosure summary="Show exact values (Yes / No / Don't know / Valid N)">
+        <DetailTable rows={data.named_conditions} />
+      </DetailDisclosure>
+
+      <SectionHeader
+        title="Reported Health and Medical-History Indicators, n (%)"
+        note="Percentages use each indicator's own valid respondents, not the full registered cohort"
+      />
+      <ChartCard
+        title="Reported Health and Medical-History Indicators"
+        subtitle={`Among ${completion.completed} children who completed this instrument`}
+      >
+        <CompositionLegend />
+        <ConditionCompositionChart items={data.general_flags} />
+      </ChartCard>
+      <DetailDisclosure summary="Show exact values (Yes / No / Don't know / Valid N)">
+        <DetailTable rows={data.general_flags} />
+      </DetailDisclosure>
     </section>
   );
 }

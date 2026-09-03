@@ -101,10 +101,10 @@ export default function Demographics() {
 
       <div className="chart-grid two-col">
         <ChartCard title="Udai Pareek SES category" note={data.notes.udai_pareek_category}>
-          <HorizontalBarChart data={udaiData} />
+          <HorizontalBarChart data={udaiData} mode="sequential" />
         </ChartCard>
         <ChartCard title="BG Prasad category" note={data.notes.bg_prasad_category}>
-          <HorizontalBarChart data={prasadData} />
+          <HorizontalBarChart data={prasadData} mode="sequential" />
         </ChartCard>
       </div>
     </section>

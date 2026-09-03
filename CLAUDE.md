@@ -68,8 +68,10 @@ Actual current routes (for reference — task briefs sometimes list slightly
 different paths): `/`, `/registry`, `/demographics`, `/health-screening`
 (page title "Child Illness History" since 2026-09-03 — route/path unchanged),
 `/physical-activity`, `/screen-time`, `/dietary-intake` (new 2026-09-03),
-`/assessments` (new 2026-09-03 — "All Study Instruments" hub), `/neurodevelopment`,
-`/progress` — all under `frontend/src/App.tsx`.
+`/assessments` (new 2026-09-03 — now the grouped instrument-catalogue hub),
+`/neurodevelopment`, `/progress` (2026-09-03: removed from all nav menus,
+still a working route reachable only by direct URL) — all under
+`frontend/src/App.tsx`.
 
 Verified before this config was written (2026-09-01): backend 105/105 tests
 pass; frontend `npm run build` succeeds; a temporary local backend instance
@@ -336,20 +338,43 @@ same precedent as above):
   version for this ~9-10-year-old cohort — that remains an open
   confirmation item for the study team, not a code decision.
 
-**Assessment instrument structure (new)**: `frontend/src/routes/AssessmentsHub.tsx`
-(route `/assessments`, linked from the nav's Assessments dropdown as "All
-Study Instruments") lists all instruments the study team named. The 9
-that exist in REDCap link to their existing pages (Registration→Registry,
-SES→Demographics, CHH→Child Illness History page, DSEQ→Screen Time,
-PAQ→Physical Activity, Dietary Intake, SSRS Parent/Child/Teacher→
-Neurodevelopment). The 6 that do **not** exist in REDCap today (ASER
-Literacy and Numeracy, SANGIAN, Visual Working Memory, DCCS, Colour
-Detection Task, Anthropometry/BIA) render as clickable "Under Development"
-placeholder cards — clicking expands an inline panel reading "Under
-Development / Data for this assessment is not currently available in the
-dashboard." No route navigation, no API call, no fake chart or zero-filled
-statistic is produced for these six; this is a UI/product-status
-representation only and does not imply any of the six exist in REDCap.
+**Assessment instrument structure**: `frontend/src/routes/AssessmentsHub.tsx`
+(route `/assessments`) is the authoritative instrument catalogue — "Explore
+each study instrument and its current data availability." Instruments are
+grouped into 5 sections matching established study terminology: **Core /
+Baseline** (Baseline/Participant Information, SES), **Health & Behaviour**
+(Child Illness History, DSEQ, PAQ, Dietary Intake), **Social Functioning**
+(SSRS Parent/Child/Teacher), **Cognitive / Developmental** (ASER, SANGIAN,
+Visual Working Memory, DCCS, Colour Detection Task), **Anthropometry**
+(Anthropometry/BIA). The 9 real instruments render as compact cards
+(icon, name, one-line purpose, a derived status — "Completed" if
+completed_count equals total_registered, "Data Available" if >0, else "No
+Data Available" — plus `n/N (%)` and a thin proportion bar) built entirely
+from the existing `/dashboard/overview` response's `all_instrument_coverage`
+— no new backend endpoint or field was added for this page. The 6
+placeholder instruments render identically in card shape but as a button
+showing only "Under Development"; clicking expands an inline panel reading
+"Under Development / Data for this assessment is not currently available in
+the dashboard" — no route navigation, no API call, no fake numbers. This
+remains a UI/product-status representation only, not evidence any of the
+six exist in REDCap.
+
+**Navigation simplification (2026-09-03, third pass)**: the standalone
+"Progress" primary nav item was removed — study progress is already
+communicated via Overview's Study Snapshot + Assessment Coverage, and the
+per-instrument completion now visible on the Assessments hub. The
+`/progress` route/`AssessmentProgress.tsx` page and its
+`GET /dashboard/progress` endpoint are **unchanged and still reachable by
+direct URL** — same precedent as Neurodevelopment being nav-hidden-but-not-
+deleted. The "Assessments" topnav dropdown was trimmed from a near-complete
+instrument list to genuine quick navigation — `frontend/src/components/Layout.tsx`'s
+`QUICK_NAV` — "All Study Instruments" (the hub) plus the 3 most-used
+instrument pages (Child Illness History, Screen Time, Physical Activity);
+Dietary Intake and Neurodevelopment are reachable via the hub or direct URL
+but no longer duplicated in the dropdown. A separate `ASSESSMENT_ROUTES`
+list (broader than `QUICK_NAV`) still correctly highlights the "Assessments"
+nav trigger when any assessment-area route is active, including ones no
+longer in the trimmed dropdown.
 
 **Known data characteristic (not a bug, flagged for the study team)**: the
 10 Dietary Intake frequency fields' (`die_*_freq`) REDCap choice labels are

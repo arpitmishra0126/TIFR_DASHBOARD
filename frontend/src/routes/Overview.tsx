@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { getOverview, getProgress } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
+import { percentOf } from "../components/charts/chartHelpers";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
@@ -10,11 +12,12 @@ import HorizontalBarChart from "../components/HorizontalBarChart";
 import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
+import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
-import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
+import type { ConditionIndicator, OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
@@ -24,6 +27,16 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
 
 function formatTime(date: Date): string {
   return date.toLocaleTimeString("en-GB", { hour12: false });
+}
+
+/** Highest-prevalence reported conditions/indicators, for a compact
+ * Overview-level health signal — NOT the full item-level breakdown (that
+ * stays exclusively on the Child Illness History assessment page). */
+function topReportedItems(named: ConditionIndicator[], general: ConditionIndicator[], limit = 5): ConditionIndicator[] {
+  return [...named, ...general]
+    .filter((i) => i.yes_count > 0)
+    .sort((a, b) => b.yes_count - a.yes_count || b.percent_yes - a.percent_yes)
+    .slice(0, limit);
 }
 
 export default function Overview() {
@@ -64,7 +77,10 @@ export default function Overview() {
     count: c.count,
   }));
 
-  const dseqDistribution = overview.dseq_screen_time_distribution.map((c) => ({ label: c.code, count: c.count }));
+  const topHealthSignals = topReportedItems(overview.chh_named_conditions, overview.chh_general_flags);
+
+  const dseqAnswered = overview.dseq_screen_time_distribution.reduce((sum, c) => sum + c.count, 0);
+  const dseqDominant = [...overview.dseq_screen_time_distribution].sort((a, b) => b.count - a.count)[0];
 
   return (
     <section>
@@ -113,14 +129,14 @@ export default function Overview() {
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
       <div className="chart-grid three-col">
-        <ChartCard title="Sex Distribution">
-          <DonutChart data={sexData} />
+        <ChartCard title="Sex Distribution" subtitle="Registered children, by sex">
+          <DonutChart data={sexData} centerValue={overview.total_registered} centerLabel="Registered" />
         </ChartCard>
-        <ChartCard title="Age Distribution">
+        <ChartCard title="Age Distribution" subtitle="Registered children, by study age group">
           <CategoryBarChart data={ageData} mode="sequential" />
         </ChartCard>
-        <ChartCard title="SES Category (Udai Pareek)">
-          <HorizontalBarChart data={udaiData} />
+        <ChartCard title="SES Category (Udai Pareek)" subtitle="Registered children with an SES score">
+          <HorizontalBarChart data={udaiData} mode="sequential" />
         </ChartCard>
       </div>
 
@@ -131,7 +147,7 @@ export default function Overview() {
             <tr>
               <th>Assessment Instrument</th>
               <th>Completed</th>
-              <th>Coverage</th>
+              <th style={{ minWidth: 160 }}>Coverage</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -142,7 +158,24 @@ export default function Overview() {
                 <td>
                   {instrument.completed_count} / {overview.total_registered}
                 </td>
-                <td>{instrument.percent_of_registered}%</td>
+                <td>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                    <span style={{ flex: "0 0 60px" }}>{instrument.percent_of_registered}%</span>
+                    <span style={{ flex: 1, minWidth: 60 }}>
+                      <ProportionBar
+                        value={instrument.completed_count}
+                        total={overview.total_registered}
+                        color={
+                          instrument.coverage_tier === "High"
+                            ? "var(--status-good)"
+                            : instrument.coverage_tier === "Partial"
+                              ? "var(--status-warning)"
+                              : "var(--baseline)"
+                        }
+                      />
+                    </span>
+                  </div>
+                </td>
                 <td>
                   <StatusBadge label={instrument.coverage_tier} tone={TIER_BADGE_TONE[instrument.coverage_tier] ?? "neutral"} />
                 </td>
@@ -159,74 +192,59 @@ export default function Overview() {
         <Funnel stages={progress.stages} />
       </ChartCard>
 
-      <SectionHeader
-        title="Child Illness History"
-        note={`${overview.chh_completion.completed}/${overview.chh_completion.total_registered} registered children completed this instrument (${overview.chh_completion.percent}%) — percentages below use each item's own valid respondents`}
-      />
-      <div className="chart-grid two-col">
-        <div className="table-card">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Reported Health Conditions, n (%)</th>
-                <th>Yes</th>
-                <th>No</th>
-                <th>Don't know</th>
-                <th>Valid N</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.chh_named_conditions.map((c) => (
-                <tr key={c.label}>
-                  <td>{c.label}</td>
-                  <td>
-                    {c.yes_count} ({c.percent_yes}%)
-                  </td>
-                  <td>{c.no_count}</td>
-                  <td>{c.dont_know_count}</td>
-                  <td>{c.valid_n}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="table-card">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Reported Health and Medical-History Indicators, n (%)</th>
-                <th>Yes</th>
-                <th>No</th>
-                <th>Don't know</th>
-                <th>Valid N</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.chh_general_flags.map((c) => (
-                <tr key={c.label}>
-                  <td>{c.label}</td>
-                  <td>
-                    {c.yes_count} ({c.percent_yes}%)
-                  </td>
-                  <td>{c.no_count}</td>
-                  <td>{c.dont_know_count}</td>
-                  <td>{c.valid_n}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <SectionHeader title="Broad health signal" note="Child Illness History — high-level summary; full item-by-item analysis lives on its own page" />
+      <ChartCard
+        title="Most commonly reported conditions & indicators"
+        subtitle={`Among ${overview.chh_completion.completed} of ${overview.chh_completion.total_registered} registered children who completed Child Illness History (${overview.chh_completion.percent}%)`}
+      >
+        {topHealthSignals.length === 0 ? (
+          <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+            No conditions or indicators have been reported "Yes" yet among completed Child Illness History records.
+          </p>
+        ) : (
+          <div className="response-list">
+            {topHealthSignals.map((item) => (
+              <div className="response-item" key={item.label}>
+                <div className="response-item-header">
+                  <span className="response-item-label">{item.label}</span>
+                  <span className="response-item-value">
+                    {item.yes_count} ({item.percent_yes}%)
+                  </span>
+                </div>
+                <ProportionBar value={item.yes_count} total={item.valid_n} color="var(--series-1)" />
+              </div>
+            ))}
+          </div>
+        )}
+        <Link to="/health-screening" className="chart-card-link">
+          View full Child Illness History analysis →
+        </Link>
+      </ChartCard>
 
-      <SectionHeader
-        title="Screen Time (DSEQ)"
-        note={`${overview.dseq_completion.completed}/${overview.dseq_completion.total_registered} registered children completed this instrument (${overview.dseq_completion.percent}%)`}
-      />
-      <div className="chart-grid">
-        <ChartCard title="Distribution of Total Daily Screen Time" subtitle="DSEQ Q10, ordered low to high">
-          <CategoryBarChart data={dseqDistribution} mode="categorical" />
-        </ChartCard>
-      </div>
+      <SectionHeader title="Broad screen-time signal" note="DSEQ — high-level summary; full detailed analysis lives on its own page" />
+      <ChartCard
+        title="Total daily screen time — dominant pattern"
+        subtitle={`Among ${overview.dseq_completion.completed} of ${overview.dseq_completion.total_registered} registered children who completed DSEQ (${overview.dseq_completion.percent}%)`}
+      >
+        {dseqAnswered === 0 || !dseqDominant ? (
+          <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+            No DSEQ Q10 responses have been recorded yet.
+          </p>
+        ) : (
+          <div className="response-item">
+            <div className="response-item-header">
+              <span className="response-item-label">Most reported: {dseqDominant.code}</span>
+              <span className="response-item-value">
+                {dseqDominant.count} / {dseqAnswered} ({percentOf(dseqDominant.count, dseqAnswered)}%)
+              </span>
+            </div>
+            <ProportionBar value={dseqDominant.count} total={dseqAnswered} color="var(--series-1)" />
+          </div>
+        )}
+        <Link to="/screen-time" className="chart-card-link">
+          View full Screen Time (DSEQ) analysis →
+        </Link>
+      </ChartCard>
 
       <ChartCard title="Data Collection & Quality Status" subtitle="Where collection currently stands, and where it is lagging">
         <div className="status-stat-grid">

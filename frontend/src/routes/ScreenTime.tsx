@@ -4,7 +4,7 @@ import { getScreenTime } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
-import KpiCard from "../components/KpiCard";
+import ProportionBar from "../components/ProportionBar";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -52,12 +52,6 @@ export default function ScreenTime() {
         />
       </div>
 
-      <div className="kpi-row">
-        {data.yes_no_items.map((item) => (
-          <KpiCard key={item.code} label={item.code} value={item.count} sublabel={`of ${completion.total_registered} registered`} />
-        ))}
-      </div>
-
       <SectionHeader
         title="Distribution of Total Daily Screen Time"
         note="DSEQ Q10, ordered low to high, among children who completed the instrument"
@@ -67,6 +61,23 @@ export default function ScreenTime() {
           <CategoryBarChart data={distribution} mode="categorical" />
         </ChartCard>
       </div>
+
+      <SectionHeader title="Key behavioural indicators" note={`Yes responses, of ${completion.total_registered} registered children`} />
+      <ChartCard title="Screen-use behaviour" subtitle="DSEQ Q9 / Q14 / Q15">
+        <div className="response-list">
+          {data.yes_no_items.map((item) => (
+            <div className="response-item" key={item.code}>
+              <div className="response-item-header">
+                <span className="response-item-label">{item.code}</span>
+                <span className="response-item-value">
+                  {item.count} / {completion.total_registered}
+                </span>
+              </div>
+              <ProportionBar value={item.count} total={completion.total_registered} />
+            </div>
+          ))}
+        </div>
+      </ChartCard>
     </section>
   );
 }

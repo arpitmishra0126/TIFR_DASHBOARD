@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
 import { getNeurodevelopment } from "../api/dashboard";
+import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
-import { IconBrain } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
+import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
@@ -20,23 +21,35 @@ function scoreSublabel(summary: ScoreSummary): string {
 }
 
 function InstrumentSection({ summary }: { summary: SSRSInstrumentSummary }) {
+  const hasData = summary.children_with_any_data > 0;
+
   return (
     <>
       <SectionHeader
         title={summary.instrument}
         note={`${summary.completed_count} fully complete · ${summary.children_with_any_data} of ${summary.total_registered} have at least one rating item answered`}
       />
-      <div className="kpi-row" style={{ marginBottom: "var(--space-5)" }}>
-        <KpiCard
-          label="Children with any data"
-          value={`${summary.children_with_any_data} / ${summary.total_registered}`}
-          sublabel={`${summary.percent}% of registered`}
-          icon={IconBrain}
-          tone={summary.children_with_any_data > 0 ? "violet" : "neutral"}
-        />
-        <KpiCard label="Avg frequency rating" value={scoreValue(summary.avg_frequency_summary)} sublabel={scoreSublabel(summary.avg_frequency_summary)} />
-        <KpiCard label="Avg importance rating" value={scoreValue(summary.avg_importance_summary)} sublabel={scoreSublabel(summary.avg_importance_summary)} />
-      </div>
+      {!hasData ? (
+        <ChartCard title={`${summary.instrument} — No data available`} subtitle="No completed responses yet for this instrument">
+          <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+            0 of {summary.total_registered} registered children have any rating item answered. This will populate
+            automatically once live {summary.instrument} data exists — no value is invented here.
+          </p>
+        </ChartCard>
+      ) : (
+        <>
+          <ChartCard
+            title="Coverage"
+            subtitle={`${summary.children_with_any_data} of ${summary.total_registered} registered children have at least one rating item answered`}
+          >
+            <ProportionBar value={summary.children_with_any_data} total={summary.total_registered} />
+          </ChartCard>
+          <div className="kpi-row" style={{ marginBottom: "var(--space-5)" }}>
+            <KpiCard label="Avg frequency rating" value={scoreValue(summary.avg_frequency_summary)} sublabel={scoreSublabel(summary.avg_frequency_summary)} />
+            <KpiCard label="Avg importance rating" value={scoreValue(summary.avg_importance_summary)} sublabel={scoreSublabel(summary.avg_importance_summary)} />
+          </div>
+        </>
+      )}
     </>
   );
 }

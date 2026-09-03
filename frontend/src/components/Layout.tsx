@@ -10,7 +10,6 @@ import {
   IconHome,
   IconMenu,
   IconMonitor,
-  IconProgress,
   IconUsers,
 } from "./icons";
 import RouteErrorBoundary from "./RouteErrorBoundary";
@@ -22,16 +21,31 @@ interface NavItem {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
-// Neurodevelopment keeps its route/API/implementation untouched — it is
-// deliberately left out of this nav list only (information-architecture
-// decision), not deleted. "Health & Screening" renamed to "Child Illness
-// History" per the terminology audit — the route/API are unchanged.
-const MODULE_NAV: NavItem[] = [
-  { to: "/health-screening", label: "Child Illness History", icon: IconHeart },
-  { to: "/physical-activity", label: "Physical Activity", icon: IconActivity },
-  { to: "/screen-time", label: "Screen Time", icon: IconMonitor },
-  { to: "/dietary-intake", label: "Dietary Intake", icon: IconChart },
+// The Assessments dropdown is now quick navigation, not the instrument
+// catalogue — that role belongs to the /assessments hub page itself (all 15
+// study instruments, grouped, with live completion status). This list is
+// deliberately short: the hub link first, then the most frequently accessed
+// available instruments — not a duplicate of every instrument. Neurodevelopment
+// (SSRS) is reachable via the hub, not listed here directly (information-
+// architecture decision only — its route/API are unchanged).
+const QUICK_NAV: NavItem[] = [
   { to: "/assessments", label: "All Study Instruments", icon: IconChart },
+  { to: "/health-screening", label: "Child Illness History", icon: IconHeart },
+  { to: "/screen-time", label: "Screen Time", icon: IconMonitor },
+  { to: "/physical-activity", label: "Physical Activity", icon: IconActivity },
+];
+
+// Every route considered part of the "Assessments" area, for highlighting
+// the nav trigger — broader than QUICK_NAV so direct navigation to a page
+// not in the trimmed quick-nav list (e.g. Dietary Intake, Neurodevelopment)
+// still shows "Assessments" as active.
+const ASSESSMENT_ROUTES = [
+  "/assessments",
+  "/health-screening",
+  "/physical-activity",
+  "/screen-time",
+  "/dietary-intake",
+  "/neurodevelopment",
 ];
 
 export default function Layout() {
@@ -56,7 +70,7 @@ export default function Layout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [assessmentsOpen]);
 
-  const isModuleActive = MODULE_NAV.some((item) => item.to === location.pathname);
+  const isModuleActive = ASSESSMENT_ROUTES.includes(location.pathname);
 
   return (
     <div className="app-shell">
@@ -115,7 +129,7 @@ export default function Layout() {
             </button>
             {assessmentsOpen && (
               <div className="topnav-dropdown-menu">
-                {MODULE_NAV.map((item) => {
+                {QUICK_NAV.map((item) => {
                   const Icon = item.icon;
                   return (
                     <NavLink
@@ -131,11 +145,6 @@ export default function Layout() {
               </div>
             )}
           </div>
-
-          <NavLink to="/progress" className={({ isActive }) => `topnav-link${isActive ? " active" : ""}`}>
-            <IconProgress width={15} height={15} />
-            Progress
-          </NavLink>
         </nav>
 
         {mobileOpen && (
@@ -147,7 +156,7 @@ export default function Layout() {
               Registry
             </NavLink>
             <div className="topnav-mobile-section-label">Assessments</div>
-            {MODULE_NAV.map((item) => (
+            {QUICK_NAV.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -156,9 +165,6 @@ export default function Layout() {
                 {item.label}
               </NavLink>
             ))}
-            <NavLink to="/progress" className={({ isActive }) => `topnav-mobile-link${isActive ? " active" : ""}`}>
-              Progress
-            </NavLink>
           </nav>
         )}
       </header>

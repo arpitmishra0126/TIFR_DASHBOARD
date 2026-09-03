@@ -556,46 +556,154 @@ a, button {
   }
 }
 
-/* --- Donut chart (compact, chart + inline legend) --- */
+/* --- Donut chart (chart + center label + legend) --- */
 .donut-chart {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-5);
   flex-wrap: wrap;
+}
+
+.donut-plot {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.donut-center-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.donut-center-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 3px;
+  font-weight: 600;
 }
 
 .donut-legend {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
   flex: 1;
-  min-width: 120px;
+  min-width: 140px;
 }
 
 .donut-legend-item {
   display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  transition: background var(--transition-fast);
+  cursor: default;
+}
+
+.donut-legend-item.active,
+.donut-legend-item:hover {
+  background: var(--surface-2);
+}
+
+.donut-legend-heading {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.8rem;
+  gap: 8px;
 }
 
 .donut-legend-dot {
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .donut-legend-label {
   color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
   flex: 1;
 }
 
 .donut-legend-value {
   color: var(--text-primary);
-  font-weight: 700;
+  font-weight: 800;
+  font-size: 0.95rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.donut-legend-percent {
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.74rem;
+}
+
+.donut-legend-bar {
+  display: block;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.donut-legend-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width var(--transition);
+}
+
+/* --- Shared chart tooltip --- */
+.chart-tooltip {
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow-card-hover);
+  padding: 8px 12px;
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.chart-tooltip-title {
+  color: var(--text-secondary);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--text-primary);
+}
+
+.chart-tooltip-row-label {
+  color: var(--text-muted);
+}
+
+.chart-tooltip-row-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .stage-grid {
@@ -809,22 +917,95 @@ a, button {
   border-color: var(--border-hairline-strong);
 }
 
-a.chart-card.assessment-instrument-card,
-button.chart-card.assessment-placeholder-card {
+/* --- Assessment instrument hub (catalogue cards) --- */
+.instrument-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.instrument-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
   text-align: left;
   text-decoration: none;
   color: inherit;
   font: inherit;
   cursor: pointer;
   width: 100%;
+  transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition-fast);
 }
 
-button.chart-card.assessment-placeholder-card {
-  opacity: 0.85;
+.instrument-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-hairline-strong);
+  transform: translateY(-1px);
 }
 
-button.chart-card.assessment-placeholder-card:hover {
+.instrument-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--series-1);
+  margin-bottom: 2px;
+}
+
+.instrument-card-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.005em;
+}
+
+.instrument-card-purpose {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  min-height: 2.1em;
+}
+
+.instrument-card-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.instrument-card-figure {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instrument-card-placeholder {
+  opacity: 0.8;
+}
+
+.instrument-card-placeholder:hover {
   opacity: 1;
+}
+
+.instrument-card-expanded {
+  margin-top: 4px;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--gridline);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .chart-card-title {
@@ -839,6 +1020,25 @@ button.chart-card.assessment-placeholder-card:hover {
   color: var(--text-muted);
   margin-top: 2px;
   margin-bottom: var(--space-4);
+}
+
+.chart-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--gridline);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--series-1);
+  text-decoration: none;
+  width: fit-content;
+  transition: gap var(--transition-fast);
+}
+
+.chart-card-link:hover {
+  gap: 7px;
 }
 
 .chart-card-note {
@@ -1025,6 +1225,121 @@ table.data-table tbody tr {
 
 table.data-table tbody tr:hover {
   background: var(--surface-2);
+}
+
+/* --- Detail disclosure (secondary/reference tables) --- */
+.detail-disclosure {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-6);
+}
+
+.detail-disclosure-summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--series-1);
+  padding: var(--space-2) 0;
+  list-style: none;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-disclosure-summary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 0.7rem;
+  transition: transform var(--transition-fast);
+}
+
+.detail-disclosure[open] > .detail-disclosure-summary::before {
+  transform: rotate(90deg);
+}
+
+.detail-disclosure-body {
+  margin-top: var(--space-3);
+}
+
+/* --- Proportion bar (single-value compact indicator) --- */
+.proportion-bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.proportion-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  transition: width var(--transition);
+}
+
+/* --- Inline composition legend (Yes / No / Don't know) --- */
+.composition-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.composition-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composition-legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* --- Compact response list (single-proportion indicators) --- */
+.response-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.response-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.response-item-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.response-item-label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.response-item-value {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.response-item-sublabel {
+  font-size: 0.72rem;
+  color: var(--text-muted);
 }
 
 .pagination-controls {
