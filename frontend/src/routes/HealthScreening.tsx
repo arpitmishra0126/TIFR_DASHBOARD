@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
+import BackToAssessments from "../components/BackToAssessments";
 import ChartCard from "../components/ChartCard";
 import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
 import DataLoadError from "../components/DataLoadError";
@@ -91,6 +92,7 @@ export default function HealthScreening() {
 
   return (
     <section>
+      <BackToAssessments />
       <PageHeader
         eyebrow="Study Assessment"
         title="Child Illness History"

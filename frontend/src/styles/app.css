@@ -428,6 +428,24 @@ a, button {
   box-shadow: var(--shadow-card);
 }
 
+/* --- Back-to-hub link (instrument detail pages) --- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+  transition: color var(--transition-fast), gap var(--transition-fast);
+}
+
+.back-link:hover {
+  color: var(--series-1);
+  gap: 8px;
+}
+
 /* --- Page header --- */
 .page-header {
   margin-bottom: var(--space-6);

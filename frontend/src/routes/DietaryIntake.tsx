@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getDietaryIntake } from "../api/dashboard";
+import BackToAssessments from "../components/BackToAssessments";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
@@ -37,6 +38,7 @@ export default function DietaryIntake() {
 
   return (
     <section>
+      <BackToAssessments />
       <PageHeader
         eyebrow="Study Assessment"
         title="Dietary Intake"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getScreenTime } from "../api/dashboard";
+import BackToAssessments from "../components/BackToAssessments";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
@@ -39,6 +40,7 @@ export default function ScreenTime() {
 
   return (
     <section>
+      <BackToAssessments />
       <PageHeader
         eyebrow="Study Assessment"
         title="Screen Time"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getNeurodevelopment } from "../api/dashboard";
+import BackToAssessments from "../components/BackToAssessments";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import KpiCard from "../components/KpiCard";
@@ -72,6 +73,7 @@ export default function Neurodevelopment() {
 
   return (
     <section>
+      <BackToAssessments />
       <PageHeader
         eyebrow="Study Assessment"
         title="Neurodevelopment / Assessment"
