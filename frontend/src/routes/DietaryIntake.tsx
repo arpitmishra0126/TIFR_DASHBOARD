@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
 import { getDietaryIntake } from "../api/dashboard";
-import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
+import HorizontalBarChart, { computeHorizontalBarChartHeight } from "../components/HorizontalBarChart";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -16,6 +16,12 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   Partial: "warning",
   "No Data": "neutral",
 };
+
+// Wide enough for the longest known REDCap frequency choice labels
+// (including the Hindi-only die_*_freq categories - see CLAUDE.md) without
+// truncating; shared by every food-group chart so their y-axis columns
+// line up.
+const FOOD_GROUP_LABEL_WIDTH = 190;
 
 export default function DietaryIntake() {
   const [data, setData] = useState<DietaryIntakeResponse | null>(null);
@@ -34,6 +40,8 @@ export default function DietaryIntake() {
   if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
+  const distributions = data.items.map((item) => item.distribution.map((c) => ({ label: c.code, count: c.count })));
+  const sharedChartHeight = computeHorizontalBarChartHeight(distributions, FOOD_GROUP_LABEL_WIDTH);
 
   return (
     <section>
@@ -55,13 +63,18 @@ export default function DietaryIntake() {
         note="Each food group's category order follows the REDCap frequency scale (Daily → ... → Rarely/Never); valid N shown per item"
       />
       <div className="chart-grid two-col">
-        {data.items.map((item) => (
+        {data.items.map((item, index) => (
           <ChartCard
             key={item.field_label}
             title={item.field_label}
             subtitle={`n=${item.valid_n}/${completion.total_registered} answered (${item.percent_valid}%)`}
           >
-            <CategoryBarChart data={item.distribution.map((c) => ({ label: c.code, count: c.count }))} mode="categorical" />
+            <HorizontalBarChart
+              data={distributions[index]}
+              mode="categorical"
+              labelWidth={FOOD_GROUP_LABEL_WIDTH}
+              height={sharedChartHeight}
+            />
           </ChartCard>
         ))}
       </div>

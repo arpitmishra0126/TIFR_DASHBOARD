@@ -306,6 +306,40 @@ new `GET /api/v1/dashboard/dietary-intake` endpoint, new
 `frontend/src/routes/DietaryIntake.tsx` page (route `/dietary-intake`) - one
 compact chart per food group with n/N/% and category order preserved.
 
+**Dietary Intake chart layout fix (2026-09-08)**: the 10 food-group charts
+originally used `CategoryBarChart` (vertical bars, category labels along
+the x-axis), which visibly overlapped/collided once the live REDCap
+`die_*_freq` choice labels turned out to be long (and, per the "Known data
+characteristic" note above, Hindi-only with no short English segment to
+fall back on). Fixed by switching `DietaryIntake.tsx` to
+`HorizontalBarChart` (labels on the y-axis, read normally, no rotation
+needed) - the same shared component already used for the SES charts on
+Overview/Demographics, not a new one-off chart. `HorizontalBarChart.tsx`
+itself gained two capabilities, usable by any future caller, not just this
+page: (1) an optional `labelWidth` prop (default `124`, unchanged for
+existing callers) controlling the y-axis category column width, and (2) a
+custom Y-axis tick (`makeCategoryTick`) that word-wraps a label to fit that
+width using the new `wrapLabel()` helper in `chartHelpers.ts` (greedy
+word-wrap; hard-splits a single overlong word instead of ever truncating),
+replacing recharts' default single-line tick that let long text overflow
+past the reserved axis width into the bars - which was the actual root
+cause of the collision, not a sizing/margin issue. Row height scales with
+however many lines the widest label in a dataset needs
+(`DEFAULT_ROW_HEIGHT` 44px + 16px per extra wrapped line), so short labels
+(e.g. Udai Pareek's "Upper-middle") still render identically to before -
+this is backward-compatible for every other `HorizontalBarChart` caller.
+New exported `computeHorizontalBarChartHeight(datasets, labelWidth)`
+computes one shared height across *all* of a group's datasets at once (not
+each chart sizing itself independently); `DietaryIntake.tsx` calls this
+once for all 10 food items and passes the same `height` + `labelWidth`
+(`FOOD_GROUP_LABEL_WIDTH = 190`) to every chart, so all 10 charts in
+"Consumption Frequency by Food Group" share identical dimensions and
+y-axis alignment. No REDCap field, calculation, denominator, category
+ordering, or API response changed - `CategoryBarChart.tsx` is untouched
+and still used as-is by Overview/PhysicalActivity/ScreenTime/Demographics.
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend files
+touched.
+
 **"Completed Assessment Set" → "Core REDCap Instruments Completed"**: this
 UI label (Overview KPI card, Overview footnote, Assessment Progress funnel
 stage + instrument-table title) is renamed again - the six-instrument
