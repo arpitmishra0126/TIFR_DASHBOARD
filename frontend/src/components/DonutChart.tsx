@@ -44,9 +44,33 @@ function renderActiveShape(props: any) {
   );
 }
 
+/** Approximate rendered tooltip footprint, used only to keep it inside the
+ * chart bounds and clear of the donut center — not pixel-exact. */
+const TOOLTIP_WIDTH = 150;
+const TOOLTIP_HEIGHT = 72;
+const TOOLTIP_GAP = 14;
+
 export default function DonutChart({ data, height = 200, centerValue, centerLabel }: DonutChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | undefined>(undefined);
   const total = data.reduce((sum, d) => sum + d.count, 0);
+
+  const handleSliceEnter = (entry: any, index: number) => {
+    setActiveIndex(index);
+    const { cx, cy, midAngle, outerRadius } = entry;
+    const RADIAN = Math.PI / 180;
+    const dirX = Math.cos(-midAngle * RADIAN);
+    const dirY = Math.sin(-midAngle * RADIAN);
+    // Anchor just outside the slice, then place the tooltip box on the far
+    // side of that anchor from the center so it never falls back over it.
+    const anchorX = cx + (outerRadius + TOOLTIP_GAP) * dirX;
+    const anchorY = cy + (outerRadius + TOOLTIP_GAP) * dirY;
+    const rawLeft = dirX >= 0 ? anchorX : anchorX - TOOLTIP_WIDTH;
+    const rawTop = dirY >= 0 ? anchorY : anchorY - TOOLTIP_HEIGHT;
+    const left = Math.min(Math.max(rawLeft, 0), height - TOOLTIP_WIDTH);
+    const top = Math.min(Math.max(rawTop, 0), height - TOOLTIP_HEIGHT);
+    setTooltipPos({ x: left, y: top });
+  };
 
   return (
     <div className="donut-chart">
@@ -63,14 +87,19 @@ export default function DonutChart({ data, height = 200, centerValue, centerLabe
               cornerRadius={4}
               strokeWidth={0}
               activeShape={renderActiveShape}
-              onMouseEnter={(_, index) => setActiveIndex(index)}
-              onMouseLeave={() => setActiveIndex(undefined)}
+              onMouseEnter={handleSliceEnter}
+              onMouseLeave={() => {
+                setActiveIndex(undefined);
+                setTooltipPos(undefined);
+              }}
             >
               {data.map((entry, index) => (
                 <Cell key={entry.label} fill={CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length]} />
               ))}
             </Pie>
             <Tooltip
+              position={tooltipPos}
+              isAnimationActive={false}
               content={(props) => {
                 const point = props.payload?.[0]?.payload as DonutDatum | undefined;
                 if (!point) return null;

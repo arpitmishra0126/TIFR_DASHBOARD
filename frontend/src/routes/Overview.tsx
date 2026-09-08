@@ -8,7 +8,7 @@ import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
 import HorizontalBarChart from "../components/HorizontalBarChart";
-import { IconClipboardCheck, IconGraduationCap, IconHeart, IconUserCheck, IconUsers } from "../components/icons";
+import { IconClipboardCheck, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
@@ -72,7 +72,7 @@ export default function Overview() {
     count: c.count,
   }));
 
-  const topHealthSignals = topReportedItems(overview.chh_named_conditions, overview.chh_general_flags);
+  const topHealthSignals = topReportedItems(overview.chh_named_conditions, overview.chh_general_flags, 1);
 
   const dseqAnswered = overview.dseq_screen_time_distribution.reduce((sum, c) => sum + c.count, 0);
   const dseqDominant = [...overview.dseq_screen_time_distribution].sort((a, b) => b.count - a.count)[0];
@@ -91,41 +91,28 @@ export default function Overview() {
         <KpiCard
           label="Core REDCap Instruments Completed"
           value={overview.core_assessment_count.toLocaleString()}
-          sublabel={`${overview.core_assessment_percent}% of registered`}
+          sublabel={`${overview.core_assessment_percent}% of registered — current overall assessment coverage`}
           icon={IconClipboardCheck}
           tone="aqua"
         />
-        <KpiCard
-          label="SSRS Parent"
-          value={overview.ssrs_parent_count.toLocaleString()}
-          sublabel={`${overview.ssrs_parent_percent}% of registered`}
-          icon={IconHeart}
-          tone="neutral"
-        />
-        <KpiCard
-          label="SSRS Child"
-          value={overview.ssrs_child_count.toLocaleString()}
-          sublabel={`${overview.ssrs_child_percent}% of registered`}
-          icon={IconUserCheck}
-          tone="violet"
-        />
-        <KpiCard
-          label="SSRS Teacher"
-          value={overview.ssrs_teacher_count.toLocaleString()}
-          sublabel={`${overview.ssrs_teacher_percent}% of registered`}
-          icon={IconGraduationCap}
-          tone="amber"
-        />
+      </div>
+      <div className="snapshot-status-row">
+        <span className="live-badge">
+          <span className="live-badge-dot" />
+          Live REDCap data
+        </span>
+        {lastUpdated && <span className="last-updated">Last updated: {formatTime(lastUpdated)}</span>}
       </div>
       <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
         Core REDCap Instruments Completed = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and
-        SSRS Parent all completed for the same child.
+        SSRS Parent all completed for the same child. Per-instrument and per-stage detail (SSRS Parent/
+        Child/Teacher included) is available below in Assessment Coverage.
       </p>
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
       <div className="chart-grid two-col">
         <ChartCard title="Sex Distribution" subtitle="Registered children, by sex">
-          <DonutChart data={sexData} height={168} centerValue={overview.total_registered} centerLabel="Registered" />
+          <DonutChart data={sexData} height={190} centerValue={overview.total_registered} centerLabel="Registered" />
         </ChartCard>
         <ChartCard title="Age Distribution" subtitle="Registered children, by study age group">
           <CategoryBarChart data={ageData} mode="sequential" height={190} />
@@ -180,59 +167,60 @@ export default function Overview() {
         </table>
       </div>
 
-      <SectionHeader title="Broad health signal" note="Child Illness History — high-level summary; full item-by-item analysis lives on its own page" />
-      <ChartCard
-        title="Most commonly reported conditions & indicators"
-        subtitle={`Among ${overview.chh_completion.completed} of ${overview.chh_completion.total_registered} registered children who completed Child Illness History (${overview.chh_completion.percent}%)`}
-      >
-        {topHealthSignals.length === 0 ? (
-          <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
-            No conditions or indicators have been reported "Yes" yet among completed Child Illness History records.
-          </p>
-        ) : (
-          <div className="response-list">
-            {topHealthSignals.map((item) => (
-              <div className="response-item" key={item.label}>
-                <div className="response-item-header">
-                  <span className="response-item-label">{item.label}</span>
-                  <span className="response-item-value">
-                    {item.yes_count} ({item.percent_yes}%)
-                  </span>
+      <SectionHeader title="Current data signals" note="What we're seeing — one high-level indicator per instrument; full item-level analysis lives on each assessment page" />
+      <div className="chart-grid two-col">
+        <ChartCard
+          title="Most commonly reported condition or indicator"
+          subtitle={`Child Illness History · ${overview.chh_completion.completed}/${overview.chh_completion.total_registered} completed (${overview.chh_completion.percent}%)`}
+        >
+          {topHealthSignals.length === 0 ? (
+            <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+              No conditions or indicators have been reported "Yes" yet among completed records.
+            </p>
+          ) : (
+            <div className="response-list">
+              {topHealthSignals.map((item) => (
+                <div className="response-item" key={item.label}>
+                  <div className="response-item-header">
+                    <span className="response-item-label">{item.label}</span>
+                    <span className="response-item-value">
+                      {item.yes_count} ({item.percent_yes}%)
+                    </span>
+                  </div>
+                  <ProportionBar value={item.yes_count} total={item.valid_n} color="var(--series-1)" />
                 </div>
-                <ProportionBar value={item.yes_count} total={item.valid_n} color="var(--series-1)" />
-              </div>
-            ))}
-          </div>
-        )}
-        <Link to="/health-screening" className="chart-card-link">
-          View full Child Illness History analysis →
-        </Link>
-      </ChartCard>
-
-      <SectionHeader title="Broad screen-time signal" note="DSEQ — high-level summary; full detailed analysis lives on its own page" />
-      <ChartCard
-        title="Total daily screen time — dominant pattern"
-        subtitle={`Among ${overview.dseq_completion.completed} of ${overview.dseq_completion.total_registered} registered children who completed DSEQ (${overview.dseq_completion.percent}%)`}
-      >
-        {dseqAnswered === 0 || !dseqDominant ? (
-          <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
-            No DSEQ Q10 responses have been recorded yet.
-          </p>
-        ) : (
-          <div className="response-item">
-            <div className="response-item-header">
-              <span className="response-item-label">Most reported: {dseqDominant.code}</span>
-              <span className="response-item-value">
-                {dseqDominant.count} / {dseqAnswered} ({percentOf(dseqDominant.count, dseqAnswered)}%)
-              </span>
+              ))}
             </div>
-            <ProportionBar value={dseqDominant.count} total={dseqAnswered} color="var(--series-1)" />
-          </div>
-        )}
-        <Link to="/screen-time" className="chart-card-link">
-          View full Screen Time (DSEQ) analysis →
-        </Link>
-      </ChartCard>
+          )}
+          <Link to="/health-screening" className="chart-card-link">
+            View full Child Illness History analysis →
+          </Link>
+        </ChartCard>
+
+        <ChartCard
+          title="Dominant total daily screen time"
+          subtitle={`DSEQ · ${overview.dseq_completion.completed}/${overview.dseq_completion.total_registered} completed (${overview.dseq_completion.percent}%)`}
+        >
+          {dseqAnswered === 0 || !dseqDominant ? (
+            <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+              No DSEQ Q10 responses have been recorded yet.
+            </p>
+          ) : (
+            <div className="response-item">
+              <div className="response-item-header">
+                <span className="response-item-label">Most reported: {dseqDominant.code}</span>
+                <span className="response-item-value">
+                  {dseqDominant.count} / {dseqAnswered} ({percentOf(dseqDominant.count, dseqAnswered)}%)
+                </span>
+              </div>
+              <ProportionBar value={dseqDominant.count} total={dseqAnswered} color="var(--series-1)" />
+            </div>
+          )}
+          <Link to="/screen-time" className="chart-card-link">
+            View full Screen Time (DSEQ) analysis →
+          </Link>
+        </ChartCard>
+      </div>
 
       <ChartCard title="Data Collection & Quality Status" subtitle="Where collection currently stands, and where it is lagging">
         <div className="status-stat-grid">
@@ -251,10 +239,6 @@ export default function Overview() {
               {partialCoverage.length + noDataCoverage.length} / {overview.all_instrument_coverage.length}
             </div>
             <div className="status-stat-label">Instruments needing attention (Partial or No Data)</div>
-          </div>
-          <div className="status-stat">
-            <div className="status-stat-value">{lastUpdated ? formatTime(lastUpdated) : "—"}</div>
-            <div className="status-stat-label">Last refresh</div>
           </div>
         </div>
 

@@ -574,6 +574,16 @@ a, button {
   gap: var(--space-4);
 }
 
+.snapshot-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -1677,7 +1687,7 @@ table.data-table tbody tr:hover {
 /* --- Data Collection & Quality Status panel --- */
 .status-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: var(--space-5);
 }
 

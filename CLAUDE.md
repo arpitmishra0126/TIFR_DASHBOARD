@@ -541,15 +541,56 @@ this pass, and short/attached rather than a standalone long paragraph.
 
 Study-level summary.
 
+**Overview final refinement (2026-09-08 — supersedes the KPI list and section
+set below):** the Study Snapshot KPI row was trimmed to exactly two cards —
+**Registered** and **Core REDCap Instruments Completed** (sublabel now reads
+"X% of registered — current overall assessment coverage"). The standalone
+SSRS Parent/Child/Teacher KPI cards were removed from Snapshot — they
+duplicated numbers already shown per-instrument in the Assessment Coverage
+table (`all_instrument_coverage` includes ssrs_parent/ssrs_child/ssrs_teacher
+rows) and in the cumulative funnel on the still-reachable `/progress` page;
+no calculation, field, or API response changed, only which KPI cards render.
+A new compact `.snapshot-status-row` (reuses the existing `.live-badge` +
+`.last-updated` classes) sits directly under the KPI row showing "Live
+REDCap data" + "Last updated HH:MM:SS", sourced from the same `useRefresh()`
+context Topbar already uses — this duplicates Topbar's badge only on wide
+screens (where Topbar's own badge is visible in the header row) and is the
+only place that status is visible below the ~900px breakpoint, where
+Topbar's live badge and nav hide. The two former standalone sections "Broad
+health signal" and "Broad screen-time signal" were merged into one
+**"Current data signals"** section, rendered as a `chart-grid two-col` row
+(previously two full-width stacked sections) — same underlying data/links,
+just presented side by side; the Child Illness History card now shows only
+the single top-ranked condition/indicator (`topReportedItems(..., limit=1)`,
+was `limit=5` feeding a short list) since the section's job is one
+descriptive signal, not a mini-list — full item-level detail is still
+exclusively on `/health-screening`. The "Study Progress" funnel section
+(already removed from Overview in an earlier 2026-09-03 pass — see the
+REVISION section above) was **not** reintroduced. The Data Collection &
+Quality Status panel's "Last refresh" stat was dropped (redundant with the
+new Snapshot status row) — it now shows 3 stats instead of 4, and
+`.status-stat-grid`'s CSS changed from a fixed `repeat(4, 1fr)` to
+`repeat(auto-fit, minmax(170px, 1fr))` so the stat count can change without
+a matching CSS edit. `DonutChart`'s height on the Sex Distribution chart was
+changed from 168 to 190 to match the adjacent Age Distribution bar chart in
+the same `two-col` row (both charts' cards stretch to the row's tallest
+card via CSS grid default `align-items: stretch`; mismatched internal chart
+heights left visible dead space under the shorter one). Frontend
+`tsc --noEmit` and `npm run build` both succeed; no backend files were
+touched, so backend REDCap mappings/calculations/API contracts are
+unchanged — verify this is still true by inspecting `git status` before
+trusting it in a future session, per the source-of-truth rule.
+
 Show, as separate top-level KPI cards (kept deliberately small in number —
 NOT one per instrument), each independently live-calculated from REDCap:
 
 - Registered
 - Core REDCap Instruments Completed (**UI label only** — see "UI TERMINOLOGY" below;
   underlying strict all-six-instruments calculation is unchanged)
-- SSRS Parent
-- SSRS Child
-- SSRS Teacher
+
+SSRS Parent/Child/Teacher are **no longer separate Snapshot KPI cards** (see
+2026-09-08 note above) — their live counts remain fully available in the
+Assessment Coverage table and on `/progress`.
 
 **Overview restructure (2026-09-01, second pass — analytical layout):**
 below the "Study snapshot" KPI row, the page now has four further
@@ -585,10 +626,11 @@ numbers in more than one additional format):
   duplicate 4-card `ProgressStageCard` KPI grid from this page — see prior
   entry below; `ProgressStageCard.tsx` remains intentionally unused in the
   codebase, kept pending an explicit dead-code-cleanup decision.)
-- **Data Collection & Quality Status** — unchanged: the compact
-  `.status-stat-grid` panel (total instrument-completions collected, count
-  at High coverage, count needing attention, last refresh) plus the
-  Partial/No-Data flag list.
+- **Data Collection & Quality Status** — the compact `.status-stat-grid`
+  panel (total instrument-completions collected, count at High coverage,
+  count needing attention) plus the Partial/No-Data flag list. The stat grid
+  originally also had a fourth "last refresh" stat — removed 2026-09-08 as
+  redundant with the new Snapshot status row (see note above).
 
 Do NOT duplicate detailed demographic analysis here.
 
