@@ -14,7 +14,7 @@ FIXTURE_METADATA: list[dict] = [
         "form_name": "registration_form",
         "field_type": "dropdown",
         "field_label": "sex of the child",
-        # Real live label format: bilingual "English /Hindi" — exercises the
+        # Real live label format: bilingual "English /Hindi" - exercises the
         # primary-language-segment stripping in app.ingestion.choice_maps.
         "select_choices_or_calculations": "1, male /transliteration | 2, female/transliteration",
     },
@@ -220,7 +220,7 @@ def build_fixture_records(as_of: date) -> list[dict]:
             scr_bg_members="4",
             **core_complete,
         ),
-        # REC004: PARTIAL core battery — 5 of 6 complete (dietary_intake missing).
+        # REC004: PARTIAL core battery - 5 of 6 complete (dietary_intake missing).
         # Must NOT count toward core_assessment_battery (strict intersection).
         _base_record(
             "REC004",
@@ -235,16 +235,16 @@ def build_fixture_records(as_of: date) -> list[dict]:
         # REC005: registered only, nothing else started.
         _base_record("REC005", child_dob=""),
         # REC006: registration form itself marked incomplete, but still a
-        # valid record with a child_id — must still count as "registered".
+        # valid record with a child_id - must still count as "registered".
         _base_record("REC006", registration_form_complete="0", child_dob=_dob_years_ago(4, as_of)),
-        # REC007: blank child_id — must be excluded from every count entirely,
+        # REC007: blank child_id - must be excluded from every count entirely,
         # even though its instrument fields look "complete".
         _base_record("", **core_complete, ssrs_child_complete="2", ssrs_teacher_complete="2"),
     ]
 
 
 class FakeRedCapRepository:
-    """Duck-compatible stand-in for LiveRedCapRepository — no network I/O."""
+    """Duck-compatible stand-in for LiveRedCapRepository - no network I/O."""
 
     def __init__(self, metadata: list[dict], records: list[dict]) -> None:
         self._metadata = metadata

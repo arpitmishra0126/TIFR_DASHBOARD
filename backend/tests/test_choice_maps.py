@@ -15,7 +15,7 @@ def test_parse_choice_string_ignores_malformed_segments():
 
 
 def test_parse_choice_string_strips_bilingual_transliteration():
-    # This study's live forms label choices as "English /Hindi" — only the
+    # This study's live forms label choices as "English /Hindi" - only the
     # English segment should survive, so downstream exact-match grouping
     # (e.g. sex distribution counts) isn't silently broken by the raw label.
     assert parse_choice_string("1, male /पुरुष | 2, female/महिला") == {

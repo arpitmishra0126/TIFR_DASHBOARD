@@ -1,4 +1,4 @@
-"""V1 dashboard API — the only interface the frontend talks to.
+"""V1 dashboard API - the only interface the frontend talks to.
 
 Every endpoint here reads live from REDCap (via the cached LiveRedCapRepository)
 and normalizes in memory. There is no database. The REDCap token never leaves

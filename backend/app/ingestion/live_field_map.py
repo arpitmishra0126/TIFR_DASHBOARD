@@ -11,11 +11,11 @@ Resolution rule applied below: a live field is mapped to an approved V1
 metric ONLY when it measures the same underlying construct, not merely a
 similarly-labelled field. As of 2026-08-26, field-level content is mapped
 into the dashboard for Registration, SES, Child Illness History (Health &
-Screening), PAQ-A (Physical Activity), and DSEQ (Screen Time) — following
+Screening), PAQ-A (Physical Activity), and DSEQ (Screen Time) - following
 the approved Active Cases Excel analytical specification (see
 app.services.module_analytics). SSRS Parent/Child/Teacher contribute
 items-answered/mean-rating summaries to Neurodevelopment (not the
-individual t43-t51 teacher ratings, which remain unmapped — see
+individual t43-t51 teacher ratings, which remain unmapped - see
 NEURODEVELOPMENT_STATUS). Dietary Intake's per-field content is exported
 in the Active Cases sheet but has no dedicated dashboard module.
 Instrument-level completion status for all instruments is used throughout
@@ -68,7 +68,7 @@ SES_STATUS: tuple[LiveFieldStatus, ...] = (
         "Demographics & SES", "udai_pareek_category", True, "scr_pareek_category", "screening_rural",
         "Category label (Upper/Upper-middle/Middle/Lower-middle/Lower) parsed from the calc field's own "
         "field_note text (confirmed live 2026-09-03: 'field_note': \"1=I Upper >43; 2=II Upper-middle "
-        "33-42; ...\") via app.ingestion.choice_maps.build_calc_category_maps — not a hardcoded/invented "
+        "33-42; ...\") via app.ingestion.choice_maps.build_calc_category_maps - not a hardcoded/invented "
         "label. Falls back to the raw numeric code only if field_note is ever removed/changed upstream.",
     ),
     LiveFieldStatus(
@@ -87,9 +87,9 @@ SES_STATUS: tuple[LiveFieldStatus, ...] = (
 )
 
 # --- Assessment module analytics (approved 2026-08-26 as the V1 analytical
-#     specification — see app.services.module_analytics and the Active Cases
-#     Excel export's "DOMAIN ANALYSIS" section, which uses the exact same
-#     field lists and calculations as these four dashboard modules). ---
+# specification - see app.services.module_analytics and the Active Cases
+# Excel export's "DOMAIN ANALYSIS" section, which uses the exact same
+# field lists and calculations as these four dashboard modules). ---
 HEALTH_SCREENING_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
         "Health & Screening", "current_illness_flag", True, "chh_illness_current", "child_illness_history",
@@ -101,7 +101,7 @@ HEALTH_SCREENING_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
         "Health & Screening", "assessment_eligibility_decision", False, None, None,
         "chh_fit_for_assessment/chh_assessor_decision exist and are exported in the Active Cases sheet, but "
-        "were not included in the approved Summary/dashboard analysis — only the 11 named conditions and 8 "
+        "were not included in the approved Summary/dashboard analysis - only the 11 named conditions and 8 "
         "general flags were approved for aggregate display.",
     ),
 )
@@ -135,7 +135,7 @@ SCREEN_TIME_STATUS: tuple[LiveFieldStatus, ...] = (
 NEURODEVELOPMENT_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
         "Neurodevelopment", "teacher_academic_performance", False, "t43_rating", "ssrs_teacher",
-        "t43_rating exists in REDCap but is NOT part of the approved analytical specification — the approved "
+        "t43_rating exists in REDCap but is NOT part of the approved analytical specification - the approved "
         "Neurodevelopment analysis uses SSRS Parent/Child/Teacher items-answered counts and mean "
         "frequency/importance ratings (p*/c*/t*_freq and _imp fields) instead of the individual t43-t51 "
         "teacher ratings. SSRS Teacher also has 0/live completions today regardless.",
@@ -176,7 +176,7 @@ CORE_BATTERY_DESCRIPTION = (
 
 # All nine live instruments in PID 196, each paired with its own completion
 # field and a display label for the Overview "Assessment Instrument Coverage"
-# panel. Every entry is calculated independently of the others — this is a
+# panel. Every entry is calculated independently of the others - this is a
 # per-instrument breakdown, NOT the Completed Assessment Set intersection
 # (see CORE_BATTERY_COMPLETE_FIELDS / _core_battery_ids for that).
 ALL_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
@@ -205,14 +205,14 @@ ALL_STATUS: tuple[LiveFieldStatus, ...] = (
 
 # --- Export-only fields (Active Cases Excel/CSV export) ---
 # Approved per the 2026-08-26 live-metadata field audit. These are NOT used
-# by any dashboard module/calculation above — they exist here only so that
+# by any dashboard module/calculation above - they exist here only so that
 # LiveRedCapRepository's fixed field whitelist (LIVE_FIELDS) includes them,
 # for app.services.export_service to read. See export_service.py's
 # ACTIVE_CASES_FIELD_SPECS for the per-field acquired/derived documentation.
 #
 # Udai Pareek P1 (caste, scr_pareek_caste) and P1a (actual caste category,
 # scr_caste_category) are intentionally EXCLUDED from this list and from the
-# export — caste is sensitive demographic data and was excluded per explicit
+# export - caste is sensitive demographic data and was excluded per explicit
 # instruction, even though it is technically part of the P1-P9 Udai Pareek
 # item set. The 8 fields below are P2-P9.
 SES_EXPORT_FIELDS: tuple[str, ...] = (
@@ -302,7 +302,7 @@ DIETARY_EXPORT_FIELDS: tuple[str, ...] = (
 
 # SSRS Parent/Child/Teacher: per-item frequency + importance rating fields
 # (confirmed live field names, 2026-08-26). Raw items are not individually
-# exported to keep the Active Cases sheet readable — export_service.py
+# exported to keep the Active Cases sheet readable - export_service.py
 # instead computes a per-child "items answered" count and mean rating for
 # each of the two rating scales. Included for all three instruments
 # (including Teacher, which has 0/212 live completions today) so the same

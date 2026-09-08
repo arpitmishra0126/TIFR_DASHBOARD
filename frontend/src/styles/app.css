@@ -142,7 +142,7 @@ a, button {
 
 /* Topbar (last-updated / refresh / theme toggle) now lives inside the
    header row instead of floating as its own bar at the top of every page's
-   content — one cohesive header instead of a separate application shell. */
+   content - one cohesive header instead of a separate application shell. */
 .topnav-header-row .app-topbar {
   margin-bottom: 0;
   flex-wrap: nowrap;
@@ -516,6 +516,34 @@ a, button {
   line-height: 1.5;
 }
 
+/* --- Overview only: tighter above-the-fold header, so Study Snapshot
+   starts much higher instead of reading as a landing-page hero. Scoped to
+   .overview-page rather than changing the shared .page-header/.section-
+   header rules other routes also use. */
+.overview-page .page-header {
+  margin-bottom: var(--space-4);
+}
+
+.overview-page .page-header-eyebrow {
+  margin-bottom: 6px;
+}
+
+.overview-page .page-header-subtitle {
+  margin-top: 3px;
+}
+
+.overview-page .section-header:first-of-type {
+  margin-bottom: var(--space-3);
+}
+
+/* The section header right after the Snapshot strip ("Study profile")
+   would otherwise inherit .section-header's full space-7 (44px) top
+   margin - tighten just that one gap so the page flows straight from the
+   strip into the next section. */
+.overview-page .snapshot-strip + .section-header {
+  margin-top: var(--space-5);
+}
+
 /* --- Section header --- */
 .section-header {
   display: flex;
@@ -574,15 +602,156 @@ a, button {
   gap: var(--space-4);
 }
 
-.snapshot-status-row {
+/* --- Study Snapshot: one cohesive information strip, not four separate
+   boxed cards. A single frame (border/shadow) holds all four metrics,
+   each an equal-width column separated by a hairline divider. Live REDCap
+   status / last-updated is intentionally NOT repeated here - it lives only
+   in the global top header (Topbar.tsx / Layout.tsx). --- */
+.snapshot-strip {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow var(--transition), border-color var(--transition);
+}
+
+.snapshot-strip:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-hairline-strong);
+}
+
+.snapshot-strip-item {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+}
+
+.snapshot-strip-item + .snapshot-strip-item {
+  border-left: 1px solid var(--border-hairline);
+}
+
+.snapshot-strip-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--tone-accent);
+  opacity: 0.7;
+}
+
+@media (max-width: 760px) {
+  .snapshot-strip {
+    flex-wrap: wrap;
+  }
+
+  .snapshot-strip-item {
+    flex: 1 1 50%;
+    border-left: none !important;
+  }
+
+  .snapshot-strip-item:nth-child(odd) {
+    border-right: 1px solid var(--border-hairline);
+  }
+
+  .snapshot-strip-item:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border-hairline);
+  }
+}
+
+.snapshot-tone-blue { --tone-accent: var(--series-1); --tone-accent-soft: rgba(42, 120, 214, 0.12); }
+.snapshot-tone-aqua { --tone-accent: var(--series-3); --tone-accent-soft: rgba(27, 175, 122, 0.12); }
+.snapshot-tone-amber { --tone-accent: var(--series-4); --tone-accent-soft: rgba(237, 161, 0, 0.14); }
+.snapshot-tone-violet { --tone-accent: var(--series-violet); --tone-accent-soft: rgba(74, 58, 167, 0.12); }
+
+.snapshot-card-head {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-  font-size: 0.78rem;
-  color: var(--text-muted);
+  gap: 7px;
+  margin-bottom: 4px;
 }
+
+.snapshot-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--tone-accent-soft);
+  color: var(--tone-accent);
+  flex-shrink: 0;
+}
+
+.snapshot-card-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  line-height: 1.25;
+}
+
+.snapshot-card-value {
+  font-size: 1.55rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.snapshot-card-support {
+  margin-top: 1px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- SSRS strip item: Parent/Child/Teacher as compact label/value lines,
+   not three separate columns --- */
+.snapshot-ssrs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.snapshot-ssrs-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.snapshot-ssrs-row-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.snapshot-ssrs-row-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.snapshot-ssrs-row-muted {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-style: italic;
+}
+
+:root[data-theme="dark"] .snapshot-tone-blue { --tone-accent-soft: rgba(57, 135, 229, 0.2); }
+:root[data-theme="dark"] .snapshot-tone-aqua { --tone-accent-soft: rgba(25, 158, 112, 0.22); }
+:root[data-theme="dark"] .snapshot-tone-amber { --tone-accent-soft: rgba(201, 133, 0, 0.26); }
+:root[data-theme="dark"] .snapshot-tone-violet { --tone-accent-soft: rgba(144, 133, 233, 0.24); }
 
 .chart-grid {
   display: grid;
@@ -1948,7 +2117,7 @@ table.data-table tbody tr:hover {
 }
 
 /* ==========================================================================
-   Dark theme — explicit toggle only (data-theme="dark" on <html>), never
+   Dark theme - explicit toggle only (data-theme="dark" on <html>), never
    tied to OS preference. Default is always light. Redefining the same
    custom properties used throughout this file is enough to re-theme almost
    everything below; the handful of rules with literal (non-token) colors

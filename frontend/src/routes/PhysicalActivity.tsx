@@ -19,7 +19,7 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
 };
 
 function scoreValue(summary: ScoreSummary): string {
-  return summary.mean !== null ? summary.mean.toFixed(2) : "—";
+  return summary.mean !== null ? summary.mean.toFixed(2) : "-";
 }
 
 function scoreSublabel(summary: ScoreSummary): string {
@@ -68,7 +68,7 @@ export default function PhysicalActivity() {
       </div>
       <p className="chart-card-note" style={{ marginBottom: "var(--space-4)" }}>
         Instrument completion ({completion.completed}/{completion.total_registered}) and each score's valid N above
-        are reported separately and are not forced to match — a completed instrument can still yield a blank
+        are reported separately and are not forced to match - a completed instrument can still yield a blank
         calculated score if a dependent item was skipped.
       </p>
 

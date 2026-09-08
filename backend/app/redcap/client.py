@@ -4,7 +4,7 @@ Architectural boundary for all REDCap communication: authentication, record
 export, metadata (Data Dictionary) export, retries, and response validation.
 
 This client is fully implemented but is NOT invoked anywhere in the
-application yet — REDCAP_API_URL / REDCAP_API_TOKEN / REDCAP_PROJECT_ID are
+application yet - REDCAP_API_URL / REDCAP_API_TOKEN / REDCAP_PROJECT_ID are
 not configured, and calling any method before they are will raise
 RedCapNotConfiguredError. No live connection is made at this stage.
 """
@@ -37,7 +37,7 @@ class RedCapClient:
         self._max_retries = max_retries
 
     def _ensure_configured(self) -> None:
-        # project_id is not sent in any REDCap API request below — the token
+        # project_id is not sent in any REDCap API request below - the token
         # alone scopes a request to a project. It is required only for
         # app-level bookkeeping (see Settings.redcap_configured), not for
         # making authenticated requests, so it is intentionally not checked here.
@@ -100,7 +100,7 @@ class RedCapClient:
     async def fetch_metadata(self) -> list[dict]:
         """Export the project's Data Dictionary (field/variable metadata).
 
-        This is required before real field-name mapping can be implemented —
+        This is required before real field-name mapping can be implemented - 
         the reference CSV only contains data-labels, not variable names.
         """
         data = {"content": "metadata", "format": "json"}

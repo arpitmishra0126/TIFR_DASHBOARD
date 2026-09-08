@@ -1,5 +1,4 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from "react";
-import { Link } from "react-router-dom";
 
 import { getOverview } from "../api/dashboard";
 import DataLoadError from "../components/DataLoadError";
@@ -15,23 +14,13 @@ import {
   IconUserCheck,
   IconUsers,
 } from "../components/icons";
+import InstrumentCoverageCard, { type AvailableInstrument } from "../components/InstrumentCoverageCard";
 import PageHeader from "../components/PageHeader";
-import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse } from "../types/liveDashboard";
-
-type InstrumentStatus = "Completed" | "Data Available" | "No Data Available" | "Under Development";
-
-interface AvailableInstrument {
-  key: string; // matches OverviewResponse.all_instrument_coverage[].key
-  name: string;
-  purpose: string;
-  route: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-}
 
 interface PlaceholderInstrument {
   key: string;
@@ -48,10 +37,10 @@ interface InstrumentGroup {
 
 // Groups and per-instrument descriptions reflect the study terminology
 // established by the 2026-09-03 audit (CLAUDE.md "ALL STUDY TOOLS" /
-// "CURRENT REDCAP INSTRUMENTS" sections) — not invented categories. This
+// "CURRENT REDCAP INSTRUMENTS" sections) - not invented categories. This
 // list is a UI/product-status representation only: an instrument's presence
 // here under "Under Development" is not evidence it exists in REDCap.
-const GROUPS: InstrumentGroup[] = [
+export const GROUPS: InstrumentGroup[] = [
   {
     title: "Core / Baseline",
     available: [
@@ -71,9 +60,9 @@ const GROUPS: InstrumentGroup[] = [
   {
     title: "Social Functioning",
     available: [
-      { key: "ssrs_parent", name: "SSRS — Parent", purpose: "Parent-reported social skills rating", route: "/neurodevelopment", icon: IconUserCheck },
-      { key: "ssrs_child", name: "SSRS — Child", purpose: "Child self-reported social skills rating", route: "/neurodevelopment", icon: IconGraduationCap },
-      { key: "ssrs_teacher", name: "SSRS — Teacher", purpose: "Teacher-reported social skills rating", route: "/neurodevelopment", icon: IconBrain },
+      { key: "ssrs_parent", name: "SSRS - Parent", purpose: "Parent-reported social skills rating", route: "/neurodevelopment", icon: IconUserCheck },
+      { key: "ssrs_child", name: "SSRS - Child", purpose: "Child self-reported social skills rating", route: "/neurodevelopment", icon: IconGraduationCap },
+      { key: "ssrs_teacher", name: "SSRS - Teacher", purpose: "Teacher-reported social skills rating", route: "/neurodevelopment", icon: IconBrain },
     ],
   },
   {
@@ -93,53 +82,6 @@ const GROUPS: InstrumentGroup[] = [
     placeholders: [{ key: "anthropometry", name: "Anthropometry / BIA", purpose: "Height, weight & body composition", icon: IconActivity }],
   },
 ];
-
-const STATUS_BADGE_TONE: Record<InstrumentStatus, "good" | "neutral" | "warning"> = {
-  Completed: "good",
-  "Data Available": "good",
-  "No Data Available": "neutral",
-  "Under Development": "neutral",
-};
-
-function deriveStatus(completed: number, total: number): InstrumentStatus {
-  if (total > 0 && completed === total) return "Completed";
-  if (completed > 0) return "Data Available";
-  return "No Data Available";
-}
-
-function AvailableInstrumentCard({ instrument, overview }: { instrument: AvailableInstrument; overview: OverviewResponse }) {
-  const coverage = overview.all_instrument_coverage.find((c) => c.key === instrument.key);
-  const completed = coverage?.completed_count ?? 0;
-  const total = overview.total_registered;
-  const percent = coverage?.percent_of_registered ?? 0;
-  const status = deriveStatus(completed, total);
-  const Icon = instrument.icon;
-
-  return (
-    <Link to={instrument.route} className="instrument-card instrument-card-available">
-      <div className="instrument-card-top">
-        <div className="instrument-card-icon">
-          <Icon width={18} height={18} />
-        </div>
-        <IconChevron width={13} height={13} className="instrument-card-chevron" />
-      </div>
-      <div className="instrument-card-name">{instrument.name}</div>
-      <div className="instrument-card-purpose">{instrument.purpose}</div>
-      <div className="instrument-card-body">
-        <div className="instrument-card-status-row">
-          <StatusBadge label={status} tone={STATUS_BADGE_TONE[status]} />
-          <span className="instrument-card-figure">
-            {completed}/{total} ({percent}%)
-          </span>
-        </div>
-        <ProportionBar value={completed} total={total} color={status === "No Data Available" ? "var(--baseline)" : "var(--series-1)"} />
-        <span className="instrument-card-affordance">
-          View assessment <IconChevron width={10} height={10} />
-        </span>
-      </div>
-    </Link>
-  );
-}
 
 function PlaceholderInstrumentCard({ instrument }: { instrument: PlaceholderInstrument }) {
   const [expanded, setExpanded] = useState(false);
@@ -208,7 +150,7 @@ export default function AssessmentsHub() {
           <SectionHeader title={group.title} />
           <div className="instrument-grid">
             {group.available.map((instrument) => (
-              <AvailableInstrumentCard key={instrument.key} instrument={instrument} overview={overview} />
+              <InstrumentCoverageCard key={instrument.key} instrument={instrument} overview={overview} />
             ))}
             {group.placeholders?.map((instrument) => (
               <PlaceholderInstrumentCard key={instrument.key} instrument={instrument} />

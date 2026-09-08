@@ -1,7 +1,7 @@
 """Dashboard-facing response schemas for the live REDCap-backed /dashboard/* API.
 
 Every response is truthful to what the configured REDCap API scope actually
-provides — see app.ingestion.live_field_map for the field-by-field
+provides - see app.ingestion.live_field_map for the field-by-field
 availability ledger. Modules with no live source data return an explicit
 `available=False` shape rather than an empty-looking populated one.
 """
@@ -108,7 +108,7 @@ class DemographicsResponse(BaseModel):
 
 
 # --- Assessment module analytics (Health & Screening / Physical Activity /
-# Screen Time / Neurodevelopment) — approved 2026-08-26 analytical
+# Screen Time / Neurodevelopment) - approved 2026-08-26 analytical
 # specification. Population = all registered children (same convention as
 # Overview/Demographics/Progress), not just "active" cases. ---
 class InstrumentCompletion(BaseModel):
@@ -116,12 +116,12 @@ class InstrumentCompletion(BaseModel):
     completed: int
     total_registered: int
     percent: float
-    coverage_tier: str  # "High" | "Partial" | "No Data"
+    coverage_tier: str # "High" | "Partial" | "No Data"
 
 
 class ScoreSummary(BaseModel):
     """valid_n + missing_n always sum to total; missing is never treated as
-    zero — mean/minimum/maximum are null when there is no data at all."""
+    zero - mean/minimum/maximum are null when there is no data at all."""
 
     valid_n: int
     missing_n: int
@@ -134,9 +134,9 @@ class ScoreSummary(BaseModel):
 
 class ConditionIndicator(BaseModel):
     """One coded health/history item, fully denominated per the audit's
-    denominator rule: `valid_n` (question-level — children who actually
+    denominator rule: `valid_n` (question-level - children who actually
     answered THIS item) is the correct percentage denominator; `asked_n`
-    (instrument-level — children who completed the instrument this item
+    (instrument-level - children who completed the instrument this item
     belongs to) is kept separate and never substituted for it."""
 
     label: str

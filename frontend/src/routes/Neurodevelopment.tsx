@@ -12,7 +12,7 @@ import { useRefresh } from "../context/RefreshContext";
 import type { ScoreSummary, SSRSInstrumentSummary } from "../types/liveDashboard";
 
 function scoreValue(summary: ScoreSummary): string {
-  return summary.mean !== null ? summary.mean.toFixed(2) : "—";
+  return summary.mean !== null ? summary.mean.toFixed(2) : "-";
 }
 
 function scoreSublabel(summary: ScoreSummary): string {
@@ -30,10 +30,10 @@ function InstrumentSection({ summary }: { summary: SSRSInstrumentSummary }) {
         note={`${summary.completed_count} fully complete · ${summary.children_with_any_data} of ${summary.total_registered} have at least one rating item answered`}
       />
       {!hasData ? (
-        <ChartCard title={`${summary.instrument} — No data available`} subtitle="No completed responses yet for this instrument">
+        <ChartCard title={`${summary.instrument} - No data available`} subtitle="No completed responses yet for this instrument">
           <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
             0 of {summary.total_registered} registered children have any rating item answered. This will populate
-            automatically once live {summary.instrument} data exists — no value is invented here.
+            automatically once live {summary.instrument} data exists - no value is invented here.
           </p>
         </ChartCard>
       ) : (
@@ -75,7 +75,7 @@ export default function Neurodevelopment() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Neurodevelopment / Assessment"
-        subtitle="Social Skills Rating System (SSRS) — Parent, Child and Teacher — live REDCap instruments."
+        subtitle="Social Skills Rating System (SSRS) - Parent, Child and Teacher - live REDCap instruments."
       />
 
       <InstrumentSection summary={data.parent} />

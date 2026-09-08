@@ -30,8 +30,8 @@ async def test_registry_excludes_records_without_child_id(service: LiveDashboard
 async def test_registry_resolves_choice_labels_and_free_text_village(service: LiveDashboardService):
     result = await service.get_registry()
     rec1 = next(c for c in result.children if c.redcap_child_id == "REC001")
-    assert rec1.sex == "Male"  # capitalized from REDCap's lowercase 'male' choice label
-    assert rec1.village == "Alpha Village"  # plain free-text field, not a choice code
+    assert rec1.sex == "Male" # capitalized from REDCap's lowercase 'male' choice label
+    assert rec1.village == "Alpha Village" # plain free-text field, not a choice code
     assert rec1.child_status == "Live"
     assert rec1.registration_complete is True
 
@@ -130,7 +130,7 @@ async def test_overview_instrument_coverage_counts_each_instrument_independently
     result = await service.get_overview()
     coverage = {c.key: c.completed_count for c in result.instrument_coverage}
     # REC001-004 have every core field complete except REC004 is missing
-    # dietary_intake specifically — so dietary_intake alone should read 3,
+    # dietary_intake specifically - so dietary_intake alone should read 3,
     # not 4, even though the other five instruments all read 4.
     assert coverage == {
         "ses": 4,
@@ -190,7 +190,7 @@ async def test_overview_all_instrument_coverage_counts_are_independent(service: 
     # Registration: 5 of 6 (REC006 has registration_form_complete == "0").
     # ses/dseq/child_illness_history/paq_a/ssrs_parent: 4 each (REC001-004).
     # dietary_intake: 3 (REC004 is deliberately missing this one field alone).
-    # ssrs_child: 2 (REC001, REC002 only — NOT gated by core-battery completion here).
+    # ssrs_child: 2 (REC001, REC002 only - NOT gated by core-battery completion here).
     # ssrs_teacher: 1 (REC002 only).
     assert counts == {
         "registration": 5,
@@ -205,7 +205,7 @@ async def test_overview_all_instrument_coverage_counts_are_independent(service: 
     }
     # SSRS Child/Teacher here are raw independent completion counts, distinct
     # from the cumulative (gated) ssrs_child_count/ssrs_teacher_count used by
-    # the progression funnel — both of which happen to equal these same raw
+    # the progression funnel - both of which happen to equal these same raw
     # values in this fixture, since every SSRS Child/Teacher completion here
     # already sits within the core-battery cohort.
     assert result.ssrs_child_count == counts["ssrs_child"]
@@ -249,7 +249,7 @@ async def test_overview_all_instrument_coverage_includes_coverage_tier(service: 
 async def test_overview_instrument_coverage_includes_coverage_tier(service: LiveDashboardService):
     # The original 6-instrument instrument_coverage list (used by the
     # Assessment Progress "Completed Assessment Set instruments" panel) also
-    # gained coverage_tier — same helper, same thresholds.
+    # gained coverage_tier - same helper, same thresholds.
     result = await service.get_overview()
     tiers = {c.key: c.coverage_tier for c in result.instrument_coverage}
     assert tiers["ses"] == "High"
@@ -319,11 +319,11 @@ async def test_demographics_age_and_sex_distribution(service: LiveDashboardServi
     buckets = {b.label: b.count for b in result.age_distribution}
     # Study-specific age groups: REC004 is exactly 8, REC003 is exactly 9;
     # REC001 (6), REC002 (11), REC006 (4) fall outside 8-10 -> "Other".
-    assert buckets["8 years"] == 1  # REC004
-    assert buckets["9 years"] == 1  # REC003
+    assert buckets["8 years"] == 1 # REC004
+    assert buckets["9 years"] == 1 # REC003
     assert buckets["10 years"] == 0
-    assert buckets["Other (outside 8-10 years)"] == 3  # REC001, REC002, REC006
-    assert buckets["Unknown"] == 1  # REC005, no dob
+    assert buckets["Other (outside 8-10 years)"] == 3 # REC001, REC002, REC006
+    assert buckets["Unknown"] == 1 # REC005, no dob
 
 
 @pytest.mark.asyncio
@@ -355,7 +355,7 @@ async def test_physical_activity_reports_real_score_summaries(service: LiveDashb
     assert result.total_summary.valid_n == 1
     assert result.total_summary.missing_n == 5
     assert result.total_summary.mean == 3.2
-    # Missing is never treated as zero — item1 has 1 valid + 5 missing, not a mean of 0.
+    # Missing is never treated as zero - item1 has 1 valid + 5 missing, not a mean of 0.
     assert result.item1_summary.valid_n == 1
     assert result.item1_summary.missing_n == 5
     assert result.item1_summary.mean == 2.5

@@ -11,7 +11,7 @@ interface ChartTooltipBoxProps {
   rows?: ChartTooltipRow[];
 }
 
-/** Shared tooltip presentation for all chart components — one styling
+/** Shared tooltip presentation for all chart components - one styling
  * implementation instead of a duplicated inline `contentStyle` per chart. */
 export function ChartTooltipBox({ active, title, rows }: ChartTooltipBoxProps) {
   if (!active || !rows || rows.length === 0) return null;

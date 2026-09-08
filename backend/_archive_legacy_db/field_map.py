@@ -9,7 +9,7 @@ not variable names.
 
 This mapping must be re-keyed to real REDCap variable names once the
 project's Data Dictionary is obtained via RedCapClient.fetch_metadata().
-Do not guess variable names — re-key from the Data Dictionary export only.
+Do not guess variable names - re-key from the Data Dictionary export only.
 """
 from dataclasses import dataclass
 

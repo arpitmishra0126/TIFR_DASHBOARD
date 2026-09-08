@@ -1,6 +1,6 @@
 """In-memory, read-only cache of live REDCap metadata + records.
 
-There is no database layer in this architecture — REDCap is the source of
+There is no database layer in this architecture - REDCap is the source of
 truth, and this class is the only place the app holds a transient copy of
 REDCap data in process memory. Every value expires after CACHE_TTL_SECONDS,
 after which the next request re-fetches from the live REDCap API, keeping

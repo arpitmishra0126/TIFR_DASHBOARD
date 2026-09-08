@@ -6,7 +6,7 @@ interface ProportionBarProps {
   color?: string;
 }
 
-/** A compact single-value proportion indicator (value/total) — for places
+/** A compact single-value proportion indicator (value/total) - for places
  * where only a count and its denominator exist (no separate "No" count to
  * compose against), so a full response-composition chart would overstate
  * what the data actually distinguishes. */

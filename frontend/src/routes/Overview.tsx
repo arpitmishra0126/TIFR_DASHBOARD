@@ -8,28 +8,58 @@ import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
 import HorizontalBarChart from "../components/HorizontalBarChart";
-import { IconClipboardCheck, IconUsers } from "../components/icons";
-import KpiCard from "../components/KpiCard";
+import { IconClipboardCheck, IconMonitor, IconUserCheck, IconUsers } from "../components/icons";
+import InstrumentCoverageCard from "../components/InstrumentCoverageCard";
 import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
-import StatusBadge from "../components/StatusBadge";
+import SnapshotMetricCard, { SnapshotCardShell } from "../components/SnapshotMetricCard";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
+import { GROUPS } from "./AssessmentsHub";
 
-const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
-  High: "good",
-  Partial: "warning",
-  "No Data": "neutral",
-};
+// The 8 currently-mapped assessment instruments (excludes Registration/
+// Baseline, which is already the "Registered" Snapshot KPI) - reuses the
+// same instrument metadata (name/purpose/route/icon) as the Assessments hub
+// so the two pages can never drift apart on what an instrument is called.
+const OVERVIEW_INSTRUMENTS = GROUPS.flatMap((g) => g.available).filter((i) => i.key !== "registration");
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-GB", { hour12: false });
+interface SsrsRow {
+  label: string;
+  count: number;
+  total: number;
+  percent: number;
+}
+
+/** Single "SSRS" headline card holding the Parent/Child/Teacher breakdown
+ * as compact label/value lines - deliberately one top-level card, not
+ * three, per the 2026-09-08 Overview correction. Coverage-only (n/N/%),
+ * no bars - the full SSRS item-level analysis stays on the
+ * Neurodevelopment assessment page. */
+function SsrsSummaryCard({ rows }: { rows: SsrsRow[] }) {
+  return (
+    <SnapshotCardShell label="SSRS" icon={IconUserCheck} tone="violet">
+      <div className="snapshot-ssrs-list">
+        {rows.map((row) => (
+          <div className="snapshot-ssrs-row" key={row.label}>
+            <span className="snapshot-ssrs-row-label">{row.label}</span>
+            {row.count > 0 ? (
+              <span className="snapshot-ssrs-row-value">
+                {row.count}/{row.total} ({row.percent}%)
+              </span>
+            ) : (
+              <span className="snapshot-ssrs-row-value snapshot-ssrs-row-muted">No data available</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </SnapshotCardShell>
+  );
 }
 
 /** Highest-prevalence reported conditions/indicators, for a compact
- * Overview-level health signal — NOT the full item-level breakdown (that
+ * Overview-level health signal - NOT the full item-level breakdown (that
  * stays exclusively on the Child Illness History assessment page). */
 function topReportedItems(named: ConditionIndicator[], general: ConditionIndicator[], limit = 5): ConditionIndicator[] {
   return [...named, ...general]
@@ -42,7 +72,7 @@ export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const { version, lastUpdated } = useRefresh();
+  const { version } = useRefresh();
 
   useEffect(() => {
     setError(null);
@@ -78,7 +108,7 @@ export default function Overview() {
   const dseqDominant = [...overview.dseq_screen_time_distribution].sort((a, b) => b.count - a.count)[0];
 
   return (
-    <section>
+    <section className="overview-page">
       <PageHeader
         eyebrow="ICMR Neurodevelopment Study"
         title="Study Population & Assessment Dashboard"
@@ -86,28 +116,36 @@ export default function Overview() {
       />
 
       <SectionHeader title="Study snapshot" note="Headline counts, each independently live-calculated from REDCap" />
-      <div className="kpi-row">
-        <KpiCard label="Registered" value={overview.total_registered.toLocaleString()} icon={IconUsers} tone="blue" />
-        <KpiCard
+      <div className="snapshot-strip">
+        <SnapshotMetricCard
+          label="Registered"
+          value={overview.total_registered.toLocaleString()}
+          support="Total study population"
+          icon={IconUsers}
+          tone="blue"
+        />
+        <SnapshotMetricCard
           label="Core REDCap Instruments Completed"
           value={overview.core_assessment_count.toLocaleString()}
-          sublabel={`${overview.core_assessment_percent}% of registered — current overall assessment coverage`}
+          support={`${overview.core_assessment_count}/${overview.total_registered} (${overview.core_assessment_percent}%)`}
           icon={IconClipboardCheck}
           tone="aqua"
         />
+        <SnapshotMetricCard
+          label="DSEQ / Screen Time"
+          value={overview.dseq_completion.completed.toLocaleString()}
+          support={`${overview.dseq_completion.completed}/${overview.dseq_completion.total_registered} (${overview.dseq_completion.percent}%)`}
+          icon={IconMonitor}
+          tone="amber"
+        />
+        <SsrsSummaryCard
+          rows={[
+            { label: "Parent", count: overview.ssrs_parent_count, total: overview.total_registered, percent: overview.ssrs_parent_percent },
+            { label: "Child", count: overview.ssrs_child_count, total: overview.total_registered, percent: overview.ssrs_child_percent },
+            { label: "Teacher", count: overview.ssrs_teacher_count, total: overview.total_registered, percent: overview.ssrs_teacher_percent },
+          ]}
+        />
       </div>
-      <div className="snapshot-status-row">
-        <span className="live-badge">
-          <span className="live-badge-dot" />
-          Live REDCap data
-        </span>
-        {lastUpdated && <span className="last-updated">Last updated: {formatTime(lastUpdated)}</span>}
-      </div>
-      <p className="chart-card-note" style={{ marginTop: "var(--space-2)", marginBottom: "var(--space-5)", borderTop: "none", paddingTop: 0 }}>
-        Core REDCap Instruments Completed = SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and
-        SSRS Parent all completed for the same child. Per-instrument and per-stage detail (SSRS Parent/
-        Child/Teacher included) is available below in Assessment Coverage.
-      </p>
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
       <div className="chart-grid two-col">
@@ -122,52 +160,17 @@ export default function Overview() {
         <HorizontalBarChart data={udaiData} mode="sequential" />
       </ChartCard>
 
-      <SectionHeader title="Assessment coverage" note="Completion of each of the 9 live instruments, independently calculated" />
-      <div className="table-card">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Assessment Instrument</th>
-              <th>Completed</th>
-              <th style={{ minWidth: 160 }}>Coverage</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {overview.all_instrument_coverage.map((instrument) => (
-              <tr key={instrument.key}>
-                <td>{instrument.label}</td>
-                <td>
-                  {instrument.completed_count} / {overview.total_registered}
-                </td>
-                <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                    <span style={{ flex: "0 0 60px" }}>{instrument.percent_of_registered}%</span>
-                    <span style={{ flex: 1, minWidth: 60 }}>
-                      <ProportionBar
-                        value={instrument.completed_count}
-                        total={overview.total_registered}
-                        color={
-                          instrument.coverage_tier === "High"
-                            ? "var(--status-good)"
-                            : instrument.coverage_tier === "Partial"
-                              ? "var(--status-warning)"
-                              : "var(--baseline)"
-                        }
-                      />
-                    </span>
-                  </div>
-                </td>
-                <td>
-                  <StatusBadge label={instrument.coverage_tier} tone={TIER_BADGE_TONE[instrument.coverage_tier] ?? "neutral"} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <SectionHeader
+        title="Assessment coverage"
+        note="Each of the 8 currently-mapped study instruments, independently calculated - tap a card for its full analysis"
+      />
+      <div className="instrument-grid">
+        {OVERVIEW_INSTRUMENTS.map((instrument) => (
+          <InstrumentCoverageCard key={instrument.key} instrument={instrument} overview={overview} />
+        ))}
       </div>
 
-      <SectionHeader title="Current data signals" note="What we're seeing — one high-level indicator per instrument; full item-level analysis lives on each assessment page" />
+      <SectionHeader title="Current data signals" note="What we're seeing - one high-level indicator per instrument; full item-level analysis lives on each assessment page" />
       <div className="chart-grid two-col">
         <ChartCard
           title="Most commonly reported condition or indicator"

@@ -69,7 +69,7 @@ from app.schemas.dashboard import (
 )
 
 # Study-specific age groups (replacing the previous broad 0-4/5-9/10-14/15+
-# bands) — the cohort's target ages per the study team's 2026-09-03 request.
+# bands) - the cohort's target ages per the study team's 2026-09-03 request.
 # "Other" is only shown when a registered child's computed age genuinely
 # falls outside 8-10 (data-integrity visibility, not an expected bucket).
 _STUDY_AGE_BUCKETS = [("8 years", 8), ("9 years", 9), ("10 years", 10)]
@@ -87,7 +87,7 @@ _AGE_REFERENCE_DATE = None
 def _resolve_or_raw(field_name: str, raw_value: str | None, choice_maps: dict[str, ChoiceMap]) -> str | None:
     """Resolve a coded (radio/dropdown) value to its label, or pass a plain
     text field's value through unchanged. Field type is determined by
-    whether it appears in the choice-map set built from live metadata —
+    whether it appears in the choice-map set built from live metadata - 
     this way the same normalization code works whether a given field is
     coded or free text, without hard-coding that assumption per field.
     """
@@ -165,7 +165,7 @@ def _ordered_labeled_category_distribution(
 ) -> list[CategoryCount]:
     """Category distribution for a numerically-coded field (e.g. an SES
     category), ordered by the underlying numeric code (preserving logical
-    category ordering) and displayed using the field's resolved label — via
+    category ordering) and displayed using the field's resolved label - via
     the same choice_maps mechanism used everywhere else, so a calc field's
     documented field_note labels (see build_calc_category_maps) are used
     when available, and the raw code is shown unchanged otherwise (never an
@@ -194,7 +194,7 @@ def _unique_ids_with_complete_field(records: list[dict], field: str) -> set[str]
 
 def _instrument_coverage(records: list[dict], total_registered: int) -> list[InstrumentCoverage]:
     """Live completion count + percentage for each of the six core-battery
-    instruments individually (not the all-six intersection — see
+    instruments individually (not the all-six intersection - see
     core_assessment_count for that)."""
     coverage = []
     for key, field, label in CORE_BATTERY_INSTRUMENTS:
@@ -215,7 +215,7 @@ def _all_instrument_coverage(records: list[dict], total_registered: int) -> list
     """Live completion count + percentage for each of the nine live REDCap
     instruments individually (Registration + all eight assessment
     instruments), each calculated independently from its own completion
-    field — never derived from another instrument's count. For the
+    field - never derived from another instrument's count. For the
     Overview 'Assessment Instrument Coverage' panel."""
     coverage = []
     for key, field, label in ALL_INSTRUMENTS:
@@ -341,8 +341,8 @@ class LiveDashboardService:
         total_registered = len(children)
 
         core_ids = _core_battery_ids(records)
-        # SSRS Parent is computed independently from ssrs_parent_complete —
-        # NOT derived from core_ids — even though SSRS Parent is also one of
+        # SSRS Parent is computed independently from ssrs_parent_complete - 
+        # NOT derived from core_ids - even though SSRS Parent is also one of
         # the six instruments required for the Completed Assessment Set.
         ssrs_parent_ids = _unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)
         ssrs_child_ids = core_ids & _unique_ids_with_complete_field(records, SSRS_CHILD_COMPLETE_FIELD)
@@ -411,7 +411,7 @@ class LiveDashboardService:
                 # This grouping IS the genuine six-instrument intersection
                 # (CORE_BATTERY_COMPLETE_FIELDS) used as the gate for the
                 # SSRS Child/Teacher stages below, so "Core REDCap
-                # Instruments Completed" honestly names what it measures —
+                # Instruments Completed" honestly names what it measures - 
                 # unlike the earlier placeholder "Completed Assessment Set"
                 # wording, it doesn't imply a validated clinical milestone.
                 label="Core REDCap Instruments Completed",
@@ -535,10 +535,10 @@ class LiveDashboardService:
             teacher=_instrument_summary(analysis["teacher"]),
             notes={
                 "scope": "Items-answered counts and mean frequency/importance ratings, computed from the raw "
-                "SSRS rating items — the same calculation used in the Active Cases Excel export. Not a "
+                "SSRS rating items - the same calculation used in the Active Cases Excel export. Not a "
                 "validated SSRS composite score. Individual SSRS Teacher item ratings (t43-t51) are not part "
                 "of the approved analytical specification.",
-                "ssrs_teacher": "0 live Teacher assessments are complete — Teacher's counts/summaries will "
+                "ssrs_teacher": "0 live Teacher assessments are complete - Teacher's counts/summaries will "
                 "populate automatically once real data exists; no value has been invented here.",
             },
         )

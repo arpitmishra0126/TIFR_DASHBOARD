@@ -33,7 +33,7 @@ function CompositionLegend() {
         <span className="composition-legend-swatch" style={{ background: "var(--series-4)" }} />
         Don't know
       </span>
-      <span>— each bar is 100% of that item's own valid respondents</span>
+      <span> - each bar is 100% of that item's own valid respondents</span>
     </div>
   );
 }
@@ -94,7 +94,7 @@ export default function HealthScreening() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Child Illness History"
-        subtitle="Child Illness History — live REDCap instrument."
+        subtitle="Child Illness History - live REDCap instrument."
       />
 
       <div className="module-status-line">

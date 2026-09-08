@@ -42,7 +42,7 @@ export default function ScreenTime() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Screen Time"
-        subtitle="Digital Screen Exposure Questionnaire (DSEQ) — live REDCap instrument."
+        subtitle="Digital Screen Exposure Questionnaire (DSEQ) - live REDCap instrument."
       />
 
       <div className="module-status-line">

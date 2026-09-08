@@ -15,8 +15,8 @@ existing live pipeline). No new REDCap mappings are introduced.
 
 Population: unlike the Excel export (which reports on "Active Cases" only,
 for the newsletter use case), these dashboard-facing functions report on
-ALL registered children — the same population convention already used by
-Overview, Demographics and Assessment Progress — for consistency across the
+ALL registered children - the same population convention already used by
+Overview, Demographics and Assessment Progress - for consistency across the
 dashboard. The underlying arithmetic (how a distribution/summary/coverage
 tier is computed) is identical either way.
 """
@@ -27,7 +27,7 @@ from typing import Callable
 from app.ingestion.choice_maps import ChoiceMap
 from app.ingestion.normalize import parse_complete_flag, parse_float
 
-# --- Field lists (single source of truth — approved 2026-08-26) ---
+# --- Field lists (single source of truth - approved 2026-08-26) ---
 
 CHH_NAMED_CONDITIONS: tuple[tuple[str, str], ...] = (
     ("chh_q8_asthma", "Asthma"),
@@ -102,7 +102,7 @@ def child_id(record: dict) -> str:
 
 
 def registered_records(records: list[dict]) -> list[dict]:
-    """Unique-by-child_id records with a non-blank child_id — the same
+    """Unique-by-child_id records with a non-blank child_id - the same
     population every other dashboard module (Overview/Demographics/Progress)
     already reports on."""
     seen: set[str] = set()
@@ -173,7 +173,7 @@ def yes_count(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]
 def response_breakdown(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> dict:
     """Yes/No/Don't-know/unanswered counts for one coded Yes/No(/Don't know)
     field, resolved from whatever choice labels the field's own REDCap
-    metadata actually defines — "don't know" is only ever counted if a
+    metadata actually defines - "don't know" is only ever counted if a
     record's resolved value textually says so; it is never inferred or
     fabricated for fields that don't offer that choice."""
     yes = no = dont_know = 0
@@ -183,7 +183,7 @@ def response_breakdown(records: list[dict], field: str, choice_maps: dict[str, C
             yes += 1
         elif value == "no":
             no += 1
-        elif "know" in value:  # e.g. "don't know" / "do not know"
+        elif "know" in value: # e.g. "don't know" / "do not know"
             dont_know += 1
     return {"yes": yes, "no": no, "dont_know": dont_know, "valid_n": yes + no + dont_know}
 
@@ -195,7 +195,7 @@ def build_condition_indicator(
     Yes/No/Don't-know counts, the valid respondent count for THIS question
     (the correct percentage denominator per the audit's denominator rule),
     and missing count against `asked_n` (the number of children who
-    completed the instrument this question belongs to — the instrument-level
+    completed the instrument this question belongs to - the instrument-level
     denominator, kept distinct from the question-level one)."""
     breakdown = response_breakdown(records, field, choice_maps)
     valid_n = breakdown["valid_n"]
@@ -236,7 +236,7 @@ def coverage_tier(completed: int, total: int) -> str:
 
 def numeric_summary(values: list[float], total: int) -> dict:
     """Valid N / missing N / percent-valid + mean/min/max. Missing is never
-    treated as zero — mean/min/max are None (not 0) when there is no data."""
+    treated as zero - mean/min/max are None (not 0) when there is no data."""
     valid_n = len(values)
     return {
         "valid_n": valid_n,

@@ -17,7 +17,7 @@ interface StudyDataLoaderProps {
 }
 
 /**
- * Compact "study data / neural network" loading indicator — a small
+ * Compact "study data / neural network" loading indicator - a small
  * animated hexagon of nodes standing in for study-data connectivity, used
  * wherever a page is waiting on a live REDCap fetch. Occupies only the
  * space it needs; never a full-screen takeover.

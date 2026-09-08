@@ -2,7 +2,7 @@
 
 These describe REDCap's own response shapes (export format), distinct from
 this application's dashboard-facing Pydantic schemas in app.schemas. Field
-names here are generic/structural — the actual per-study variable names can
+names here are generic/structural - the actual per-study variable names can
 only be confirmed once the REDCap Data Dictionary is available (see
 app.ingestion.normalize for the known limitation).
 """

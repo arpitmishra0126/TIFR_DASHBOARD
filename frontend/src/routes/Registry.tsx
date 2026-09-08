@@ -63,7 +63,7 @@ export default function Registry() {
       <PageHeader
         eyebrow="Study Population"
         title="Participants"
-        subtitle="Approved registry identifiers only — parent/family names and contact numbers are not exposed here."
+        subtitle="Approved registry identifiers only - parent/family names and contact numbers are not exposed here."
       />
 
       <div className="export-bar">
@@ -132,11 +132,11 @@ export default function Registry() {
               {data.children.map((child) => (
                 <tr key={child.redcap_child_id}>
                   <td>{child.redcap_child_id}</td>
-                  <td>{child.sex ?? "—"}</td>
-                  <td>{child.age_years ?? "—"}</td>
-                  <td>{child.village ?? "—"}</td>
-                  <td>{child.child_status ?? "—"}</td>
-                  <td>{child.visit_date ?? "—"}</td>
+                  <td>{child.sex ?? "-"}</td>
+                  <td>{child.age_years ?? "-"}</td>
+                  <td>{child.village ?? "-"}</td>
+                  <td>{child.child_status ?? "-"}</td>
+                  <td>{child.visit_date ?? "-"}</td>
                   <td>
                     <StatusBadge
                       label={child.registration_complete ? "Complete" : "Incomplete"}

@@ -19,6 +19,6 @@ class ChildRead(BaseModel):
 
 
 class ChildSummary(BaseModel):
-    """Registry KPI summary — 'Total children registered' etc."""
+    """Registry KPI summary - 'Total children registered' etc."""
 
     total_registered: int

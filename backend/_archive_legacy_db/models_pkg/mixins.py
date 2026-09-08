@@ -10,7 +10,7 @@ def _utcnow() -> datetime:
 
 
 class TimestampMixin:
-    """System-managed audit columns — not sourced from REDCap."""
+    """System-managed audit columns - not sourced from REDCap."""
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

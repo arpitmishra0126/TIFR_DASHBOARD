@@ -2,12 +2,12 @@
 
 V1 scope is limited to the six teacher-rated ordinal items approved in the
 V1 spec. Parent-report and child self-report SSRS items are explicitly
-excluded — the approved spec has no computed composite for either, only raw
+excluded - the approved spec has no computed composite for either, only raw
 per-item Frequency/Importance responses, so no qualifying variable exists.
 
 Field provenance:
   REDCap source -> the six teacher-rated ordinal items (Teacher-report instrument)
-  Normalized    -> none beyond text storage of ordinal categories
+  Normalized -> none beyond text storage of ordinal categories
   Dashboard-derived -> none
 """
 from sqlalchemy import ForeignKey, String

@@ -7,12 +7,12 @@ import RouteErrorBoundary from "./RouteErrorBoundary";
 import Topbar from "./Topbar";
 
 // The Assessments hub (/assessments) is now the SINGLE authoritative
-// instrument catalogue — grouped, polished instrument cards with live
+// instrument catalogue - grouped, polished instrument cards with live
 // completion status. Top navigation is deliberately just three items
 // (Overview | Registry | Assessments); there is no dropdown/instrument list
 // in the nav itself any more. Every individual assessment page (Child
 // Illness History, Screen Time, Physical Activity, Dietary Intake,
-// Neurodevelopment) is reached by clicking through the hub — routes/APIs
+// Neurodevelopment) is reached by clicking through the hub - routes/APIs
 // for all of them are unchanged, only this nav-level discovery path moved.
 const ASSESSMENT_ROUTES = [
   "/assessments",

@@ -19,9 +19,6 @@ export interface CategoryBarDatum {
 
 interface CategoryBarChartProps {
   data: CategoryBarDatum[];
-  /** "categorical": each bar is a distinct identity, gets its own hue.
-   *  "sequential": bars are ordered bins of one measure, single hue, shaded
-   *  by relative magnitude for a subtle sense of hierarchy. */
   mode: "categorical" | "sequential";
   height?: number;
 }

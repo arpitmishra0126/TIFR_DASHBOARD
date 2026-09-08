@@ -1,10 +1,10 @@
 """Registry / Study Overview module.
 
 Field provenance:
-  REDCap source   -> redcap_child_id, sex, dob, village, child_status, visit_date,
+  REDCap source -> redcap_child_id, sex, dob, village, child_status, visit_date,
                       registration_complete (from the "Complete?" field on the
                       Registration instrument)
-  Normalized      -> dob parsed to a date; registration_complete parsed to bool
+  Normalized -> dob parsed to a date; registration_complete parsed to bool
   Dashboard-derived -> age_years (computed from dob at read time / on ingest)
 """
 from datetime import date
@@ -21,7 +21,7 @@ class Child(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    # REDCap source field: "Original Cohort Child ID" — the join key across all modules.
+    # REDCap source field: "Original Cohort Child ID" - the join key across all modules.
     redcap_child_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
 
     # REDCap source field: "sex of the child"

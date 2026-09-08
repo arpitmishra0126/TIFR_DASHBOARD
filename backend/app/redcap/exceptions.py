@@ -8,7 +8,7 @@ class RedCapError(Exception):
 class RedCapNotConfiguredError(RedCapError):
     """Raised when REDCAP_API_URL / REDCAP_API_TOKEN / REDCAP_PROJECT_ID are missing.
 
-    This is the expected error at this stage of the project — no live
+    This is the expected error at this stage of the project - no live
     credentials have been supplied yet.
     """
 

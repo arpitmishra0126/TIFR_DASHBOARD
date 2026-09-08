@@ -1,7 +1,7 @@
 /**
  * Types for the live REDCap-backed /api/v1/dashboard/* endpoints
  * (backend/app/schemas/dashboard.py). This is the V1 dashboard's actual
- * data contract — REDCap is the source of truth, there is no database.
+ * data contract - REDCap is the source of truth, there is no database.
  */
 
 export interface SexDistribution {
@@ -112,7 +112,7 @@ export interface DemographicsResponse {
 }
 
 // --- Assessment module analytics (Health & Screening / Physical Activity /
-// Screen Time / Neurodevelopment) — approved 2026-08-26 analytical
+// Screen Time / Neurodevelopment) - approved 2026-08-26 analytical
 // specification. Population = all registered children. ---
 export interface InstrumentCompletion {
   instrument: string;

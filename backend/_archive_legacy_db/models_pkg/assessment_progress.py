@@ -2,13 +2,13 @@
 
 Field provenance:
   REDCap source -> the nine per-instrument "Complete?" fields
-  Normalized    -> Complete/Incomplete text parsed to bool
+  Normalized -> Complete/Incomplete text parsed to bool
   Dashboard-derived -> overall_status, computed from the nine flags
 
 Note: nutrition_complete tracks completion of the Nutrition (FFQ) instrument
 for the funnel view only. The Nutrition *display* module itself remains
 deferred in V1 per the approved spec (no dashboard-ready summary metric
-exists) — this flag does not imply the Nutrition module is in scope.
+exists) - this flag does not imply the Nutrition module is in scope.
 """
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship

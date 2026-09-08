@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 
 /** Rendered once, globally, by Layout.tsx above every non-Overview page's
- * content — not duplicated per page. "Back" uses the router's own history
+ * content - not duplicated per page. "Back" uses the router's own history
  * stack (react-router's `navigate(-1)`, not `window.history.back()`) to
  * step back one context; "Back to Home" always goes to Overview regardless
  * of history. */

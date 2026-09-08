@@ -20,7 +20,7 @@ export interface DonutDatum {
 interface DonutChartProps {
   data: DonutDatum[];
   height?: number;
-  /** Optional center figure — defaults to the sum of `data`, i.e. no new
+  /** Optional center figure - defaults to the sum of `data`, i.e. no new
    * value is introduced, only a display choice of what to foreground. */
   centerValue?: string | number;
   centerLabel?: string;
@@ -45,7 +45,7 @@ function renderActiveShape(props: any) {
 }
 
 /** Approximate rendered tooltip footprint, used only to keep it inside the
- * chart bounds and clear of the donut center — not pixel-exact. */
+ * chart bounds and clear of the donut center - not pixel-exact. */
 const TOOLTIP_WIDTH = 150;
 const TOOLTIP_HEIGHT = 72;
 const TOOLTIP_GAP = 14;

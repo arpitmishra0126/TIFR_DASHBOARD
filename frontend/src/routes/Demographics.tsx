@@ -79,7 +79,7 @@ export default function Demographics() {
 
       <SectionHeader
         title="Socioeconomic status"
-        note={`n=${data.ses_profile_count} with SES questionnaire completed — not affected by filters above`}
+        note={`n=${data.ses_profile_count} with SES questionnaire completed - not affected by filters above`}
       />
 
       <div className="kpi-row" style={{ marginBottom: "var(--space-4)" }}>

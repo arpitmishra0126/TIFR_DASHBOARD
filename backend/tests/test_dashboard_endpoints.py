@@ -25,7 +25,7 @@ def test_overview_endpoint_returns_core_battery_progression():
     body = response.json()
     assert body["total_registered"] == 6
     assert body["core_assessment_count"] == 3
-    assert body["ssrs_parent_count"] == 4  # independent of core_assessment_count — see fixture REC004
+    assert body["ssrs_parent_count"] == 4 # independent of core_assessment_count - see fixture REC004
     assert body["ssrs_child_count"] == 2
     all_coverage_keys = {c["key"] for c in body["all_instrument_coverage"]}
     assert all_coverage_keys == {
@@ -115,7 +115,7 @@ def test_screen_time_endpoint_returns_real_distribution():
     body = response.json()
     assert body["instrument"] == "DSEQ"
     # Ordered by REDCap choice-code order (fixture defines codes 1, 2), not
-    # by descending frequency — every defined category appears, zero-count included.
+    # by descending frequency - every defined category appears, zero-count included.
     dist_list = [(c["code"], c["count"]) for c in body["total_screen_time_distribution"]]
     assert dist_list == [("Less than 30 minutes", 0), ("30 minutes-1 hour", 1)]
     yes_no = {c["code"]: c["count"] for c in body["yes_no_items"]}

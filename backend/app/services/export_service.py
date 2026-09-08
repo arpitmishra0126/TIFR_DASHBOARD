@@ -1,14 +1,14 @@
 """Builds the "Active Cases" Excel export for the monthly newsletter.
 
 Reads only from the already-normalized live REDCap data (RegistryChild +
-raw records + choice maps) produced by LiveDashboardService — no new
+raw records + choice maps) produced by LiveDashboardService - no new
 REDCap fields are invented here, and no data is persisted. Field selection
 follows the 2026-08-26 live-metadata field audit and the 2026-08-26
 refinement pass: SES, DSEQ, Child Illness History, PAQ-A and Dietary
 Intake contribute real acquired/derived columns; SSRS Parent/Child/Teacher
 contribute per-child derived summaries (items answered + mean
 frequency/importance rating) computed from their raw rating items rather
-than a full raw-item dump, to keep the sheet readable — see
+than a full raw-item dump, to keep the sheet readable - see
 `ACTIVE_CASES_FIELD_SPECS` and the Data Dictionary sheet for exactly what
 is exported and why. Free-text/notes fields, redundant identifier
 duplicates, and caste/caste-category are intentionally excluded.
@@ -95,7 +95,7 @@ class FieldSpec(NamedTuple):
     header: str
     redcap_field: str | None
     form: str
-    kind: str  # "Identifier" | "Acquired" | "Derived" | "Status"
+    kind: str # "Identifier" | "Acquired" | "Derived" | "Status"
     redcap_type: str | None
     description: str
     missing_note: str
@@ -324,7 +324,7 @@ def _ssrs_group_specs(
     Data Dictionary sheet documents the underlying REDCap field names.
     Computed identically for Parent/Child/Teacher so Teacher (0/212 live
     completions today) is handled by the same dynamic logic, not a special
-    case — it will simply show 0 answered / blank averages until real
+    case - it will simply show 0 answered / blank averages until real
     Teacher data exists in REDCap.
     """
     n_freq = len(freq_fields)
@@ -391,13 +391,13 @@ def _core_battery_status_fn(_c: RegistryChild, r: dict, _cm: dict) -> str:
 _PROGRESSION_SPECS: list[FieldSpec] = [
     FieldSpec(
         "Registration Complete", REGISTRATION_COMPLETE_FIELD, "Registration", "Status", "text (system)",
-        "REDCap instrument completion flag (0/1/2).", "N/A — always Complete or Not Complete.", _GROUP_J, None,
+        "REDCap instrument completion flag (0/1/2).", "N/A - always Complete or Not Complete.", _GROUP_J, None,
         lambda c, r, cm: "Complete" if c.registration_complete else "Not Complete",
     ),
     *[
         FieldSpec(
             f"{label} Complete", field, label, "Status", "text (system)",
-            "REDCap instrument completion flag (0/1/2).", "N/A — always Complete or Not Complete.", _GROUP_J, None,
+            "REDCap instrument completion flag (0/1/2).", "N/A - always Complete or Not Complete.", _GROUP_J, None,
             _complete_status_fn(field),
         )
         for _, field, label in ASSESSMENT_INSTRUMENTS
@@ -405,13 +405,13 @@ _PROGRESSION_SPECS: list[FieldSpec] = [
     FieldSpec(
         "Core Assessment Battery", None, "Multiple (SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake, SSRS Parent)",
         "Status", None, "Complete only when all six core-battery instruments are complete for this child.",
-        "N/A — always Complete or Not Complete.", _GROUP_J, None, _core_battery_status_fn,
+        "N/A - always Complete or Not Complete.", _GROUP_J, None, _core_battery_status_fn,
     ),
     FieldSpec(
         "Overall Progression Stage", None, "Multiple", "Status", None,
         "Highest pipeline stage reached: Registered -> Core Assessment Battery -> SSRS Child -> SSRS Teacher "
         "(same cumulative definition as the dashboard's Assessment Progress module).",
-        "N/A — always populated.", _GROUP_J, None, _progression_stage_fn,
+        "N/A - always populated.", _GROUP_J, None, _progression_stage_fn,
     ),
 ]
 
@@ -430,11 +430,11 @@ ACTIVE_CASES_FIELD_SPECS: list[FieldSpec] = (
 )
 
 _EXCLUDED_FIELDS_NOTE: tuple[tuple[str, str], ...] = (
-    ("scr_pareek_caste", "Caste (Udai Pareek P1) — excluded per data-sensitivity policy."),
-    ("scr_caste_category", "Actual caste category (P1a) — excluded per data-sensitivity policy."),
-    ("parent_child_id", "Redundant duplicate identifier on the SSRS Parent form — the Child ID column already covers this."),
-    ("teacher_child_id", "Redundant duplicate identifier on the SSRS Teacher form — the Child ID column already covers this."),
-    ("*_spec / *_comment / *_reason / *_remarks (all instruments)", "Free-text/clinical-narrative fields — excluded to avoid re-identification risk."),
+    ("scr_pareek_caste", "Caste (Udai Pareek P1) - excluded per data-sensitivity policy."),
+    ("scr_caste_category", "Actual caste category (P1a) - excluded per data-sensitivity policy."),
+    ("parent_child_id", "Redundant duplicate identifier on the SSRS Parent form - the Child ID column already covers this."),
+    ("teacher_child_id", "Redundant duplicate identifier on the SSRS Teacher form - the Child ID column already covers this."),
+    ("*_spec / *_comment / *_reason / *_remarks (all instruments)", "Free-text/clinical-narrative fields - excluded to avoid re-identification risk."),
     (
         "parent_complete / teacher_complete",
         "These are descriptive scoring-rubric text blocks on the SSRS forms, not real completion flags. True "
@@ -443,7 +443,7 @@ _EXCLUDED_FIELDS_NOTE: tuple[tuple[str, str], ...] = (
     (
         "p*_freq / p*_imp / c*_freq / c*_imp / t*_freq / t*_imp (raw SSRS items)",
         "92 (Parent) + 68 (Child) + 72 (Teacher) individual rating items are not exported one-per-column to keep "
-        "the sheet readable — see the SSRS Parent/Child/Teacher 'Items Answered'/'Avg Frequency Rating'/'Avg "
+        "the sheet readable - see the SSRS Parent/Child/Teacher 'Items Answered'/'Avg Frequency Rating'/'Avg "
         "Importance Rating' derived columns instead.",
     ),
 )
@@ -576,7 +576,7 @@ def _build_data_dictionary_sheet(sheet: Worksheet) -> None:
         ])
 
     sheet.append([])
-    sheet.append(["Assessment Status sheet — one row per active child:"])
+    sheet.append(["Assessment Status sheet - one row per active child:"])
     sheet.cell(row=sheet.max_row, column=1).font = _SECTION_FONT
     status_header_row = sheet.max_row + 1
     sheet.append(headers)
@@ -590,7 +590,7 @@ def _build_data_dictionary_sheet(sheet: Worksheet) -> None:
     sheet.append([])
     sheet.append([
         "Summary sheet contains only aggregated/derived statistics computed from the Active Cases and "
-        "Assessment Status sheets (counts, percentages, distributions) — no additional REDCap fields are read."
+        "Assessment Status sheets (counts, percentages, distributions) - no additional REDCap fields are read."
     ])
 
     sheet.append([])
@@ -639,7 +639,7 @@ def _add_bar_chart(
     show_data_labels: bool = True,
 ) -> None:
     """Adds a column chart over a 2-column (category, value) table.
-    No-ops if the table is empty or every value is zero — charts are never
+    No-ops if the table is empty or every value is zero - charts are never
     drawn for variables with insufficient/no data. All charts use a fixed
     size and styling for a consistent, report-like appearance.
     """
@@ -769,7 +769,7 @@ def _build_summary_sheet(
 
     total_registered = len(all_children)
     total_active = len(active_children)
-    chart_row = 2  # running anchor row for charts, stacked in column F
+    chart_row = 2 # running anchor row for charts, stacked in column F
 
     def next_chart_anchor() -> str:
         nonlocal chart_row
@@ -778,7 +778,7 @@ def _build_summary_sheet(
         return anchor
 
     row = 1
-    sheet.cell(row=row, column=1, value="ICMR Neurodevelopment Study — Active Cases Analysis").font = _TITLE_FONT
+    sheet.cell(row=row, column=1, value="ICMR Neurodevelopment Study - Active Cases Analysis").font = _TITLE_FONT
     row += 1
     sheet.cell(row=row, column=1, value=f"Generated: {generated_at.strftime('%Y-%m-%d %H:%M:%S')} (live REDCap data)")
     row += 1
@@ -803,7 +803,7 @@ def _build_summary_sheet(
     _add_bar_chart(sheet, next_chart_anchor(), "Age Distribution", hdr, first, last)
 
     village_rows = _village_counts(active_children)
-    row, hdr, first, last = _write_table(sheet, row, f"Village Distribution — All {len(village_rows)} Villages (Active Cases)", ["Village", "Count"], village_rows)
+    row, hdr, first, last = _write_table(sheet, row, f"Village Distribution - All {len(village_rows)} Villages (Active Cases)", ["Village", "Count"], village_rows)
     top10_last = min(last, first + 9)
     _add_bar_chart(sheet, next_chart_anchor(), f"Top 10 Villages by Active Cases (of {len(village_rows)} total)", hdr, first, top10_last)
 
@@ -828,7 +828,7 @@ def _build_summary_sheet(
 
     per_capita_values = _numeric_values(active_records, "scr_pci", parse_float)
     income_buckets = _bucket_counts(per_capita_values, INCOME_BUCKET_EDGES, INCOME_BUCKET_LABELS)
-    row, hdr, first, last = _write_table(sheet, row, "Monthly Income — Per Capita Income Distribution (INR)", ["Range", "Count"], income_buckets)
+    row, hdr, first, last = _write_table(sheet, row, "Monthly Income - Per Capita Income Distribution (INR)", ["Range", "Count"], income_buckets)
     monthly_income_values = _numeric_values(active_records, "scr_bg_income", parse_float)
     row = _write_coverage_note(sheet, row, _numeric_summary_line("Per capita income", per_capita_values, total_active))
     row = _write_coverage_note(sheet, row, _numeric_summary_line("Raw monthly household income", monthly_income_values, total_active))
@@ -841,7 +841,7 @@ def _build_summary_sheet(
     row, hdr, first, last = _write_table(sheet, row, "Household Size Distribution", ["Household Size", "Count"], size_rows)
     _add_bar_chart(sheet, next_chart_anchor(), "Household Size Distribution", hdr, first, last)
 
-    sheet.cell(row=row, column=1, value="SES — Additional Udai Pareek Items (P2-P9, tables only)").font = _SECTION_FONT
+    sheet.cell(row=row, column=1, value="SES - Additional Udai Pareek Items (P2-P9, tables only)").font = _SECTION_FONT
     row += 1
     for field, label in (
         ("scr_pareek_occupation", "P2: Occupation of Head of Family"),
@@ -898,20 +898,20 @@ def _build_summary_sheet(
 
     # --- DSEQ ---
     row, hdr, first, last = _write_table(
-        sheet, row, "DSEQ — Average Total Daily Screen Time (Q10)", ["Response", "Count"],
+        sheet, row, "DSEQ - Average Total Daily Screen Time (Q10)", ["Response", "Count"],
         _category_counts(active_records, "q10_total_screen_time", choice_maps),
     )
     _add_bar_chart(sheet, next_chart_anchor(), "DSEQ: Total Daily Screen Time", hdr, first, last)
     dseq_yn_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in DSEQ_YES_NO_ITEMS]
-    row, _, _, _ = _write_table(sheet, row, "DSEQ — Selected Yes/No Items (of Active)", ["Item", "Yes Count"], dseq_yn_rows)
+    row, _, _, _ = _write_table(sheet, row, "DSEQ - Selected Yes/No Items (of Active)", ["Item", "Yes Count"], dseq_yn_rows)
 
     # --- Child Illness History ---
     condition_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in CHH_NAMED_CONDITIONS]
-    row, hdr, first, last = _write_table(sheet, row, "Child Illness History — Named Conditions (Yes counts)", ["Condition", "Yes Count"], condition_rows)
+    row, hdr, first, last = _write_table(sheet, row, "Child Illness History - Named Conditions (Yes counts)", ["Condition", "Yes Count"], condition_rows)
     _add_bar_chart(sheet, next_chart_anchor(), "CHH: Named Conditions (Yes)", hdr, first, last)
 
     chh_general_rows = [(label, _yes_count(active_records, field, choice_maps)) for field, label in CHH_GENERAL_FLAGS]
-    row, _, _, _ = _write_table(sheet, row, "Child Illness History — General Flags (Yes counts, of Active)", ["Flag", "Yes Count"], chh_general_rows)
+    row, _, _, _ = _write_table(sheet, row, "Child Illness History - General Flags (Yes counts, of Active)", ["Flag", "Yes Count"], chh_general_rows)
 
     # --- PAQ-A ---
     item1 = _numeric_values(active_records, "paq_item1_score", parse_float)
@@ -932,7 +932,7 @@ def _build_summary_sheet(
         daily_count = sum(1 for r in active_records if (r.get(field) or "").strip() == "1")
         daily_rows.append((label.replace("Diet Frequency: ", ""), daily_count))
     row, hdr, first, last = _write_table(
-        sheet, row, "Dietary Intake — Daily Consumption by Food Group (of Active)", ["Food Group", "Children Reporting Daily"], daily_rows,
+        sheet, row, "Dietary Intake - Daily Consumption by Food Group (of Active)", ["Food Group", "Children Reporting Daily"], daily_rows,
     )
     _add_bar_chart(sheet, next_chart_anchor(), "Dietary: Daily Consumption by Food Group", hdr, first, last)
 
@@ -942,11 +942,11 @@ def _build_summary_sheet(
         ("SSRS Child", _ssrs_items_answered(active_records, SSRS_CHILD_FREQ_FIELDS)),
         ("SSRS Teacher", _ssrs_items_answered(active_records, SSRS_TEACHER_FREQ_FIELDS)),
     ]
-    row, hdr, first, last = _write_table(sheet, row, "SSRS — Children With Any Rating Items Answered (of Active)", ["Instrument", "Children"], ssrs_rows)
+    row, hdr, first, last = _write_table(sheet, row, "SSRS - Children With Any Rating Items Answered (of Active)", ["Instrument", "Children"], ssrs_rows)
     _add_bar_chart(sheet, next_chart_anchor(), "SSRS: Children With Data", hdr, first, last)
     row = _write_coverage_note(
         sheet, row,
-        "SSRS Teacher has 0 completed assessments live — its row above and its Active Cases columns will "
+        "SSRS Teacher has 0 completed assessments live - its row above and its Active Cases columns will "
         "populate automatically once REDCap has real Teacher data; no value has been invented here.",
     )
     row += 1
@@ -1035,8 +1035,8 @@ def export_filename(as_of: date | None = None, extension: str = "xlsx") -> str:
 def build_active_cases_csv(all_children: list[RegistryChild], records: list[dict]) -> str:
     """Build the Active Cases CSV export: one row per active child.
 
-    Kept at its original (pre-audit-expansion) field set — Registration/SES
-    core fields + per-instrument completion status — since the CSV export
+    Kept at its original (pre-audit-expansion) field set - Registration/SES
+    core fields + per-instrument completion status - since the CSV export
     was not part of the Excel refinement requests. Unmapped-instrument
     columns are left blank (not the descriptive placeholder text used in
     the workbook).

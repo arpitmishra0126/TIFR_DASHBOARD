@@ -107,7 +107,7 @@ async def test_active_cases_sheet_includes_newly_audited_instrument_fields_with_
 
     assert values["Monthly Household Income (INR)"] == 15000.0
     # Note: choice_maps' primary-language-segment split cuts on the FIRST
-    # "/" in a choice label — a pre-existing behavior (app.ingestion.choice_maps,
+    # "/" in a choice label - a pre-existing behavior (app.ingestion.choice_maps,
     # unchanged here) that also truncates "1-2 days/week" style live DSEQ
     # labels mid-word. Documented as a known quirk, not fixed here since
     # that module is shared dashboard logic.
@@ -130,7 +130,7 @@ async def test_active_cases_sheet_leaves_new_fields_blank_when_not_collected():
 
 async def test_active_cases_sheet_computes_real_ssrs_parent_and_child_summaries():
     # REC001 has p1_freq="1", p2_freq="0", p1_imp="2" in the fixture (out of
-    # the real 52 frequency / 40 importance items) — verifies real acquired
+    # the real 52 frequency / 40 importance items) - verifies real acquired
     # SSRS Parent data now surfaces instead of a blanket "not mapped" text.
     workbook_bytes = await _export_bytes()
     wb = _load(workbook_bytes)
@@ -143,7 +143,7 @@ async def test_active_cases_sheet_computes_real_ssrs_parent_and_child_summaries(
 
 
 async def test_active_cases_sheet_ssrs_teacher_shows_no_acquired_data():
-    # 0/212 live Teacher completions — every active child must show 0
+    # 0/212 live Teacher completions - every active child must show 0
     # items answered and blank averages, never an invented value.
     workbook_bytes = await _export_bytes()
     wb = _load(workbook_bytes)
@@ -159,7 +159,7 @@ async def test_active_cases_sheet_has_progression_status_group():
     workbook_bytes = await _export_bytes()
     wb = _load(workbook_bytes)
     sheet = wb["Active Cases"]
-    values = _active_cases_row_values(sheet, "REC004")  # partial core battery
+    values = _active_cases_row_values(sheet, "REC004") # partial core battery
 
     assert values["Registration Complete"] == "Complete"
     assert values["Dietary Intake Complete"] == "Not Complete"
@@ -216,7 +216,7 @@ async def test_assessment_status_sheet_reports_core_battery_and_stage_for_full_p
     wb = _load(workbook_bytes)
     sheet = wb["Assessment Status"]
     header = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-    rec2_row = next(row for row in sheet.iter_rows(min_row=2) if row[0].value == "REC002")  # full pipeline incl. SSRS Teacher
+    rec2_row = next(row for row in sheet.iter_rows(min_row=2) if row[0].value == "REC002") # full pipeline incl. SSRS Teacher
     values = dict(zip(header, [c.value for c in rec2_row]))
 
     assert values["Core Assessment Battery"] == "Complete"
@@ -228,7 +228,7 @@ async def test_summary_sheet_reports_active_total_and_renamed_title():
     wb = _load(workbook_bytes)
     sheet = wb["Summary"]
     title = sheet.cell(row=1, column=1).value
-    assert title == "ICMR Neurodevelopment Study — Active Cases Analysis"
+    assert title == "ICMR Neurodevelopment Study - Active Cases Analysis"
 
     rows = {row[0].value: row[1].value for row in sheet.iter_rows(min_row=1) if row[0].value}
     assert rows["Total Active Cases"] == 6
@@ -284,7 +284,7 @@ def _fixture_children_and_records(records: list[dict]):
 
 def test_csv_excludes_children_marked_dead():
     records = build_fixture_records(AS_OF)
-    records.append(_base_record("REC008", baby_status="0"))  # Dead
+    records.append(_base_record("REC008", baby_status="0")) # Dead
     children, records = _fixture_children_and_records(records)
 
     csv_text = build_active_cases_csv(children, records)
@@ -306,7 +306,7 @@ def test_csv_includes_ses_values_and_leaves_unmapped_instrument_data_blank():
     assert rec1["Udai Pareek SES Score"] == "35"
     assert rec1["Per Capita Income"] == "3000.0"
     assert rec1["Household Size"] == "5"
-    # Instrument data columns aren't part of the CSV at all — only status.
+    # Instrument data columns aren't part of the CSV at all - only status.
     assert "DSEQ Data" not in rec1
     assert rec1["DSEQ Status"] == "Complete"
     assert rec1["SSRS Teacher Status"] == "Incomplete"
@@ -318,7 +318,7 @@ def test_csv_leaves_blank_ses_fields_blank_when_not_collected():
 
     csv_text = build_active_cases_csv(children, records)
     rows = {row["Child ID"]: row for row in _csv_rows(csv_text)}
-    rec5 = rows["REC005"]  # registered only, nothing else started
+    rec5 = rows["REC005"] # registered only, nothing else started
 
     assert rec5["Udai Pareek SES Score"] == ""
     assert rec5["Per Capita Income"] == ""

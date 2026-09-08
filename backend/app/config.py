@@ -1,6 +1,6 @@
 """Environment-based application configuration.
 
-All values are sourced from environment variables / .env — nothing here is
+All values are sourced from environment variables / .env - nothing here is
 hard-coded, and no REDCap credentials have real defaults.
 """
 from functools import lru_cache
@@ -21,12 +21,12 @@ class Settings(BaseSettings):
     # --- CORS ---
     cors_allow_origins: str = "http://localhost:5173"
 
-    # --- REDCap (live source of truth — REDCap API -> FastAPI -> in-memory processing) ---
+    # --- REDCap (live source of truth - REDCap API -> FastAPI -> in-memory processing) ---
     redcap_api_url: str = Field(default="", description="REDCap API endpoint. Must be supplied via env.")
     redcap_api_token: str = Field(default="", description="REDCap API token. Must be supplied via env. Never commit.")
     redcap_project_id: str = Field(
         default="",
-        description="REDCap project ID. Optional bookkeeping only — the REDCap client does not require it.",
+        description="REDCap project ID. Optional bookkeeping only - the REDCap client does not require it.",
     )
 
     @property

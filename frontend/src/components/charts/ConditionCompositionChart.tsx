@@ -23,14 +23,7 @@ interface Row {
   isZero: boolean;
 }
 
-/** 100%-stacked Yes / No / Don't-know composition, one row per condition or
- * indicator — the primary visual for Child Illness History items. Each
- * row's percentages are computed from that item's own `valid_n` (children
- * who actually answered that question), matching the backend's own
- * `percent_yes` denominator exactly — no new analytics, only chart-ready
- * derivations of numbers already returned by the API. Rows with zero "Yes"
- * responses are kept visible (never hidden) but rendered at reduced opacity
- * per the "subdued, not hidden" requirement for zero-prevalence conditions. */
+
 export default function ConditionCompositionChart({ items, height }: ConditionCompositionChartProps) {
   const resolvedHeight = height ?? Math.max(170, items.length * 38);
   const data: Row[] = items.map((c) => ({

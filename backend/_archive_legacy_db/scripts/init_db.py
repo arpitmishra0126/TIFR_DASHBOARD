@@ -10,7 +10,7 @@ import logging
 
 from app.core.logging import configure_logging
 from app.database import Base, engine
-from app.models import (  # noqa: F401 — import registers all models on Base.metadata
+from app.models import ( # noqa: F401 - import registers all models on Base.metadata
     AssessmentProgress,
     Child,
     HealthScreening,

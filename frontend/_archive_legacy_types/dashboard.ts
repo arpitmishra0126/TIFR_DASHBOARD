@@ -1,6 +1,6 @@
 /**
  * Dashboard-facing types mirroring the backend Pydantic schemas
- * (backend/app/schemas). Keep in sync with the approved V1 spec —
+ * (backend/app/schemas). Keep in sync with the approved V1 spec - 
  * do not add fields outside data/ICMR_Neurodevelopment_Dashboard_V1_Variable_Spec.docx.
  */
 

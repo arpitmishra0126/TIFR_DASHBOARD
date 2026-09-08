@@ -1,7 +1,7 @@
 """Normalization helpers for transforming raw REDCap values into typed,
 dashboard-ready values.
 
-Pure, deterministic, unit-testable functions — no REDCap I/O here. Used by
+Pure, deterministic, unit-testable functions - no REDCap I/O here. Used by
 app.services.live_dashboard_service to transform the live record export
 (see app.ingestion.live_field_map for the field-availability contract).
 """

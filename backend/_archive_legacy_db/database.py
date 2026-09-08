@@ -1,6 +1,6 @@
 """SQLAlchemy engine/session setup.
 
-PostgreSQL here is the application's normalized data/cache layer — it is
+PostgreSQL here is the application's normalized data/cache layer - it is
 populated by the ingestion layer from REDCap and is not itself the source
 of truth.
 """

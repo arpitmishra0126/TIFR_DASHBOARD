@@ -13,7 +13,7 @@ interface RouteErrorBoundaryState {
 /**
  * Contains a render-time crash to the routed content area instead of
  * unmounting the whole app (sidebar/topbar/theme survive). React error
- * boundaries must be class components — there is no hook equivalent.
+ * boundaries must be class components - there is no hook equivalent.
  *
  * Layout.tsx remounts this per-route (key={location.pathname}), so
  * navigating away from a broken module automatically clears the error;
@@ -40,7 +40,7 @@ export default class RouteErrorBoundary extends Component<RouteErrorBoundaryProp
           <StatusBadge label="Module Unavailable" tone="warning" />
           <p className="route-error-message">
             This module could not load its data. The live REDCap connection or analytics response may be
-            temporarily unavailable — no data has been invented in its place.
+            temporarily unavailable - no data has been invented in its place.
           </p>
           <button type="button" className="export-button" onClick={this.retry}>
             Try again

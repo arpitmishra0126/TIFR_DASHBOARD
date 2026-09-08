@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { getOverview } from "../api/dashboard";
 
 interface RefreshContextValue {
-  /** Bumped after each successful forced refresh — pages depend on this to refetch. */
+  /** Bumped after each successful forced refresh - pages depend on this to refetch. */
   version: number;
   lastUpdated: Date | null;
   refreshing: boolean;

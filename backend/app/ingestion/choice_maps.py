@@ -4,19 +4,19 @@ REDCap's raw-format record export returns the stored code (e.g. "1") for
 radio/dropdown fields, not the human label. The Data Dictionary (metadata)
 export carries the code->label mapping per field in
 `select_choices_or_calculations`, formatted as "code, label | code, label | ...".
-Calc fields have no such mapping — their formula lives in the same column but
+Calc fields have no such mapping - their formula lives in the same column but
 does not describe choice labels, so calc-derived values are exposed as raw
 numbers, not invented text.
 
 This study's forms label choices bilingually, e.g. "1, male /पुरुष | 2, female/महिला"
-— an English segment, a slash, then a Hindi transliteration. Only the English
+ - an English segment, a slash, then a Hindi transliteration. Only the English
 segment is kept; the dashboard is English-language, and keeping the raw
 bilingual string would silently break any downstream exact-match grouping
 (sex distribution, status grouping, etc.) against plain English labels.
 
 Some `calc` fields (e.g. the Udai Pareek / BG Prasad SES category fields)
-have no `select_choices_or_calculations` choice list — REDCap's metadata API
-never returns one for calc fields, only the formula — but DO carry their
+have no `select_choices_or_calculations` choice list - REDCap's metadata API
+never returns one for calc fields, only the formula - but DO carry their
 named categories as documented text in `field_note` (confirmed live,
 2026-09-03: "1=I Upper >43; 2=II Upper-middle 33-42; ..."). See
 `parse_calc_category_note`/`build_calc_category_maps` below, which parse
@@ -61,7 +61,7 @@ def parse_choice_string(raw: str | None) -> ChoiceMap:
 def build_choice_maps(metadata: list[dict]) -> dict[str, ChoiceMap]:
     """Build {field_name: {code: label}} for every radio/dropdown field in the
     REDCap Data Dictionary. Other field types (text, calc, notes, ...) are
-    skipped — they are not coded and require no label resolution.
+    skipped - they are not coded and require no label resolution.
     """
     maps: dict[str, ChoiceMap] = {}
     for field in metadata:
@@ -75,7 +75,7 @@ def parse_calc_category_note(field_note: str | None) -> ChoiceMap:
     """Parse a calc field's `field_note` for the documented
     "<code>=<roman numeral> <Label> <range>" convention into {code: label}.
     Only fields whose field_note actually matches this convention yield any
-    entries — anything else returns an empty map rather than a guessed label.
+    entries - anything else returns an empty map rather than a guessed label.
     """
     if not field_note:
         return {}

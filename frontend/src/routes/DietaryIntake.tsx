@@ -40,7 +40,7 @@ export default function DietaryIntake() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Dietary Intake"
-        subtitle="Food-group consumption frequency — live REDCap instrument."
+        subtitle="Food-group consumption frequency - live REDCap instrument."
       />
 
       <div className="module-status-line">

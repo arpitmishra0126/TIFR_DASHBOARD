@@ -41,13 +41,13 @@ export default function AssessmentProgress() {
 
       <ChartCard
         title="Instrument completion pipeline"
-        subtitle="Each stage counts only children who also completed every prior stage — see Overview for the headline counts"
+        subtitle="Each stage counts only children who also completed every prior stage - see Overview for the headline counts"
       >
         <Funnel stages={data.stages} />
       </ChartCard>
 
       <SectionHeader title="Instrument-level completion" note="Completion of each core instrument, individually" />
-      <ChartCard title="Core REDCap Instruments Completed — by instrument" subtitle={`Out of ${overview.total_registered} registered children`}>
+      <ChartCard title="Core REDCap Instruments Completed - by instrument" subtitle={`Out of ${overview.total_registered} registered children`}>
         <div className="coverage-list">
           {overview.instrument_coverage.map((c) => (
             <CoverageBar
