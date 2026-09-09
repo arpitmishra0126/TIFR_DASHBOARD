@@ -448,6 +448,203 @@ category labels in Hindi, exactly as REDCap defines them - no English
 label was invented. This needs a study-team decision (translate on the
 REDCap form, or accept Hindi-only category labels on this one page).
 
+**Dietary Intake - portion size + Other Food Specified (2026-09-09,
+implemented after a read-only inspection pass against the senior's
+"portion-size x frequency" specification):**
+
+A live REDCap metadata check of the `dietary_intake` form found each of the
+10 standard food groups actually has **two** fields, not one:
+`die_<group>_freq` (already mapped, `radio`, 8-level ordinal) and
+`die_<group>_portion` (**not previously fetched at all** - `text`, free
+text, field_note: *"Record local unit (e.g., cup, katori, piece, spoon)
+and quantity"*, e.g. live values like `"100 gram"`, `"250"`, `"3Pc"`).
+There is also a separate, 11th open-ended item - `die_other_specify`
+(free-text food name), `die_other_portion` (free text), `die_other_freq`
+(same 8-level scale) - gated by REDCap skip logic (`die_other_portion`/
+`die_other_freq` only apply once `die_other_specify` is non-blank; a
+group's own `*_portion` only applies when that group's `*_freq` isn't
+"rarely/never"). None of these 13 fields were previously in `LIVE_FIELDS`,
+so they were never fetched regardless of what REDCap held.
+
+**Implemented** (derivable-only, per explicit instruction not to invent a
+portion-size classification):
+- All 13 fields added to `DIETARY_EXPORT_FIELDS` in `live_field_map.py`
+  (feeds `LIVE_FIELDS`, so they are now actually fetched from REDCap).
+- The 10 food groups' frequency distributions are **unchanged** - still
+  frequency-only, still `ordered_category_counts()` against the same
+  denominators. Portion-size text is fetched but **deliberately not
+  charted, categorized, or cross-tabbed with frequency anywhere** - a true
+  "portion x frequency" 100%-stacked bar would require bucketing free text
+  with inconsistent units (grams vs pieces vs no unit) into invented size
+  categories, which no REDCap convention defines. This is called out
+  explicitly as a **pending, study-team-defined item** (not an omission)
+  in both `DietaryIntakeResponse.notes.scope` and a short note on
+  `DietaryIntake.tsx`'s food-group `SectionHeader`.
+- New `build_other_food_specified()` in `module_analytics.py` (called from
+  `build_dietary_analysis()`) + new `OtherFoodEntry`/
+  `OtherFoodSpecifiedSummary` schemas + `DietaryIntakeResponse
+  .other_food_specified` field: one entry per child who actually filled
+  `die_other_specify` (real text only - names are never grouped/matched
+  across children, since fuzzy-matching free-text food names would be the
+  same kind of invented-convention problem as portion buckets), each with
+  `food_name`, `portion`, `frequency`, and a `portion_status`/
+  `frequency_status` of `"recorded"` / `"not_applicable"` (REDCap's own
+  skip logic - not counted as missing) / `"not_answered"` (a genuine
+  non-response). `DietaryIntake.tsx` renders this as a small
+  Food Name/Portion Size/Frequency table (`.table-card`/`.data-table`,
+  reused as-is - no new table component) below the 10 food-group charts,
+  with an "N/total specified an additional food (%)" line above it and an
+  explicit empty state if nobody has. Live-verified: currently **1/212**
+  children have specified one (`"Dal Chahal roti Sabji"`, portion
+  `"50 grams"`, frequency "1-2 times/week").
+- **Naming distinctness preserved**: "Other Vegetables"/"Other Fruits"
+  (2 of the 10 *standard* food groups, `die_other_veg_freq`/
+  `die_other_fruits_freq`) are unrelated to this 11th open-ended item -
+  `DietaryIntake.tsx`'s new section is explicitly labelled "Other Food
+  Specified" with a note clarifying it is not a duplicate of those two
+  groups.
+
+**Bug fixed in `choice_maps.py::_primary_language_segment`** (shared by
+every coded field in the app, not dietary-specific): it previously split
+every choice label on the first `/` unconditionally. This is correct for a
+genuine "English /Hindi" bilingual label, but the dietary/DSEQ frequency
+scale's "rarely/never" option, `"शायद ही कभी/कभी नहीं"`, is **pure Hindi
+with no English segment at all** - the `/` there is ordinary punctuation
+inside one Hindi phrase, not a language separator - so the old code
+silently truncated it to `"शायद ही कभी"` ("rarely"), dropping "/कभी नहीं"
+("never"). Fixed by only splitting when the text before the first `/`
+contains at least one Latin letter (i.e. there is an actual English
+segment to isolate); a label with no Latin text before the `/` is now
+returned whole. This does **not** change any existing bilingual field's
+behavior (every real "English/Hindi" label has Latin text before the
+slash, by definition) and does **not** fix the separately-documented,
+still-open quirk where a genuine English segment with its own mid-word `/`
+(e.g. `"1-2 days/week / <hindi>"`) still truncates at that first slash -
+that stays exactly as before, locked in by
+`test_parse_choice_string_still_truncates_english_segment_with_mid_word_slash`.
+Live-verified: the "rarely/never" bucket now displays the full Hindi label
+correctly across all 10 dietary frequency charts, including buckets with
+large real counts (e.g. Flesh Foods 29/44, Eggs 27/44) that were
+previously mislabeled.
+
+Tests added: `test_live_field_map.py` (new file - the 13 fields are in
+`DIETARY_EXPORT_FIELDS`/`LIVE_FIELDS`), 2 new cases in
+`test_choice_maps.py` (Hindi-only label preserved whole; existing
+mid-word-slash quirk unchanged), 1 new integration test in
+`test_module_analytics.py` (`build_other_food_specified` - skip-logic
+statuses, real-entry-only inclusion, denominators), plus an assertion added
+to the existing `/dietary-intake` endpoint test. Backend: **138/138 tests
+pass**. Frontend `tsc --noEmit` and `npm run build` both succeed.
+
+**Remaining limitation (explicitly not resolved by this change)**: portion
+size for the 10 standard food groups still has no categorical
+representation anywhere in the dashboard - the "100% stacked bar of
+portion-size x frequency" from the original specification requires the
+study team to define a portion-size classification (unit conversion and/or
+size buckets) before it can be built without guessing. Raw portion text is
+now fetched into `records` but not yet exposed on `DietaryFoodItem` or
+`DietaryIntake.tsx` for the 10 groups (only for the separate Other Food
+Specified table, where it's shown as plain text, not categorized).
+
+**Spacing/text cleanup (2026-09-09, same day - UI only, no
+calculation/mapping change):** the gap between the Instrument Completion
+badge and the "Consumption frequency by food group" heading used the
+shared `.module-status-line` margin-bottom (`--space-5`/24px), which reads
+as too generous now that the rest of the dashboard's above-the-fold
+spacing has been tightened. Fixed with a page-scoped override,
+`.dietary-intake-page .module-status-line { margin-bottom: --space-3; }`
+(root `<section>` now carries a `dietary-intake-page` class) - scoped to
+this page only, since `.module-status-line` is shared by Health &
+Screening/Physical Activity/Screen Time too and those were left unchanged.
+Also removed the long explanatory `note` text on that same `SectionHeader`
+("Category order follows..."/"Portion size... pending a study-team-defined
+classification") - no replacement text was added. The underlying
+denominators, category ordering, completion count, and the pending-
+portion-size limitation itself are all unchanged and still documented
+above in this section and in `DietaryIntakeResponse.notes.scope` - only
+this one on-page sentence was removed. `PageBackNav` ("Back"/"Back to
+Home") is rendered by `Layout.tsx`, not this page, and was not touched.
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend files
+touched.
+
+**Food-group chart visual refinement (2026-09-09, same day - presentation
+only, no data/calculation/mapping/category change):** the 10 food-group
+charts felt heavily rounded and sparse (a lot of empty space around thin
+bars). Fixed via two new **opt-in** capabilities on the shared components
+already used dashboard-wide, not one-off styling for any single chart:
+- `ChartCard` gained a `compact?: boolean` prop -> adds a `chart-card-
+  compact` class (`app.css`): padding reduced to `space-3`/`space-4`,
+  `margin-bottom: 0` (relies on `.chart-grid`'s own `gap` instead of
+  double-spacing), border-radius switched to the existing `--radius-
+  control` token (8px, sharper than the default `--radius-card` 14px -
+  reusing an existing design-system value, not a new one), and the title-
+  subtitle gap tightened. Every other `ChartCard` caller (Overview,
+  Demographics, Health & Screening, Physical Activity, Screen Time,
+  Assessment Progress, Neurodevelopment) omits this prop and is completely
+  unaffected.
+- `HorizontalBarChart` gained a `dense?: boolean` prop (also added to the
+  exported `computeHorizontalBarChartHeight(datasets, labelWidth, dense)`,
+  so the page-level shared-height calculation and the chart's own internal
+  sizing can never drift apart). A new internal `GEOMETRY` table holds
+  `normal` (unchanged: 44px row height, 26px bars, `[0,7,7,0]` radius, 30%
+  category gap, `{top:4,right:68,left:0,bottom:4}` margin) vs `dense` (28px
+  row height, 16px thinner bars, `[0,3,3,0]` smaller radius - no longer
+  pill-shaped, 14% category gap, `{top:2,right:58,left:0,bottom:2}`
+  margin), selected by the prop. Every other caller (Demographics' village/
+  SES charts, Overview's SES chart) omits `dense` and renders exactly as
+  before. Axis/tick typography, gridline styling, the `n (%)` end-of-bar
+  `LabelList`, and the tooltip are all untouched.
+- `DietaryIntake.tsx` passes `compact`/`dense` only on its 10 food-group
+  `ChartCard`/`HorizontalBarChart` calls (`computeHorizontalBarChartHeight`
+  called with `dense=true` too, so all 10 stay the same height as each
+  other, per the existing shared-height convention). The category set (all
+  8 frequency levels, including zero-count ones), category order, Hindi
+  choice labels, denominators, and completion count are all unchanged -
+  confirmed by re-reading the diff before considering this done: no
+  `module_analytics.py`/schema/service file was touched. The separate
+  "Other Food Specified" table section is unaffected (different markup,
+  not a `ChartCard`).
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend files
+touched.
+
+**Vertical label/bar misalignment fixed (2026-09-09, same day - shared
+`HorizontalBarChart` fix, verified with a real headless-browser render):**
+the density refinement above caused some food-group charts (e.g. Dairy) to
+show Y-axis category labels that didn't line up with their bars. Root
+cause, confirmed by inspecting the live-rendered SVG DOM (not just static
+reasoning - installed a scratch Playwright/Chromium instance and measured
+actual tick/bar pixel positions): recharts' `<YAxis type="category">` has
+no `interval` prop set, so it defaults to `interval="preserveEnd"` and
+**silently drops ticks it estimates would collide** using its own generic
+size guess - at `dense` mode's tighter 28px row height, this was dropping
+up to half of a chart's 8 category ticks (measured: only 4 of 8 rendered
+for Dairy). A category still got a bar (bars are driven independently by
+`data`, unaffected by axis tick-skipping) but no tick of its own nearby -
+reading exactly as "label between bars." Fix:
+added `interval={0}` to `HorizontalBarChart`'s `<YAxis>` (unconditional,
+not `dense`-gated - every category must always show its own label, so
+this isn't a density-specific fix) forcing all 8 ticks to always render.
+A separate, smaller issue found during the same measurement pass: even
+with all 8 ticks present, each was consistently 4-5px off from its bar's
+true center (baseline-anchored SVG `<text>` vs. the bar's geometric
+center) - harmless at the old 44px row height, more visible at 28px. Fixed
+by adding `dominantBaseline="central"` to the custom tick's `<text>` in
+`makeCategoryTick()`. Re-measured after both fixes: every one of the 10
+food-group charts' non-zero bars now aligns with its tick within 0-1px,
+all 8 categories (including every zero-count one, e.g. Grains' 5 zero-count
+rows) render with reserved row space and no bar, and the compact/dense
+visual design, bar thinness/radius, colors, category order, and Hindi
+labels are all unchanged - confirmed visually via saved screenshots of
+Dairy, Grains (many zero-count rows), and Nuts and Seeds, plus a full-page
+screenshot of all 10 charts together. No `module_analytics.py`, schema, or
+service file was touched - this was a pure `HorizontalBarChart.tsx`
+rendering fix, so it applies identically wherever this shared component is
+used (Overview/Demographics' SES and village charts get the same
+`interval={0}`/`dominantBaseline` correctness fix in `normal` mode too,
+with no visible change there since they were never hitting recharts'
+tick-skipping threshold in the first place). Backend: 138/138 tests pass
+(unaffected). Frontend `tsc --noEmit` and `npm run build` both succeed.
+
 ---
 
 ## FRONTEND STRUCTURE

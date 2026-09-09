@@ -291,10 +291,33 @@ class DietaryFoodItem(BaseModel):
     percent_valid: float
 
 
+class OtherFoodEntry(BaseModel):
+    """One respondent's freely-specified "other" food item - real REDCap
+    text only, never grouped/normalized across respondents."""
+
+    food_name: str
+    portion: str | None
+    # "recorded" | "not_applicable" (REDCap skip logic - frequency was
+    # "rarely/never", so REDCap itself never asked for a portion) |
+    # "not_answered" (portion was applicable but genuinely left blank).
+    portion_status: str
+    frequency: str | None
+    # "recorded" | "not_answered".
+    frequency_status: str
+
+
+class OtherFoodSpecifiedSummary(BaseModel):
+    valid_n: int
+    total: int
+    percent_valid: float
+    entries: list[OtherFoodEntry]
+
+
 class DietaryIntakeResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
     items: list[DietaryFoodItem]
+    other_food_specified: OtherFoodSpecifiedSummary
     notes: dict[str, str]
 
 

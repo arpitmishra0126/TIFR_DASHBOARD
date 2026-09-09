@@ -28,6 +28,30 @@ def test_parse_choice_string_strips_bilingual_transliteration():
     }
 
 
+def test_parse_choice_string_preserves_monolingual_label_with_internal_slash():
+    # Live Dietary Intake / DSEQ frequency scale option 8 is pure Hindi -
+    # "शायद ही कभी/कभी नहीं" ("rarely/never") - with NO English segment at
+    # all; the '/' is ordinary punctuation inside one Hindi phrase, not a
+    # bilingual separator. It must be kept whole, not truncated at that '/'.
+    raw = (
+        "1, प्रतिदिन | 2, सप्ताह में 3-6 बार | 3, सप्ताह में 1-2 बार | "
+        "4, 15 दिनों में एक बार | 5, मासिक | 6, 6 महीने में एक बार | "
+        "7, वार्षिक | 8, शायद ही कभी/कभी नहीं"
+    )
+    parsed = parse_choice_string(raw)
+    assert parsed["8"] == "शायद ही कभी/कभी नहीं"
+    assert parsed["1"] == "प्रतिदिन"
+
+
+def test_parse_choice_string_still_truncates_english_segment_with_mid_word_slash():
+    # Documented, unfixed quirk (out of scope here): a genuine English
+    # segment containing its own mid-word '/' (e.g. "days/week") still gets
+    # truncated at the FIRST slash, since that segment does have Latin text
+    # and is legitimately treated as the bilingual English half. Locks in
+    # that existing behavior stays unchanged by the Hindi-preservation fix.
+    assert parse_choice_string("1, 1-2 days/week /transliteration") == {"1": "1-2 days"}
+
+
 def test_build_choice_maps_skips_non_choice_fields():
     metadata = [
         {"field_name": "gender", "field_type": "radio", "select_choices_or_calculations": "1, Male | 2, Female"},

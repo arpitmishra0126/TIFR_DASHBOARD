@@ -30,6 +30,11 @@ ChoiceMap = dict[str, str]
 
 _CHOICE_FIELD_TYPES = {"radio", "dropdown"}
 
+# Used to detect whether the text before a choice label's first "/" is an
+# actual English segment (Latin script) versus ordinary punctuation inside
+# a single-language label - see _primary_language_segment below.
+_LATIN_LETTER_PATTERN = re.compile(r"[A-Za-z]")
+
 # Matches one "<code>=<roman numeral> <Label> <range>" segment of a calc
 # field's field_note, e.g. "2=II Upper-middle 33-42" -> code "2", label
 # "Upper-middle". The label is whatever falls between the roman numeral and
@@ -40,8 +45,29 @@ _CALC_CATEGORY_PATTERN = re.compile(
 
 
 def _primary_language_segment(label: str) -> str:
-    """Keep only the text before the first '/' in a bilingual choice label."""
-    return label.split("/", 1)[0].strip()
+    """Keep only the English segment of a bilingual "English/Hindi" choice
+    label, split at the first '/'.
+
+    A label with no Latin-script text before that first '/' has no English
+    segment to extract at all - e.g. a purely Hindi label such as DSEQ/
+    Dietary Intake's frequency scale option "शायद ही कभी/कभी नहीं" ("rarely/
+    never"), where the '/' is ordinary punctuation inside one Hindi phrase,
+    not a language separator. Splitting on it there would silently drop the
+    second half ("/कभी नहीं") for no reason, since there is no English text
+    to isolate - so such a label is returned whole instead.
+
+    This does not change behavior for any field that genuinely has an
+    English segment before the slash (including the separately-documented
+    quirk where a mid-word slash inside that English segment itself, e.g.
+    "1-2 days/week / <hindi>", still truncates at the first slash - that
+    remains unchanged/out of scope here).
+    """
+    if "/" not in label:
+        return label.strip()
+    head, _, _ = label.partition("/")
+    if not _LATIN_LETTER_PATTERN.search(head):
+        return label.strip()
+    return head.strip()
 
 
 def parse_choice_string(raw: str | None) -> ChoiceMap:

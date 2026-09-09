@@ -131,6 +131,8 @@ def test_dietary_intake_endpoint_returns_per_food_group_distribution():
     labels = [item["field_label"] for item in body["items"]]
     assert "Grains / Roots / Tubers" in labels
     assert len(body["items"]) == 10
+    assert "other_food_specified" in body
+    assert body["other_food_specified"]["total"] == 6
 
 
 def test_neurodevelopment_endpoint_shows_teacher_with_no_acquired_data():

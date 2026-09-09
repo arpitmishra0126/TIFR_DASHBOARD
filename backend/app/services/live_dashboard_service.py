@@ -1,18 +1,3 @@
-"""In-memory normalization + aggregation layer between the live REDCap
-record export and the dashboard-facing schemas.
-
-REDCap -> RedCapClient -> LiveRedCapRepository (cache) -> this service
-(normalize + aggregate) -> Pydantic schemas -> API routes -> React UI.
-
-No database. No persistence. No writes back to REDCap. Every function here
-is deterministic given its inputs, so the whole module is unit-testable
-against fixture metadata/records without a live connection.
-
-Data source: REDCap project PID 196 ("ICMR Neurodevelopment Study"). See
-app.ingestion.live_field_map for the confirmed field/instrument mapping and
-CORE_BATTERY_COMPLETE_FIELDS for the six instruments making up the "Core
-Assessment Battery" pipeline stage.
-"""
 from collections import Counter
 from statistics import mean
 
@@ -52,6 +37,8 @@ from app.schemas.dashboard import (
     DeviceMinutes,
     DietaryFoodItem,
     DietaryIntakeResponse,
+    OtherFoodEntry,
+    OtherFoodSpecifiedSummary,
     GroupedMinutesPoint,
     HealthScreeningResponse,
     InstrumentCompletion,
@@ -73,19 +60,10 @@ from app.schemas.dashboard import (
     SSRSInstrumentSummary,
 )
 
-# Study-specific age groups (replacing the previous broad 0-4/5-9/10-14/15+
-# bands) - the cohort's target ages per the study team's 2026-09-03 request.
-# "Other" is only shown when a registered child's computed age genuinely
-# falls outside 8-10 (data-integrity visibility, not an expected bucket).
+
 _STUDY_AGE_BUCKETS = [("8 years", 8), ("9 years", 9), ("10 years", 10)]
 
-# Reference date used for age = (reference - child_dob) in whole years.
-# The audit found no REDCap field/metadata establishing a different
-# convention, so the dashboard's existing "as of today" behavior is
-# preserved unchanged here (see app.ingestion.normalize.compute_age_years,
-# which already accepts an explicit `as_of` and defaults to date.today()).
-# If the study team later confirms a different reference (e.g. each child's
-# `visit_date`), change this single constant rather than the bucket logic.
+
 _AGE_REFERENCE_DATE = None
 
 
@@ -185,13 +163,7 @@ def _category_distribution(values: list[str | None]) -> list[CategoryCount]:
 def _ordered_labeled_category_distribution(
     raw_values: list[str | None], field_name: str, choice_maps: dict[str, ChoiceMap],
 ) -> list[CategoryCount]:
-    """Category distribution for a numerically-coded field (e.g. an SES
-    category), ordered by the underlying numeric code (preserving logical
-    category ordering) and displayed using the field's resolved label - via
-    the same choice_maps mechanism used everywhere else, so a calc field's
-    documented field_note labels (see build_calc_category_maps) are used
-    when available, and the raw code is shown unchanged otherwise (never an
-    invented label)."""
+   
     counts = Counter(v for v in raw_values if v)
     field_choices = choice_maps.get(field_name, {})
     ordered_codes = sorted(counts.keys(), key=lambda c: (parse_float(c) if parse_float(c) is not None else 0.0, c))
@@ -293,10 +265,7 @@ def _apply_registry_filters(
     if core_battery_complete is not None:
         children = [c for c in children if c.core_battery_complete == core_battery_complete]
     if progression_stage:
-        # Comma-separated list of exact stage names supported (e.g. the
-        # Registry "Assessment Follow-up" quick query needs "cleared the
-        # Core Assessment Battery gate but hasn't finished SSRS Teacher",
-        # which is two stages: "Core Assessment Battery" and "SSRS Child").
+      
         stages = {s.strip() for s in progression_stage.split(",") if s.strip()}
         children = [c for c in children if c.progression_stage in stages]
     if visit_date_from:
@@ -304,9 +273,7 @@ def _apply_registry_filters(
     if visit_date_to:
         children = [c for c in children if c.visit_date and c.visit_date <= visit_date_to]
     if data_review:
-        # Registered children with an incomplete demographic profile - a
-        # generic data-quality flag (missing sex/village/age), not a
-        # clinical/protocol rule.
+     
         children = [c for c in children if not c.sex or not c.village or c.age_years is None]
     return children
 
@@ -330,10 +297,7 @@ class LiveDashboardService:
         force: bool = False,
         **filters,
     ) -> bytes:
-        """Build the Active Cases newsletter workbook (.xlsx bytes) from live
-        data. Optional Registry filter kwargs (see _apply_registry_filters)
-        scope the export to the same set currently shown in the Registry
-        table, rather than always exporting every active case."""
+    
         records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
         if filters:
@@ -345,8 +309,7 @@ class LiveDashboardService:
         force: bool = False,
         **filters,
     ) -> str:
-        """Build the Active Cases CSV export from live data - see
-        get_active_cases_export for the optional filter kwargs."""
+      
         records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
         if filters:
@@ -435,9 +398,6 @@ class LiveDashboardService:
         total_registered = len(children)
 
         core_ids = _core_battery_ids(records)
-        # SSRS Parent is computed independently from ssrs_parent_complete - 
-        # NOT derived from core_ids - even though SSRS Parent is also one of
-        # the six instruments required for the Completed Assessment Set.
         ssrs_parent_ids = _unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)
         ssrs_child_ids = core_ids & _unique_ids_with_complete_field(records, SSRS_CHILD_COMPLETE_FIELD)
         ssrs_teacher_ids = ssrs_child_ids & _unique_ids_with_complete_field(records, SSRS_TEACHER_COMPLETE_FIELD)
@@ -502,12 +462,7 @@ class LiveDashboardService:
             ),
             ProgressStage(
                 key="core_assessment_battery",
-                # This grouping IS the genuine six-instrument intersection
-                # (CORE_BATTERY_COMPLETE_FIELDS) used as the gate for the
-                # SSRS Child/Teacher stages below, so "Core REDCap
-                # Instruments Completed" honestly names what it measures - 
-                # unlike the earlier placeholder "Completed Assessment Set"
-                # wording, it doesn't imply a validated clinical milestone.
+               
                 label="Core REDCap Instruments Completed",
                 description=CORE_BATTERY_DESCRIPTION,
                 count=core_count,
@@ -629,9 +584,20 @@ class LiveDashboardService:
                 )
                 for item in analysis["items"]
             ],
+            other_food_specified=OtherFoodSpecifiedSummary(
+                valid_n=analysis["other_food_specified"]["valid_n"],
+                total=analysis["other_food_specified"]["total"],
+                percent_valid=analysis["other_food_specified"]["percent_valid"],
+                entries=[OtherFoodEntry(**entry) for entry in analysis["other_food_specified"]["entries"]],
+            ),
             notes={
                 "scope": "10 food-group frequency items from the Dietary Intake instrument, each shown as "
-                "its own 8-point frequency distribution. Portion-size free-text fields are excluded.",
+                "its own 8-point frequency distribution, plus the separate open-ended 'Other food specified' "
+                "item (food name/portion/frequency, real respondent text only). Portion-size fields for the "
+                "10 standard groups are free text (local unit + quantity, no REDCap choice list) and are "
+                "intentionally NOT bucketed into size categories or charted as portion x frequency here - "
+                "that requires a study-team-defined portion-size classification, which does not yet exist. "
+                "This is a pending item, not an omission.",
             },
         )
 

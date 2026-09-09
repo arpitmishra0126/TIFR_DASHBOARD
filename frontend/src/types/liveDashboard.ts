@@ -245,10 +245,26 @@ export interface DietaryFoodItem {
   percent_valid: number;
 }
 
+export interface OtherFoodEntry {
+  food_name: string;
+  portion: string | null;
+  portion_status: "recorded" | "not_applicable" | "not_answered";
+  frequency: string | null;
+  frequency_status: "recorded" | "not_answered";
+}
+
+export interface OtherFoodSpecifiedSummary {
+  valid_n: number;
+  total: number;
+  percent_valid: number;
+  entries: OtherFoodEntry[];
+}
+
 export interface DietaryIntakeResponse {
   instrument: string;
   completion: InstrumentCompletion;
   items: DietaryFoodItem[];
+  other_food_specified: OtherFoodSpecifiedSummary;
   notes: Record<string, string>;
 }
 

@@ -176,6 +176,57 @@ def test_build_dietary_analysis_reports_per_food_group_distribution():
     assert grains["missing_n"] == 1
 
 
+def test_build_other_food_specified_records_real_entries_and_respects_skip_logic():
+    choice_maps = {"die_other_freq": {"1": "Daily", "8": "Rarely/Never"}}
+    records = [
+        # Specified a food; frequency answered and not "rarely/never", so a
+        # portion was genuinely asked for and answered.
+        {
+            "child_id": "A", "dietary_intake_complete": "2",
+            "die_other_specify": "Jaggery", "die_other_freq": "1", "die_other_portion": "1 spoon",
+        },
+        # Specified a food, but frequency is "rarely/never" - REDCap's own
+        # skip logic means portion was never asked. Must be "not_applicable",
+        # never counted as missing/non-response.
+        {
+            "child_id": "B", "dietary_intake_complete": "2",
+            "die_other_specify": "Papaya", "die_other_freq": "8", "die_other_portion": "",
+        },
+        # Specified a food, frequency genuinely left blank (not the skip
+        # case) - a real non-response, distinct from the skip case above.
+        {
+            "child_id": "C", "dietary_intake_complete": "0",
+            "die_other_specify": "Mango", "die_other_freq": "", "die_other_portion": "",
+        },
+        # Did not specify anything at all - excluded entirely, not a
+        # zero/blank row.
+        {"child_id": "D", "dietary_intake_complete": "2"},
+    ]
+    result = ma.build_dietary_analysis(records, choice_maps)
+    other = result["other_food_specified"]
+
+    assert other["total"] == 4
+    assert other["valid_n"] == 3
+    assert other["percent_valid"] == ma.percent(3, 4)
+    assert len(other["entries"]) == 3
+
+    by_name = {e["food_name"]: e for e in other["entries"]}
+    assert by_name["Jaggery"]["portion"] == "1 spoon"
+    assert by_name["Jaggery"]["portion_status"] == "recorded"
+    assert by_name["Jaggery"]["frequency"] == "Daily"
+    assert by_name["Jaggery"]["frequency_status"] == "recorded"
+
+    assert by_name["Papaya"]["portion"] is None
+    assert by_name["Papaya"]["portion_status"] == "not_applicable"
+    assert by_name["Papaya"]["frequency"] == "Rarely/Never"
+
+    assert by_name["Mango"]["portion_status"] == "not_answered"
+    assert by_name["Mango"]["frequency"] is None
+    assert by_name["Mango"]["frequency_status"] == "not_answered"
+
+    assert "D" not in by_name
+
+
 def test_physical_activity_analysis_missing_stays_missing():
     records = [
         {"child_id": "A", "paq_a_complete": "2", "paq_item1_score": "2.0", "paq_item8_score": "3.0", "paq_total_score": "2.5"},

@@ -40,11 +40,12 @@ export default function DietaryIntake() {
   if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
 
   const { completion } = data;
+  const otherFood = data.other_food_specified;
   const distributions = data.items.map((item) => item.distribution.map((c) => ({ label: c.code, count: c.count })));
-  const sharedChartHeight = computeHorizontalBarChartHeight(distributions, FOOD_GROUP_LABEL_WIDTH);
+  const sharedChartHeight = computeHorizontalBarChartHeight(distributions, FOOD_GROUP_LABEL_WIDTH, true);
 
   return (
-    <section>
+    <section className="dietary-intake-page">
       <PageHeader
         eyebrow="Study Assessment"
         title="Dietary Intake"
@@ -58,25 +59,58 @@ export default function DietaryIntake() {
         />
       </div>
 
-      <SectionHeader
-        title="Consumption frequency by food group"
-        note="Each food group's category order follows the REDCap frequency scale (Daily → ... → Rarely/Never); valid N shown per item"
-      />
+      <SectionHeader title="Consumption frequency by food group" />
       <div className="chart-grid two-col">
         {data.items.map((item, index) => (
           <ChartCard
             key={item.field_label}
             title={item.field_label}
             subtitle={`n=${item.valid_n}/${completion.total_registered} answered (${item.percent_valid}%)`}
+            compact
           >
             <HorizontalBarChart
               data={distributions[index]}
               mode="categorical"
               labelWidth={FOOD_GROUP_LABEL_WIDTH}
               height={sharedChartHeight}
+              dense
             />
           </ChartCard>
         ))}
+      </div>
+
+      <SectionHeader
+        title="Other Food Specified"
+        note="Open-ended item (die_other_specify) - a separate entry from the 'Other Vegetables'/'Other Fruits' food groups above, not a duplicate of them"
+      />
+      <div className="table-card">
+        <p className="chart-card-subtitle" style={{ padding: "var(--space-4) var(--space-4) 0" }}>
+          {otherFood.valid_n}/{otherFood.total} registered children specified an additional food ({otherFood.percent_valid}%)
+        </p>
+        {otherFood.entries.length === 0 ? (
+          <p className="chart-card-note" style={{ padding: "0 var(--space-4) var(--space-4)" }}>
+            No children have specified an additional food item yet.
+          </p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Food Name</th>
+                <th>Portion Size</th>
+                <th>Frequency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {otherFood.entries.map((entry, index) => (
+                <tr key={`${entry.food_name}-${index}`}>
+                  <td>{entry.food_name}</td>
+                  <td>{entry.portion_status === "recorded" ? entry.portion : entry.portion_status === "not_applicable" ? "Not applicable (rarely/never)" : "Not answered"}</td>
+                  <td>{entry.frequency_status === "recorded" ? entry.frequency : "Not answered"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </section>
   );

@@ -298,6 +298,28 @@ DIETARY_EXPORT_FIELDS: tuple[str, ...] = (
     "die_vita_fv_freq",
     "die_other_veg_freq",
     "die_other_fruits_freq",
+    # Portion-size fields (2026-09-09 audit) - confirmed live `text` fields,
+    # free-text local unit + quantity (e.g. "100 gram", "3Pc"), no REDCap
+    # choice list. Fetched so real collected text can be displayed, but
+    # deliberately NOT bucketed into invented size categories anywhere
+    # downstream - see module_analytics.py's build_dietary_analysis.
+    "die_grains_portion",
+    "die_pulses_portion",
+    "die_nuts_seeds_portion",
+    "die_dairy_portion",
+    "die_flesh_portion",
+    "die_eggs_portion",
+    "die_dgl_veg_portion",
+    "die_vita_fv_portion",
+    "die_other_veg_portion",
+    "die_other_fruits_portion",
+    # The separate "Other food specified" item (an 11th, open-ended entry -
+    # distinct from the "Other Vegetables"/"Other Fruits" standard groups
+    # above). REDCap skip logic: die_other_portion/die_other_freq only
+    # render in REDCap once die_other_specify is non-blank.
+    "die_other_specify",
+    "die_other_portion",
+    "die_other_freq",
 )
 
 # SSRS Parent/Child/Teacher: per-item frequency + importance rating fields

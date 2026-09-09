@@ -542,6 +542,56 @@ def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, Choic
     }
 
 
+# REDCap code for the die_*_freq "rarely/never" choice, shared by all 10
+# standard food groups plus the "other" item - used only to honor REDCap's
+# own skip logic (each group's *_portion field is not shown in REDCap at
+# all when its *_freq is this code), never to invent a category.
+_DIETARY_RARELY_NEVER_CODE = "8"
+
+
+def build_other_food_specified(reg: list[dict], choice_maps: dict[str, ChoiceMap], total: int) -> dict:
+    """The separate, open-ended "Other food specified" item
+    (die_other_specify/die_other_portion/die_other_freq) - distinct from the
+    "Other Vegetables"/"Other Fruits" standard food groups. One entry per
+    child who actually specified a food (real collected text, never grouped
+    or normalized - grouping free-text food names would require an
+    invented matching rule the study team hasn't defined). Portion is
+    reported as REDCap's own text, with a status distinguishing genuinely
+    missing data from a portion REDCap itself never asked for (skip logic:
+    die_other_portion only applies when die_other_freq is not "rarely/
+    never")."""
+    entries = []
+    for record in reg:
+        food_name = (record.get("die_other_specify") or "").strip()
+        if not food_name:
+            continue
+        freq_raw = (record.get("die_other_freq") or "").strip()
+        frequency = resolve_value("die_other_freq", freq_raw, choice_maps) or None
+        portion_raw = (record.get("die_other_portion") or "").strip()
+        if freq_raw == _DIETARY_RARELY_NEVER_CODE:
+            portion, portion_status = None, "not_applicable"
+        elif portion_raw:
+            portion, portion_status = portion_raw, "recorded"
+        else:
+            portion, portion_status = None, "not_answered"
+        entries.append(
+            {
+                "food_name": food_name,
+                "portion": portion,
+                "portion_status": portion_status,
+                "frequency": frequency,
+                "frequency_status": "recorded" if frequency else "not_answered",
+            }
+        )
+    valid_n = len(entries)
+    return {
+        "valid_n": valid_n,
+        "total": total,
+        "percent_valid": percent(valid_n, total),
+        "entries": entries,
+    }
+
+
 def build_dietary_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
     reg = registered_records(records)
     total = len(reg)
@@ -571,6 +621,7 @@ def build_dietary_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap
             "coverage_tier": coverage_tier(completed, total),
         },
         "items": items,
+        "other_food_specified": build_other_food_specified(reg, choice_maps, total),
     }
 
 
