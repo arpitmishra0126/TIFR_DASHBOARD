@@ -1322,6 +1322,32 @@ data, point positions, scale/domain, `n=44`, or chart height/margins
 changed - this was a label-rendering fix only. Frontend `tsc --noEmit` and
 `npm run build` both succeed; no other DSEQ chart or page touched.
 
+**Weekend − School-Day Difference histogram x-axis label collision fixed
+(2026-09-09, same day):** a reported "missing -60 to -30 min bin" turned
+out not to be a calculation bug - `module_analytics.py`'s
+`_DIFF_MINUTES_BUCKET_EDGES`/`_LABELS` and `bucket_counts()` already
+produced all 6 contiguous bins correctly (verified live: counts 1/1/1/29/9/3
+summing to `valid_n=44`); the bin was rendering but visually colliding with
+its neighbors because `CategoryBarChart`'s default single-line X-axis tick
+couldn't fit 6 labels like `"-60 to -30 min"` in this chart's column width,
+making one appear to vanish. Fix is frontend-only: `CategoryBarChart.tsx`
+gained an **optional** `xTickMaxChars` prop (default unset) - when passed,
+X-axis ticks word-wrap via the existing shared `wrapLabel()` helper (same
+one `HorizontalBarChart` already uses) into a centered multi-line tick, the
+chart's bottom margin/height grow just enough to fit the extra line(s), and
+`interval` is forced to 0 so no tick is auto-skipped. Every other
+`CategoryBarChart` caller (Demographics, Overview, Physical Activity, and
+this page's other three charts using it) omits the prop and is completely
+unaffected - same single-line tick, same default height, byte-for-byte
+unchanged behavior. Only `ScreenTime.tsx`'s difference-histogram call
+passes `xTickMaxChars={9}`. Added a regression test,
+`test_difference_distribution_has_six_contiguous_bins_in_order` in
+`test_module_analytics.py`, asserting the exact 6 labels/order and that a
+value in each bin (including -60 to -30) is counted once and sums to the
+input count. Backend: **132/132 tests pass**. Frontend `tsc --noEmit` and
+`npm run build` both succeed. No REDCap mapping, calculation, denominator,
+or any other DSEQ chart/page changed.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)

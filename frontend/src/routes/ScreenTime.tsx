@@ -189,7 +189,7 @@ export default function ScreenTime() {
           subtitle={`Mean ${minutesLabel(diff.mean)} · valid n=${diff.valid_n}/${diff.total}`}
           note="Weekend minutes minus school-day minutes, per child; histogram of the derived difference"
         >
-          <CategoryBarChart data={diffDistribution} mode="sequential" />
+          <CategoryBarChart data={diffDistribution} mode="sequential" xTickMaxChars={9} />
         </ChartCard>
       </div>
 

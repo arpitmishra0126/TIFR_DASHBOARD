@@ -330,6 +330,27 @@ def test_screen_time_analysis_minutes_derivation_and_denominators():
     assert dict(result["total_screen_time_distribution"])["1-2 hours"] == 1
 
 
+def test_difference_distribution_has_six_contiguous_bins_in_order():
+    """Regression test for a reported gap in the Weekend - School-Day
+    Difference histogram: every value, including one that lands specifically
+    in the -60-to-30 band, must be counted in exactly one of six contiguous,
+    correctly-ordered bins - none silently dropped or merged."""
+    assert ma._DIFF_MINUTES_BUCKET_LABELS == [
+        "< -60 min", "-60 to -30 min", "-30 to 0 min", "0 to 30 min", "30 to 60 min", "60+ min",
+    ]
+    diff_values = [-75.0, -45.0, -15.0, 15.0, 45.0, 75.0]  # one value per intended bin
+    result = dict(ma.bucket_counts(diff_values, ma._DIFF_MINUTES_BUCKET_EDGES, ma._DIFF_MINUTES_BUCKET_LABELS))
+    assert result == {
+        "< -60 min": 1,
+        "-60 to -30 min": 1,
+        "-30 to 0 min": 1,
+        "0 to 30 min": 1,
+        "30 to 60 min": 1,
+        "60+ min": 1,
+    }
+    assert sum(result.values()) == len(diff_values)
+
+
 def test_neurodevelopment_analysis_teacher_shows_zero_not_invented():
     records = [
         {"child_id": "A", "ssrs_parent_complete": "2", "p1_freq": "1", "p1_imp": "2"},
