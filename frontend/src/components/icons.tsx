@@ -195,3 +195,49 @@ export function IconDotFilled(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+export function IconArrowUpRight(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M7 17 17 7M9 7h8v8" />
+    </Svg>
+  );
+}
+
+export function IconClipboardAlert(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4.5" width="14" height="16" rx="2" />
+      <path d="M9 4.5V3.8a1.3 1.3 0 0 1 1.3-1.3h3.4A1.3 1.3 0 0 1 15 3.8v.7" />
+      <path d="M12 9.5v4M12 16.2v.1" />
+    </Svg>
+  );
+}
+
+export function IconClipboardX(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="4.5" width="14" height="16" rx="2" />
+      <path d="M9 4.5V3.8a1.3 1.3 0 0 1 1.3-1.3h3.4A1.3 1.3 0 0 1 15 3.8v.7" />
+      <path d="M9.7 10.7l4.6 4.6M14.3 10.7l-4.6 4.6" />
+    </Svg>
+  );
+}
+
+export function IconCalendar(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+    </Svg>
+  );
+}
+
+export function IconFlag(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M5 21V4" />
+      <path d="M5 5.2c1.6-1 3.2-1 4.8 0s3.2 1 4.8 0 3.2-1 4.4-.3v9c-1.2-.7-2.8-.7-4.4.3s-3.2 1-4.8 0-3.2-1-4.8 0" />
+    </Svg>
+  );
+}

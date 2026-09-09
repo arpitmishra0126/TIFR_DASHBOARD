@@ -943,7 +943,8 @@ filters, not KPI cards:
   (`core_battery_complete=false`).
 - **Missing Instrument** - pick any of the 9 live instruments; shows
   participants NOT complete on it (`missing_instrument=<key>`).
-- **Follow-up Window** - a generic visit-date range filter
+- **Recent Visits** (renamed from "Follow-up Window" 2026-09-09 - same
+  filter, label only) - a generic visit-date range filter
   (`visit_date_from`/`visit_date_to`) on the existing `visit_date` field - a
   user-driven date range, not a hardcoded "+N days" protocol rule.
 - **Data Review** - registered children with an incomplete demographic
@@ -955,17 +956,85 @@ mutually exclusive with each other (selecting one clears any other active
 quick query) - all sent as query params to the same `/dashboard/registry`
 endpoint.
 
+**Visual redesign (2026-09-09, presentation-only - no functional/backend
+change):** the 5 quick queries render as large equal-width colored cards
+(`.quick-query-grid`/`.quick-query-card`, 5-column grid collapsing to 3/2/1
+below 1100/700/480px) - icon chip, title, one-line description, tinted
+background matching each query's tone: Needs Follow-up = blue, Incomplete
+Assessments = amber, Missing Assessment = green, Recent Visits = violet,
+Data Review = coral (`--status-critical`). Selecting a card opens a
+dedicated white **Active Query Panel** (`.query-control-panel`) below the
+grid - icon/title/explanation header plus a divided control row for the
+instrument selector (Incomplete Assessments/Missing Assessment) or date
+range (Recent Visits); Needs Follow-up and Data Review show only the
+explanation, matching their existing logic (no invented follow-up-window
+rule). Page order is unchanged: cards -> active query panel -> Child
+ID/Sex/Age/Village filters -> matching count + export -> participant table.
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend files
+touched.
+
 **Participant table**: Child ID/Sex/Age/Village plus a compact per-instrument
 status view (✓/– dot per instrument: SES, DSEQ, Child Illness History, PAQ-A,
 Dietary Intake, SSRS Parent/Child/Teacher) and a pipeline-stage `StatusBadge`
 (Registered/Core Assessment Battery/SSRS Child/SSRS Teacher) - no long status
-text. Row click opens a compact slide-over **Participant Detail** panel
+text. Row click opens a slide-over **Participant Detail** panel
 (registration, status, visit date, pipeline stage, and the same per-instrument
 list) - study-statistics-free, participant-level only.
+
+**Participant Detail panel density fix (2026-09-09, presentation-only - no
+functional/backend change):** the panel previously listed the 8 instruments
+as a single-column text list, leaving most of the fixed-height side panel
+visibly empty. It now has a bordered header (Child ID + Sex/Age/Village),
+a "Participant Information" section (Registration/Status/Visit
+date/Pipeline stage, unchanged data/fields), a divider, and an "Assessment
+Status" section header showing an "N/8 completed" count computed client-side
+from the same `instrument_status` map already on `RegistryChild`. The 8
+instruments render as a 2-column grid of compact tiles
+(`.registry-detail-instrument-grid`/`-tile`), each with the existing
+`InstrumentDot` plus a "Completed"/"Not completed" line - a completed tile
+gets a tinted green background (`--status-good-bg`) so the grid reads as a
+scannable status board rather than a plain list, and naturally fills the
+panel width/height instead of leaving blank space below a short list. No
+REDCap record-URL action was added - no per-record REDCap web URL is
+available anywhere in the API response or frontend config (confirmed via
+`RegistryChild`/`config.py`), and the task explicitly disallowed inventing
+one; add this only if a real record-URL source is confirmed later. Frontend
+`tsc --noEmit` and `npm run build` both succeed; no backend files touched.
 
 **Result count**: shown above the table/export bar as "N matching
 participants" whenever any filter/quick query is active, "N registered
 participants" otherwise.
+
+**Query-result evidence for instrument-specific queries (2026-09-09,
+presentation-only - no backend/filtering/mapping change):** when Incomplete
+Assessments has a specific instrument chosen, or Missing Assessment is
+active, the result now visibly ties the count to that instrument instead of
+a bare number: a tinted `.registry-result-context` banner reads "N
+participants with `<Instrument>` not completed" (never "Incomplete" - the
+underlying REDCap completion field has no distinct not-started state, so
+display wording deliberately says "not completed" everywhere), plus a small
+`.active-filter-chip` (e.g. "DSEQ: Not completed"). The matching column in
+the participant table (`th`/`td.registry-instrument-col-highlighted`) gets
+a tinted background and bottom accent line so the reason those rows appear
+is visually obvious - the ✓/– `InstrumentDot` markers themselves are
+unchanged. Both the banner and the column highlight reuse the selected
+quick query's existing tone color (`quick-query-tone-*` CSS custom
+properties already defined for the Quick Query cards), so amber = Incomplete
+Assessments, green = Missing Assessment - no new color system introduced.
+Follow-up/Recent Visits/Data Review are not single-instrument queries and
+intentionally show no column highlight or chip. **"Core Assessment
+Battery" was relabeled to "Core Study Assessments"** in every user-facing
+string on this page (quick-query descriptions, the query-control-panel
+explanation text, the instrument dropdown's "Any ... instrument" option,
+and the Stage column/detail-panel pipeline-stage badge via a new
+display-only `displayStage()` helper) - the backend's actual
+`progression_stage` value and the `progressionStage` query param sent back
+to `/dashboard/registry` are untouched (`"Core Assessment Battery"` is
+still the literal string the backend returns/expects; only the on-screen
+label is remapped). This rename is scoped to Registry only - Overview/
+Assessment Progress still say "Core REDCap Instruments Completed" per the
+2026-09-03 rename in that section, unchanged. Frontend `tsc --noEmit` and
+`npm run build` both succeed; no backend files touched.
 
 **Export scoped to the current view**: both export buttons now read
 "Export Active Cases (Excel/CSV)" when unfiltered, or
@@ -1115,6 +1184,21 @@ Avoid:
 - unnecessary gradients
 - neon colors
 - excessive animation
+
+**Global page canvas is pure white (2026-09-09):** the light-theme `body`
+rule in `frontend/src/styles/app.css` was changed from a grey/blue-tinted
+gradient (`radial-gradient(... rgba(42,120,214,0.07) ...)` over
+`--surface-0`/`--surface-0-strong`) to a flat `background: #ffffff`. This is
+the single shared rule every page inherits through (`.app-content` has no
+background of its own), so all pages - Overview, Registry, Assessments hub,
+the 4 assessment detail pages, Demographics, Progress, and the Registry
+participant-detail slide-over - now sit on a plain white canvas. Only this
+one rule changed: card backgrounds (`--surface-1`/`--surface-2`), Quick
+Query tone colors, chart colors, typography, borders, shadows, spacing, and
+the top navigation are untouched. `--surface-0`/`--surface-0-strong` remain
+defined (still used by the separate `:root[data-theme="dark"] body` rule,
+which is unchanged - this was a light-theme-only change). Frontend
+`tsc --noEmit` and `npm run build` both succeed; no backend files touched.
 
 ---
 
