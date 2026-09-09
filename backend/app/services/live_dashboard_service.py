@@ -49,20 +49,25 @@ from app.schemas.dashboard import (
     CategoryCount,
     ConditionIndicator,
     DemographicsResponse,
+    DeviceMinutes,
     DietaryFoodItem,
     DietaryIntakeResponse,
+    GroupedMinutesPoint,
     HealthScreeningResponse,
     InstrumentCompletion,
     InstrumentCoverage,
+    MinutesSummary,
     NeurodevelopmentResponse,
     NumericSummary,
     OverviewResponse,
+    PairedMinutesPoint,
     PhysicalActivityResponse,
     ProgressResponse,
     ProgressStage,
     RegistryChild,
     RegistryResponse,
     ScoreSummary,
+    ScreenActivityPoint,
     ScreenTimeResponse,
     SexDistribution,
     SSRSInstrumentSummary,
@@ -568,12 +573,43 @@ class LiveDashboardService:
         return ScreenTimeResponse(
             instrument=analysis["instrument"],
             completion=InstrumentCompletion(**analysis["completion"]),
+            missing_count=analysis["missing_count"],
+            missing_percent=analysis["missing_percent"],
+            average_daily_summary=MinutesSummary(**analysis["average_daily_summary"]),
+            school_day_summary=MinutesSummary(**analysis["school_day_summary"]),
+            weekend_summary=MinutesSummary(**analysis["weekend_summary"]),
+            difference_summary=MinutesSummary(**analysis["difference_summary"]),
+            school_vs_weekend=[PairedMinutesPoint(**point) for point in analysis["school_vs_weekend"]],
+            screen_time_distribution_minutes=[
+                CategoryCount(code=label, count=count) for label, count in analysis["screen_time_distribution_minutes"]
+            ],
+            difference_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["difference_distribution"]],
+            by_age=[GroupedMinutesPoint(**point) for point in analysis["by_age"]],
+            by_sex=[GroupedMinutesPoint(**point) for point in analysis["by_sex"]],
+            by_device=[DeviceMinutes(**point) for point in analysis["by_device"]],
+            purpose_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["purpose_distribution"]],
+            supervision_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["supervision_distribution"]],
+            household_rules_distribution=[
+                CategoryCount(code=label, count=count) for label, count in analysis["household_rules_distribution"]
+            ],
+            household_rules_valid_n=analysis["household_rules_valid_n"],
+            physical_activity_school_day_summary=MinutesSummary(**analysis["physical_activity_school_day_summary"]),
+            physical_activity_weekend_summary=MinutesSummary(**analysis["physical_activity_weekend_summary"]),
+            physical_activity_school_vs_weekend=[
+                PairedMinutesPoint(**point) for point in analysis["physical_activity_school_vs_weekend"]
+            ],
+            screen_vs_activity_scatter=[ScreenActivityPoint(**point) for point in analysis["screen_vs_activity_scatter"]],
             total_screen_time_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["total_screen_time_distribution"]],
             yes_no_items=[CategoryCount(code=label, count=count) for label, count in analysis["yes_no_items"]],
             notes={
-                "scope": "Q10 total daily screen time distribution and 3 Yes/No items (Q9, Q14, Q15) approved "
-                "2026-08-26; per-item TV/phone/laptop frequency breakdowns are exported in the Active Cases "
-                "Excel sheet but not part of the approved dashboard analysis.",
+                "scope": "Average/median/school-day/weekend screen time are derived from DSEQ's per-device "
+                "duration items (q2/q3 TV, q5/q6 smartphone/tablet), each converted from its REDCap ordinal "
+                "band to that band's midpoint in minutes - an estimate, not an exact measurement. "
+                "Laptop/computer (q7) has no duration field in REDCap (only weekly-use frequency), so it is "
+                "excluded from every minutes total. Q10 (total daily screen time) and Q9/Q14/Q15 remain as "
+                "secondary, purely descriptive categorical cross-checks per the approved 2026-08-26 scope, "
+                "not the primary analysis. Physical activity here is DSEQ's own Section B outdoor-play items "
+                "(q11/q12) - distinct from the separate PAQ-A-based Physical Activity page.",
             },
         )
 

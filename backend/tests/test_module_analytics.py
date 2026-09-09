@@ -210,6 +210,126 @@ def test_screen_time_analysis_distribution_and_yes_no():
     assert yes_no["Uses screens mainly for entertainment (Q15)"] == 1
 
 
+def test_band_minutes_returns_none_for_missing_or_unrecognised_code():
+    assert ma._band_minutes({"q2_tv_school": ""}, "q2_tv_school", ma._SCREEN_BAND_MINUTES) is None
+    assert ma._band_minutes({}, "q2_tv_school", ma._SCREEN_BAND_MINUTES) is None
+    assert ma._band_minutes({"q2_tv_school": "9"}, "q2_tv_school", ma._SCREEN_BAND_MINUTES) is None
+
+
+def test_band_minutes_converts_known_codes_to_midpoint_minutes():
+    assert ma._band_minutes({"q2_tv_school": "0"}, "q2_tv_school", ma._SCREEN_BAND_MINUTES) == 0
+    assert ma._band_minutes({"q2_tv_school": "2"}, "q2_tv_school", ma._SCREEN_BAND_MINUTES) == 45
+
+
+def test_weighted_daily_minutes_requires_both_sides_present():
+    assert ma._weighted_daily_minutes(60, None) is None
+    assert ma._weighted_daily_minutes(None, 90) is None
+    assert ma._weighted_daily_minutes(70, 0) == round((70 * 5 + 0 * 2) / 7, 1)
+
+
+def _dseq_choice_maps() -> dict:
+    return {
+        "baby_gender": {"1": "Male", "2": "Female"},
+        "q8_supervision": {"3": "Always", "2": "Often", "1": "Sometimes", "0": "Never"},
+        "q9_household_rules": {"1": "Yes", "0": "No"},
+        "q13_main_use": {"1": "Homework/online learning", "5": "Watching stories/cartoons/videos"},
+        "q10_total_screen_time": {"3": "1-2 hours"},
+    }
+
+
+def test_screen_time_analysis_minutes_derivation_and_denominators():
+    from datetime import date
+
+    from dateutil.relativedelta import relativedelta
+
+    today = date.today()
+    dob_9 = (today - relativedelta(years=9)).isoformat()
+    dob_10 = (today - relativedelta(years=10)).isoformat()
+
+    choice_maps = _dseq_choice_maps()
+    # Child A: fully answered on every relevant field.
+    child_a = {
+        "child_id": "A", "dseq_complete": "2", "baby_gender": "1", "child_dob": dob_9,
+        "q2_tv_school": "2", "q3_tv_holiday": "3", "q5_phone_school": "1", "q6_phone_holiday": "2",
+        "q8_supervision": "3", "q9_household_rules": "1", "q10_total_screen_time": "3",
+        "q11_outdoor_school": "2", "q12_outdoor_holiday": "1", "q13_main_use": "1",
+    }
+    # Child B: TV answered both sides, but phone only answered for holiday
+    # (school-day phone missing) - school_total must be None (not phone=0),
+    # and physical-activity fields are entirely unanswered.
+    child_b = {
+        "child_id": "B", "dseq_complete": "2", "baby_gender": "2", "child_dob": dob_10,
+        "q2_tv_school": "1", "q3_tv_holiday": "1", "q6_phone_holiday": "1",
+        "q9_household_rules": "0",
+    }
+    records = [child_a, child_b]
+
+    result = ma.build_screen_time_analysis(records, choice_maps)
+
+    # --- Missing DSEQ data (both complete here, so 0 missing) ---
+    assert result["completion"]["completed"] == 2
+    assert result["missing_count"] == 0
+
+    # --- Primary continuous variable: school-day / weekend / weighted avg ---
+    expected_school_a = 45 + 15  # tv_school(2)=45, phone_school(1)=15
+    expected_weekend_a = 90 + 45  # tv_holiday(3)=90, phone_holiday(2)=45
+    expected_weighted_a = ma._weighted_daily_minutes(expected_school_a, expected_weekend_a)
+    assert result["school_day_summary"]["valid_n"] == 1  # only A has both TV+phone school-day values
+    assert result["school_day_summary"]["mean"] == expected_school_a
+    assert result["weekend_summary"]["valid_n"] == 2  # both A and B have TV+phone weekend values
+    assert result["average_daily_summary"]["valid_n"] == 1
+    assert result["average_daily_summary"]["mean"] == expected_weighted_a
+    assert result["average_daily_summary"]["median"] == expected_weighted_a
+
+    # --- Weekend minus school-day difference ---
+    assert result["difference_summary"]["valid_n"] == 1
+    assert result["difference_summary"]["mean"] == round(expected_weekend_a - expected_school_a, 1)
+
+    # --- School-Day vs Weekend paired points ---
+    paired = {p["group"]: p for p in result["school_vs_weekend"]}
+    assert paired["School-Day"]["valid_n"] == 1
+    assert paired["Weekend"]["valid_n"] == 2
+
+    # --- By age / by sex (both use the primary weighted value, valid for A only) ---
+    by_age = {p["group"]: p for p in result["by_age"]}
+    assert by_age["9 years"]["valid_n"] == 1
+    assert by_age["9 years"]["mean"] == expected_weighted_a
+    assert by_age["10 years"]["valid_n"] == 0  # B has no weighted value (school missing)
+    by_sex = {p["group"]: p for p in result["by_sex"]}
+    assert by_sex["Male"]["valid_n"] == 1
+    assert by_sex["Female"]["valid_n"] == 0
+
+    # --- By device: laptop has no genuine duration field, so it is never
+    # fabricated - mean_minutes stays None and valid_n stays 0. ---
+    by_device = {d["device"]: d for d in result["by_device"]}
+    assert by_device["Television"]["valid_n"] == 2  # both A and B answered TV school+holiday
+    assert by_device["Smartphone/Tablet"]["valid_n"] == 1  # only A answered phone on both sides
+    assert by_device["Laptop/Computer"]["mean_minutes"] is None
+    assert by_device["Laptop/Computer"]["valid_n"] == 0
+
+    # --- Physical activity (DSEQ Section B) - only A answered both sides ---
+    assert result["physical_activity_school_day_summary"]["valid_n"] == 1
+    assert result["physical_activity_weekend_summary"]["valid_n"] == 1
+    pa_paired = {p["group"]: p for p in result["physical_activity_school_vs_weekend"]}
+    assert pa_paired["School-Day"]["mean"] == 45
+    assert pa_paired["Weekend"]["mean"] == 15
+
+    # --- Screen time vs physical activity scatter: only children with BOTH
+    # a valid weighted screen value and a valid weighted activity value. ---
+    assert len(result["screen_vs_activity_scatter"]) == 1
+    assert result["screen_vs_activity_scatter"][0]["screen_minutes"] == expected_weighted_a
+
+    # --- Household rules / supervision / purpose (existing categorical fields) ---
+    household = dict(result["household_rules_distribution"])
+    assert household["Yes"] == 1
+    assert household["No"] == 1
+    assert result["household_rules_valid_n"] == 2
+
+    # --- Secondary/descriptive Q10 distribution is unaffected by the new
+    # minutes fields (still present, still categorical). ---
+    assert dict(result["total_screen_time_distribution"])["1-2 hours"] == 1
+
+
 def test_neurodevelopment_analysis_teacher_shows_zero_not_invented():
     records = [
         {"child_id": "A", "ssrs_parent_complete": "2", "p1_freq": "1", "p1_imp": "2"},

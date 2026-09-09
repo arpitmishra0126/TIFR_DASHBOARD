@@ -21,11 +21,11 @@ dashboard. The underlying arithmetic (how a distribution/summary/coverage
 tier is computed) is identical either way.
 """
 from collections import Counter
-from statistics import mean
+from statistics import mean, median
 from typing import Callable
 
 from app.ingestion.choice_maps import ChoiceMap
-from app.ingestion.normalize import parse_complete_flag, parse_float
+from app.ingestion.normalize import compute_age_years, parse_complete_flag, parse_date, parse_float
 
 # --- Field lists (single source of truth - approved 2026-08-26) ---
 
@@ -72,6 +72,77 @@ DIETARY_LABELS: tuple[tuple[str, str], ...] = (
     ("die_other_veg_freq", "Other Vegetables"),
     ("die_other_fruits_freq", "Other Fruits"),
 )
+
+# --- DSEQ screen-time / physical-activity minute conversion (2026-09-09
+# senior DSEQ specification) ---
+# DSEQ has no raw-minutes field anywhere on the instrument - every duration
+# question (q2/q3/q5/q6/q10/q11/q12) is a 4-5 level ordinal REDCap `radio`
+# field (confirmed live 2026-09-09 via REDCap metadata for the `dseq` form -
+# every field_type returned was "radio", none "text"/"number"). To honor the
+# requirement that screen time be analysed as a continuous minutes-per-day
+# variable, each ordinal *code* (not the bilingual label text, which has a
+# documented slash-splitting quirk elsewhere in this codebase - see
+# choice_maps.py) is converted to the midpoint of its band, in minutes. This
+# is a standard, transparent survey-research convention for turning banded
+# categories into an analysable continuous proxy - it is not a fabricated
+# per-child measurement. The open-ended top band of every field (e.g. "more
+# than 2 hours") has no REDCap-defined upper bound; its minute value below
+# is a documented, conservative approximation (one half-band-width past the
+# band's lower bound), and every UI surface built on it must say
+# "estimated" rather than presenting it as an exact duration.
+_SCREEN_BAND_MINUTES: dict[str, int] = {"0": 0, "1": 15, "2": 45, "3": 90, "4": 150}
+"""q2_tv_school / q3_tv_holiday / q5_phone_school / q6_phone_holiday codes:
+0=Does not watch/use, 1=<30min, 2=30min-1h, 3=1-2h, 4=>2h (open-ended)."""
+
+_TOTAL_SCREEN_BAND_MINUTES: dict[str, int] = {"1": 15, "2": 45, "3": 90, "4": 180, "5": 270}
+"""q10_total_screen_time codes: 1=<30min, 2=30min-1h, 3=1-2h, 4=2-4h,
+5=>4h (open-ended). Kept as a secondary/descriptive cross-check only - the
+school-day/weekend combination above is the primary continuous variable,
+per the "do not make screen-time categories the primary analysis" rule."""
+
+_ACTIVITY_BAND_MINUTES: dict[str, int] = {"1": 15, "2": 45, "3": 90, "4": 150}
+"""q11_outdoor_school / q12_outdoor_holiday codes: 1=<30min, 2=30min-1h,
+3=1-2h, 4=>2h (open-ended)."""
+
+_SCHOOL_DAYS_PER_WEEK = 5
+_WEEKEND_DAYS_PER_WEEK = 2
+
+
+def _band_minutes(record: dict, field: str, table: dict[str, int]) -> float | None:
+    """Raw REDCap code -> band-midpoint minutes. Returns None (never 0) for
+    a blank/unanswered/unrecognised code, so a missing response is never
+    silently treated as zero screen time."""
+    raw = (record.get(field) or "").strip()
+    if raw not in table:
+        return None
+    return float(table[raw])
+
+
+def _weighted_daily_minutes(school: float | None, weekend: float | None) -> float | None:
+    """5 school days + 2 weekend days per week. Only computed when BOTH
+    sides are valid observations - a missing school-day or weekend value is
+    never imputed as 0, so this returns None rather than a partial average."""
+    if school is None or weekend is None:
+        return None
+    return round((school * _SCHOOL_DAYS_PER_WEEK + weekend * _WEEKEND_DAYS_PER_WEEK) / 7, 1)
+
+
+def minutes_summary(values: list[float], total: int) -> dict:
+    """Same denominator discipline as numeric_summary(), plus median - used
+    for the continuous minutes-per-day metrics. Missing is never treated as
+    zero: mean/median/min/max are None when there is no valid data."""
+    valid_n = len(values)
+    return {
+        "valid_n": valid_n,
+        "missing_n": max(total - valid_n, 0),
+        "total": total,
+        "percent_valid": percent(valid_n, total),
+        "mean": round(mean(values), 1) if values else None,
+        "median": round(median(values), 1) if values else None,
+        "minimum": min(values) if values else None,
+        "maximum": max(values) if values else None,
+    }
+
 
 PAQA_SCORE_BUCKET_EDGES: list[float] = [2, 3, 4]
 PAQA_SCORE_BUCKET_LABELS: list[str] = ["1.0-1.99 (Low)", "2.0-2.99", "3.0-3.99", "4.0-5.0 (High)"]
@@ -325,10 +396,97 @@ def build_physical_activity_analysis(records: list[dict], choice_maps: dict[str,
     }
 
 
+_SCREEN_MINUTES_BUCKET_EDGES: list[float] = [30, 60, 90, 120, 180, 240]
+_SCREEN_MINUTES_BUCKET_LABELS: list[str] = [
+    "<30 min", "30-59 min", "60-89 min", "90-119 min", "120-179 min", "180-239 min", "240+ min",
+]
+
+_DIFF_MINUTES_BUCKET_EDGES: list[float] = [-60, -30, 0, 30, 60]
+_DIFF_MINUTES_BUCKET_LABELS: list[str] = [
+    "< -60 min", "-60 to -30 min", "-30 to 0 min", "0 to 30 min", "30 to 60 min", "60+ min",
+]
+"""Numeric-range bins for weekend-minus-school-day (minutes) - a true
+continuous histogram of the derived difference, not broad hand-labelled
+qualitative categories. Negative = less screen time on weekends."""
+
+_STUDY_AGES: tuple[int, ...] = (8, 9, 10)
+
+
+def _record_screen_minutes(record: dict) -> tuple[float | None, float | None, float | None, float | None]:
+    """Returns (tv_school, tv_holiday, phone_school, phone_holiday) band
+    midpoints for one record - None for any side that is blank/unanswered."""
+    return (
+        _band_minutes(record, "q2_tv_school", _SCREEN_BAND_MINUTES),
+        _band_minutes(record, "q3_tv_holiday", _SCREEN_BAND_MINUTES),
+        _band_minutes(record, "q5_phone_school", _SCREEN_BAND_MINUTES),
+        _band_minutes(record, "q6_phone_holiday", _SCREEN_BAND_MINUTES),
+    )
+
+
 def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
+    
     reg = registered_records(records)
     total = len(reg)
     completed = complete_count(reg, "dseq_complete")
+    missing_count = max(total - completed, 0)
+
+    school_values: list[float] = []
+    weekend_values: list[float] = []
+    weighted_values: list[float] = []
+    diff_values: list[float] = []
+    tv_daily_values: list[float] = []
+    phone_daily_values: list[float] = []
+    pa_school_values: list[float] = []
+    pa_weekend_values: list[float] = []
+    pa_weighted_values: list[float] = []
+    scatter_points: list[tuple[float, float]] = []
+
+    age_buckets: dict[int, list[float]] = {age: [] for age in _STUDY_AGES}
+    sex_buckets: dict[str, list[float]] = {"Male": [], "Female": []}
+
+    for record in reg:
+        tv_school, tv_holiday, phone_school, phone_holiday = _record_screen_minutes(record)
+        school_total = tv_school + phone_school if tv_school is not None and phone_school is not None else None
+        weekend_total = tv_holiday + phone_holiday if tv_holiday is not None and phone_holiday is not None else None
+        if school_total is not None:
+            school_values.append(school_total)
+        if weekend_total is not None:
+            weekend_values.append(weekend_total)
+        weighted = _weighted_daily_minutes(school_total, weekend_total)
+        if weighted is not None:
+            weighted_values.append(weighted)
+        if school_total is not None and weekend_total is not None:
+            diff_values.append(round(weekend_total - school_total, 1))
+
+        tv_daily = _weighted_daily_minutes(tv_school, tv_holiday)
+        if tv_daily is not None:
+            tv_daily_values.append(tv_daily)
+        phone_daily = _weighted_daily_minutes(phone_school, phone_holiday)
+        if phone_daily is not None:
+            phone_daily_values.append(phone_daily)
+
+        pa_school = _band_minutes(record, "q11_outdoor_school", _ACTIVITY_BAND_MINUTES)
+        pa_weekend = _band_minutes(record, "q12_outdoor_holiday", _ACTIVITY_BAND_MINUTES)
+        if pa_school is not None:
+            pa_school_values.append(pa_school)
+        if pa_weekend is not None:
+            pa_weekend_values.append(pa_weekend)
+        pa_weighted = _weighted_daily_minutes(pa_school, pa_weekend)
+        if pa_weighted is not None:
+            pa_weighted_values.append(pa_weighted)
+
+        if weighted is not None and pa_weighted is not None:
+            scatter_points.append((weighted, pa_weighted))
+
+        age_years = compute_age_years(parse_date(record.get("child_dob")))
+        if weighted is not None and age_years in age_buckets:
+            age_buckets[age_years].append(weighted)
+
+        sex_label = resolve_value("baby_gender", record.get("baby_gender"), choice_maps).strip().title()
+        if weighted is not None and sex_label in sex_buckets:
+            sex_buckets[sex_label].append(weighted)
+
+    household_rules = response_breakdown(reg, "q9_household_rules", choice_maps)
 
     return {
         "instrument": "DSEQ",
@@ -339,6 +497,46 @@ def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, Choic
             "percent": percent(completed, total),
             "coverage_tier": coverage_tier(completed, total),
         },
+        "missing_count": missing_count,
+        "missing_percent": percent(missing_count, total),
+        "average_daily_summary": minutes_summary(weighted_values, total),
+        "school_day_summary": minutes_summary(school_values, total),
+        "weekend_summary": minutes_summary(weekend_values, total),
+        "difference_summary": minutes_summary(diff_values, total),
+        "school_vs_weekend": [
+            {"group": "School-Day", "mean": minutes_summary(school_values, total)["mean"],
+             "median": minutes_summary(school_values, total)["median"], "valid_n": len(school_values)},
+            {"group": "Weekend", "mean": minutes_summary(weekend_values, total)["mean"],
+             "median": minutes_summary(weekend_values, total)["median"], "valid_n": len(weekend_values)},
+        ],
+        "screen_time_distribution_minutes": bucket_counts(weighted_values, _SCREEN_MINUTES_BUCKET_EDGES, _SCREEN_MINUTES_BUCKET_LABELS),
+        "difference_distribution": bucket_counts(diff_values, _DIFF_MINUTES_BUCKET_EDGES, _DIFF_MINUTES_BUCKET_LABELS),
+        "by_age": [
+            {"group": f"{age} years", "mean": round(mean(vals), 1) if vals else None, "valid_n": len(vals)}
+            for age, vals in age_buckets.items()
+        ],
+        "by_sex": [
+            {"group": sex, "mean": round(mean(vals), 1) if vals else None, "valid_n": len(vals)}
+            for sex, vals in sex_buckets.items()
+        ],
+        "by_device": [
+            {"device": "Television", "mean_minutes": round(mean(tv_daily_values), 1) if tv_daily_values else None, "valid_n": len(tv_daily_values)},
+            {"device": "Smartphone/Tablet", "mean_minutes": round(mean(phone_daily_values), 1) if phone_daily_values else None, "valid_n": len(phone_daily_values)},
+            {"device": "Laptop/Computer", "mean_minutes": None, "valid_n": 0},
+        ],
+        "purpose_distribution": category_counts(reg, "q13_main_use", choice_maps),
+        "supervision_distribution": ordered_category_counts(reg, "q8_supervision", choice_maps),
+        "household_rules_distribution": [("Yes", household_rules["yes"]), ("No", household_rules["no"])],
+        "household_rules_valid_n": household_rules["valid_n"],
+        "physical_activity_school_day_summary": minutes_summary(pa_school_values, total),
+        "physical_activity_weekend_summary": minutes_summary(pa_weekend_values, total),
+        "physical_activity_school_vs_weekend": [
+            {"group": "School-Day", "mean": minutes_summary(pa_school_values, total)["mean"],
+             "median": minutes_summary(pa_school_values, total)["median"], "valid_n": len(pa_school_values)},
+            {"group": "Weekend", "mean": minutes_summary(pa_weekend_values, total)["mean"],
+             "median": minutes_summary(pa_weekend_values, total)["median"], "valid_n": len(pa_weekend_values)},
+        ],
+        "screen_vs_activity_scatter": [{"screen_minutes": s, "activity_minutes": a} for s, a in scatter_points],
         "total_screen_time_distribution": ordered_category_counts(reg, "q10_total_screen_time", choice_maps),
         "yes_no_items": [(label, yes_count(reg, field, choice_maps)) for field, label in DSEQ_YES_NO_ITEMS],
     }

@@ -180,9 +180,86 @@ class PhysicalActivityResponse(BaseModel):
     notes: dict[str, str]
 
 
+class MinutesSummary(BaseModel):
+    """A continuous minutes-per-day metric. Same denominator discipline as
+    ScoreSummary (valid_n + missing_n always sum to total; missing is never
+    treated as zero), plus median alongside mean - both are "estimated"
+    since DSEQ's underlying fields are banded categories converted to their
+    band midpoint in minutes, not a raw duration REDCap field."""
+
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    median: float | None
+    minimum: float | None
+    maximum: float | None
+
+
+class PairedMinutesPoint(BaseModel):
+    """One side (School-Day or Weekend) of a paired minutes comparison."""
+
+    group: str
+    mean: float | None
+    median: float | None
+    valid_n: int
+
+
+class GroupedMinutesPoint(BaseModel):
+    """Mean minutes for one demographic group (an age or sex)."""
+
+    group: str
+    mean: float | None
+    valid_n: int
+
+
+class DeviceMinutes(BaseModel):
+    """Mean estimated daily minutes attributable to one device. valid_n=0
+    and mean_minutes=None for a device with no genuine duration field
+    (laptop/computer) - never a fabricated zero."""
+
+    device: str
+    mean_minutes: float | None
+    valid_n: int
+
+
+class ScreenActivityPoint(BaseModel):
+    screen_minutes: float
+    activity_minutes: float
+
+
 class ScreenTimeResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
+    missing_count: int
+    missing_percent: float
+
+    # Primary continuous variable (minutes/day) - see module_analytics
+    # .build_screen_time_analysis for the full derivation/estimation notes.
+    average_daily_summary: MinutesSummary
+    school_day_summary: MinutesSummary
+    weekend_summary: MinutesSummary
+    difference_summary: MinutesSummary
+    school_vs_weekend: list[PairedMinutesPoint]
+    screen_time_distribution_minutes: list[CategoryCount]
+    difference_distribution: list[CategoryCount]
+    by_age: list[GroupedMinutesPoint]
+    by_sex: list[GroupedMinutesPoint]
+    by_device: list[DeviceMinutes]
+
+    purpose_distribution: list[CategoryCount]
+    supervision_distribution: list[CategoryCount]
+    household_rules_distribution: list[CategoryCount]
+    household_rules_valid_n: int
+
+    physical_activity_school_day_summary: MinutesSummary
+    physical_activity_weekend_summary: MinutesSummary
+    physical_activity_school_vs_weekend: list[PairedMinutesPoint]
+    screen_vs_activity_scatter: list[ScreenActivityPoint]
+
+    # Secondary/descriptive only - never the primary analysis (see PRIMARY
+    # RULE in the 2026-09-09 DSEQ specification).
     total_screen_time_distribution: list[CategoryCount]
     yes_no_items: list[CategoryCount]
     notes: dict[str, str]

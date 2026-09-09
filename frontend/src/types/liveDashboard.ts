@@ -153,9 +153,68 @@ export interface PhysicalActivityResponse {
   notes: Record<string, string>;
 }
 
+export interface MinutesSummary {
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  median: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface PairedMinutesPoint {
+  group: string;
+  mean: number | null;
+  median: number | null;
+  valid_n: number;
+}
+
+export interface GroupedMinutesPoint {
+  group: string;
+  mean: number | null;
+  valid_n: number;
+}
+
+export interface DeviceMinutes {
+  device: string;
+  mean_minutes: number | null;
+  valid_n: number;
+}
+
+export interface ScreenActivityPoint {
+  screen_minutes: number;
+  activity_minutes: number;
+}
+
 export interface ScreenTimeResponse {
   instrument: string;
   completion: InstrumentCompletion;
+  missing_count: number;
+  missing_percent: number;
+
+  average_daily_summary: MinutesSummary;
+  school_day_summary: MinutesSummary;
+  weekend_summary: MinutesSummary;
+  difference_summary: MinutesSummary;
+  school_vs_weekend: PairedMinutesPoint[];
+  screen_time_distribution_minutes: CategoryCount[];
+  difference_distribution: CategoryCount[];
+  by_age: GroupedMinutesPoint[];
+  by_sex: GroupedMinutesPoint[];
+  by_device: DeviceMinutes[];
+
+  purpose_distribution: CategoryCount[];
+  supervision_distribution: CategoryCount[];
+  household_rules_distribution: CategoryCount[];
+  household_rules_valid_n: number;
+
+  physical_activity_school_day_summary: MinutesSummary;
+  physical_activity_weekend_summary: MinutesSummary;
+  physical_activity_school_vs_weekend: PairedMinutesPoint[];
+  screen_vs_activity_scatter: ScreenActivityPoint[];
+
   total_screen_time_distribution: CategoryCount[];
   yes_no_items: CategoryCount[];
   notes: Record<string, string>;

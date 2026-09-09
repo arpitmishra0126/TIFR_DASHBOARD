@@ -1120,7 +1120,7 @@ Do not claim an instrument does not exist if it exists in PID 196.
 
 - **Health & Screening** (`/api/v1/dashboard/health`, `HealthScreeningResponse`): Child Illness History instrument completion + 11 named-condition Yes-counts (asthma, heart disease, TB, diabetes, thyroid, anaemia, malnutrition, kidney, liver, recurrent infections, other) + 8 general-flag Yes-counts (currently ill, chronic condition, hospitalised, allergy, vision/hearing difficulty, seizures, developmental diagnosis). No other CHH fields (e.g. health rating, fit-for-assessment) are in the approved dashboard analysis - they're exported in the Excel sheet only.
 - **Physical Activity** (`/api/v1/dashboard/physical-activity`, `PhysicalActivityResponse`): PAQ-A instrument completion + Item 1/Item 8/Total score summaries (REDCap-calculated fields `paq_item1_score`/`paq_item8_score`/`paq_total_score`; valid N/missing N/mean/min/max, never treating missing as zero) + a 4-bucket Total score distribution.
-- **Screen Time** (`/api/v1/dashboard/screen-time`, `ScreenTimeResponse`): DSEQ instrument completion + Q10 "Average Total Daily Screen Time" distribution + 3 Yes/No items (Q9 household rules, Q14 school use, Q15 entertainment use). Per-item TV/phone/laptop frequency breakdowns exist in the Excel export but are **not** part of the approved dashboard analysis.
+- **Screen Time** (`/api/v1/dashboard/screen-time`, `ScreenTimeResponse`) - superseded 2026-09-09, see the dedicated section below. DSEQ instrument completion + Q10 "Total Daily Screen Time" distribution + Q9/Q14/Q15 Yes/No items are kept as **secondary/descriptive** fields; the page's primary analysis is now a derived continuous minutes-per-day variable.
 - **Neurodevelopment** (`/api/v1/dashboard/neurodevelopment`, `NeurodevelopmentResponse`): SSRS Parent/Child/Teacher, each showing "children with any rating item answered", REDCap completion count, and cohort-level mean-of-per-child-means for the frequency and importance rating scales (same per-child derivation as the Excel export's `<Instrument>: Avg Frequency/Importance Rating` columns, aggregated here with no participant identifiers). Explicitly **not** a validated SSRS composite score. SSRS Teacher (0/212 live completions) shows `valid_n=0`/`mean=null` - computed the same way as Parent/Child, not a special-cased placeholder, so it will populate automatically once real Teacher data exists. The individual SSRS Teacher item ratings (`t43_rating`...`t51_rating`) are **not** part of the approved specification and remain unmapped (see `NEURODEVELOPMENT_STATUS` in `live_field_map.py`).
 
 `backend/app/ingestion/live_field_map.py`'s `HEALTH_SCREENING_STATUS`/`PHYSICAL_ACTIVITY_STATUS`/`SCREEN_TIME_STATUS` ledgers were updated to `available=True` for the metrics now actually computed (documentation correctness only - no dashboard calculation changed); `NEURODEVELOPMENT_STATUS` stays `available=False` since t43-t51 were never approved.
@@ -1128,6 +1128,183 @@ Do not claim an instrument does not exist if it exists in PID 196.
 Frontend: `HealthScreening.tsx`/`PhysicalActivity.tsx`/`ScreenTime.tsx`/`Neurodevelopment.tsx` now render real `KpiCard`/`ChartCard`/`CategoryBarChart`/`HorizontalBarChart` components (reused from Demographics/Overview - no new chart components were built) instead of the old `EmptyStateCard` (deleted, no longer used anywhere). Every KPI shows valid-N/missing-N or "of registered" context; a null mean renders as "-" with an explicit "No data acquired (0/N)" sublabel, never a fabricated 0.
 
 Tests: `backend/tests/test_module_analytics.py` (unit tests for every shared calculation) + service-level tests in `test_live_dashboard_service.py` + endpoint tests in `test_dashboard_endpoints.py`. Verified against **live REDCap data**: all 4 endpoints and their pages checked directly against the live API (e.g. Health & Screening 20/212 completed, 1 Anaemia + 1 Liver case; PAQ-A total score mean 2.47 over 19/212; DSEQ Q10 distribution across 20/212; SSRS Parent 20/212 with data, SSRS Teacher correctly 0/212 with null mean) - all cross-checking exactly against the earlier Excel export audit numbers. Backend: **105/105 tests pass**. Frontend build succeeds; both light and dark theme confirmed via headless-browser screenshots with zero console errors.
+
+---
+
+## SCREEN TIME (DSEQ) PAGE - REBUILT 2026-09-09 (senior DSEQ specification)
+
+Scope of this change: **only** `/screen-time` (`frontend/src/routes/ScreenTime.tsx`),
+its backend builder (`build_screen_time_analysis` in
+`backend/app/services/module_analytics.py`), `ScreenTimeResponse` and its
+new nested schemas (`backend/app/schemas/dashboard.py`), and
+`LiveDashboardService.get_screen_time()`. Overview, Registry, the other
+three assessment pages, and every other backend mapping/calculation are
+unchanged.
+
+**PRIMARY RULE (per the senior spec):** average daily screen time is
+analysed as a **continuous minutes-per-day variable**, not as the DSEQ Q10
+category. DSEQ Q10 stays on the page only as a secondary, purely
+descriptive cross-check.
+
+**Field-metadata finding that shapes everything below (confirmed live
+2026-09-09 via a direct REDCap `metadata` call for the `dseq` form):**
+**every** DSEQ field is a `radio` (4-5 level ordinal band) - there is **no**
+raw-minutes text/number field anywhere on the instrument, for screen time
+*or* physical activity. Per CLAUDE.md's "never assume a variable exists
+without checking metadata" / "if a metric is unavailable, say so" rules,
+this ruled out reading a literal minutes value from REDCap; instead each
+ordinal *code* (not label text, which has a documented bilingual
+slash-splitting quirk elsewhere - see `choice_maps.py`) is converted to the
+**midpoint of its band, in minutes** - a standard, transparent
+survey-research convention for turning banded categories into an
+analysable continuous proxy, not a fabricated per-child value. Every KPI/
+chart built on this says "estimated"/"est." - never presented as an exact
+duration. The open-ended top band of every field (e.g. "more than 2 hours")
+has no REDCap-defined upper bound; its minute value is a documented,
+conservative approximation (one half-band-width past the band's lower
+bound). All conversion tables/logic live in one place:
+`_SCREEN_BAND_MINUTES` / `_TOTAL_SCREEN_BAND_MINUTES` /
+`_ACTIVITY_BAND_MINUTES` / `_band_minutes()` / `_weighted_daily_minutes()`
+in `module_analytics.py`.
+
+**Primary continuous variable derivation:** per child, `school_day` minutes
+= TV-on-a-school-day (`q2_tv_school`) + smartphone/tablet-on-a-school-day
+(`q5_phone_school`) band-midpoints; `weekend` minutes = TV-on-a-holiday
+(`q3_tv_holiday`) + smartphone/tablet-on-a-holiday (`q6_phone_holiday`).
+**Laptop/computer (`q7_laptop_freq`) is deliberately excluded from every
+minutes total** - REDCap only captures its weekly-use *frequency*, never a
+duration, so there is no genuine variable to convert; inventing one would
+violate the "use only variables that actually exist" rule. The primary
+"Average Daily Screen Time" = a 5(school-day):2(weekend) weighted average
+of those two totals - `(school*5 + weekend*2)/7` - computed **only** when
+both sides are valid for that child (a missing side is never imputed as 0,
+so it correctly drops that child from this metric's `valid_n` rather than
+pulling the average down). The same pattern (weighted 5:2 average, missing
+side never zero-filled) is reused for DSEQ's own Section B outdoor-play
+items (`q11_outdoor_school`/`q12_outdoor_holiday`) to produce the page's
+"Physical Activity" section - this is DSEQ's own outdoor-play question,
+**distinct from the separate PAQ-A-based Physical Activity page**, so
+nothing is duplicated across pages.
+
+**`ScreenTimeResponse` (new/changed fields):** `missing_count`/
+`missing_percent` (instrument-level, `total - completed`); `MinutesSummary`
+(`valid_n`/`missing_n`/`total`/`percent_valid`/`mean`/`median`/`minimum`/
+`maximum` - median added alongside the existing `numeric_summary` pattern
+via a new `minutes_summary()` helper) for `average_daily_summary`,
+`school_day_summary`, `weekend_summary`, `difference_summary`,
+`physical_activity_school_day_summary`, `physical_activity_weekend_summary`;
+`PairedMinutesPoint` lists `school_vs_weekend` and
+`physical_activity_school_vs_weekend` (School-Day/Weekend mean+median+
+valid_n); `GroupedMinutesPoint` lists `by_age` (8/9/10 years only, per the
+spec) and `by_sex` (Male/Female); `DeviceMinutes` list `by_device`
+(Television, Smartphone/Tablet, and Laptop/Computer with `mean_minutes:
+null`/`valid_n: 0` - never fabricated); `screen_time_distribution_minutes`
+and `difference_distribution` (histogram buckets, `CategoryCount`);
+`purpose_distribution` (Q13), `supervision_distribution` (Q8, ordinal-
+ordered), `household_rules_distribution` + `household_rules_valid_n` (Q9,
+now a real Yes/No pair instead of a single Yes-count);
+`screen_vs_activity_scatter` (`ScreenActivityPoint` list, one point per
+child with **both** a valid weighted screen-time and weighted
+physical-activity value - empty, not fabricated, if no child qualifies).
+`total_screen_time_distribution` (Q10) and `yes_no_items` (Q9/Q14/Q15) are
+kept unchanged as the secondary/descriptive fields.
+
+**Frontend (`ScreenTime.tsx`), infographic-first, in this order:** Screen
+Time Summary (6 KPI cards: DSEQ Completed, Average Daily (est.), Median
+Daily (est.), School-Day (mean+median), Weekend (mean+median), Missing DSEQ
+Data) → School-Day vs Weekend (paired bar of mean/median + the Weekend−
+School-Day difference KPI/histogram) → Screen-Time Distribution (histogram
+of the estimated minutes, plus Q10's category distribution kept as a
+labelled secondary chart) → Screen Time by Demographics (age 8/9/10 and sex
+grouped bars) → Screen Use & Supervision (device stacked bar with an
+explicit laptop-exclusion note, purpose donut, supervision bar, household-
+rules donut) → Physical Activity (DSEQ Section B paired bar + the screen-
+vs-activity scatter, both showing an explicit "no data" message instead of
+an empty/fake chart when `valid_n` is 0) → the pre-existing Q9/Q14/Q15
+Yes/No behavioural-indicator list (unchanged, kept for continuity) →
+**Future Cognitive/Developmental Analysis**: 5 static "Under Development"
+placeholder cards (Screen Time × SANGIAN/Visual Working Memory/DCCS/Colour
+Detection Task/ASER) reusing the Assessments-hub's existing
+`.instrument-card`/`.instrument-card-placeholder` styling - no backend
+field, no fake numbers, no zero-value charts for these five.
+
+**New shared frontend chart components** (not page-specific, reusable by
+any future page): `frontend/src/components/charts/GroupedBarChart.tsx`
+(grouped or `stacked` multi-series bar chart, used for the paired School-
+Day/Weekend bars, age/sex grouped bars, and the device stacked bar) and
+`frontend/src/components/charts/ScreenActivityScatter.tsx` (Recharts
+scatter plot for the screen-time-vs-activity comparison). `CategoryBarChart`
+(existing) is reused for every histogram (bucket labels + counts) rather
+than building a separate histogram component.
+
+Verified against **live REDCap data** (212 registered, 44/212 DSEQ
+complete at time of check): average daily 48.2 min (median 45), school-day
+mean 45.7/median 45, weekend mean 54.5/median 45, difference mean +8.9 min;
+age 9 mean 47.3 (n=40), age 10 mean 57.9 (n=4), no age-8 children currently
+(`valid_n: 0`, `mean: null`, not fabricated); sex Male 52.5 (n=25) / Female
+42.6 (n=19); device TV 8.3 min / Smartphone 39.9 min / Laptop `null`
+(n=0); household rules 23 Yes / 21 No; all denominators cross-check
+internally (e.g. age 40+4=44, sex 25+19=44, household 23+21=44, matching
+`completed`). Backend: **131/131 tests pass** (127 prior + 4 new -
+`_band_minutes`/`_weighted_daily_minutes` unit tests plus one full
+`build_screen_time_analysis` integration test covering missing-side
+exclusion, by-age/by-sex/by-device denominators, and the scatter filter).
+Frontend `tsc --noEmit` and `npm run build` both succeed. A local backend +
+`vite` dev server confirmed the live endpoint and the `/screen-time` route
+both serve successfully; no browser-automation/screenshot tool was
+available this session, so pixel-level visual QA (chart rendering, both
+themes) was **not** performed - verify visually before treating this as
+demo-ready.
+
+**Refinement pass (2026-09-09, same day):**
+- **KPI layout fix**: the 6 Screen Time Summary cards previously used the
+  shared `.kpi-row` (`auto-fit, minmax(200px, 1fr)`), which at common
+  viewport widths fit 5 columns and left the 6th ("Missing DSEQ Data")
+  alone on its own row. New CSS modifier `.kpi-row-balanced-6` (scoped to
+  this page only, not a change to `.kpi-row` itself) forces a fixed
+  3-column grid (2 even rows of 3), collapsing to 2 then 1 column below
+  860px/480px.
+- **Average Daily Screen Time KPI reworded** to "Estimated Average Daily
+  Screen Time" with sublabel "5:2 school-day/weekend weighted estimate -
+  n=X/Y - median Z min", making the derivation method and its estimated
+  (not measured) nature explicit in the KPI itself, not just the page
+  subtitle. Calculation is unchanged.
+- **Weekend − School-Day Difference histogram**: `module_analytics.py`'s
+  `_DIFF_MINUTES_BUCKET_EDGES`/`_LABELS` changed from 5 broad, qualitatively
+  hand-labelled buckets ("More than 30 min less on weekends", etc.) to 6
+  numeric-range bins (`< -60 min`, `-60 to -30 min`, ... `60+ min`) - a
+  true histogram of the derived difference rather than manually-labelled
+  categories. The underlying calculation (`weekend_total - school_total`
+  per child, `bucket_counts()`) and denominators are unchanged; valid n is
+  shown in the chart's subtitle.
+- **Age/sex sample sizes made permanently visible**: `ScreenTime.tsx`'s
+  `groupedToBar()` now folds `n=` into the chart's own group/axis label
+  (e.g. "9 years (n=40)", "Male (n=25)") for the by-age and by-sex charts,
+  not only in the hover tooltip, so a displayed mean is never shown without
+  its denominator alongside it. `pairedToGrouped()` (School-Day/Weekend,
+  PA School-Day/Weekend) is unchanged - it already carries n via tooltip
+  and its own subtitle/KPI text.
+- **Device limitation note tightened** to one concise sentence ("Laptop/
+  computer excluded - REDCap records only its weekly-use frequency, not
+  duration.") - same fact, less text; no computation change.
+- **"Key behavioural indicators" (Q9/Q14/Q15) section removed** from
+  `ScreenTime.tsx` - Q9 (household rules) duplicated the already-present
+  Household Screen Rules donut in Screen Use & Supervision, and Q14/Q15
+  were carried over from the pre-2026-09-09 approved scope rather than
+  being part of the senior's DSEQ redesign's required visual list, so per
+  this task's explicit instruction the whole section was removed rather
+  than partially kept. `data.yes_no_items` remains in `ScreenTimeResponse`
+  (backend field/API contract unchanged) - it is simply no longer rendered
+  on this page. `ProportionBar` import removed from `ScreenTime.tsx` as it
+  has no other use on this page.
+- Future Cognitive/Developmental Analysis placeholders (SANGIAN/VWM/DCCS/
+  Colour Detection/ASER) are unchanged.
+Backend: **131/131 tests pass** (no test asserted the old qualitative diff
+labels, so none needed updating). Frontend `tsc --noEmit` and
+`npm run build` both succeed. Scope was verified to touch only
+`ScreenTime.tsx`, `module_analytics.py`'s difference-bucket constants, and
+one new CSS modifier - no REDCap field mapping, Overview, Registry, or
+other assessment page was changed.
 
 ---
 

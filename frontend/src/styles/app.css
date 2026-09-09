@@ -590,6 +590,28 @@ a, button {
   gap: var(--space-4);
 }
 
+/* Screen Time's 6-card Summary row: auto-fit's column count depends on
+   viewport width, which can leave one card alone on a second row (e.g. 5
+   columns fit, 1 wraps). Scoped to this modifier (Screen Time only) rather
+   than changing the shared .kpi-row used by other pages' KPI rows - a fixed
+   3-column grid always divides 6 cards into two even rows, collapsing to 2
+   then 1 column on narrower screens. */
+.kpi-row-balanced-6 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 860px) {
+  .kpi-row-balanced-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-row-balanced-6 {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- Study Snapshot: one cohesive information strip, not four separate
    boxed cards. A single frame (border/shadow) holds all four metrics,
    each an equal-width column separated by a hairline divider. Live REDCap
