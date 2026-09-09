@@ -49,6 +49,70 @@ async def test_registry_includes_registered_child_with_incomplete_registration_f
     assert rec6.registration_complete is False
 
 
+@pytest.mark.asyncio
+async def test_registry_instrument_status_and_progression_stage(service: LiveDashboardService):
+    result = await service.get_registry()
+    by_id = {c.redcap_child_id: c for c in result.children}
+
+    # REC001: full core battery + SSRS Child, but not SSRS Teacher.
+    assert by_id["REC001"].core_battery_complete is True
+    assert by_id["REC001"].instrument_status["ssrs_child"] is True
+    assert by_id["REC001"].instrument_status["ssrs_teacher"] is False
+    assert by_id["REC001"].progression_stage == "SSRS Child"
+
+    # REC002: full pipeline through SSRS Teacher.
+    assert by_id["REC002"].progression_stage == "SSRS Teacher"
+
+    # REC004: partial core battery (dietary_intake missing) -> not complete, stays at Registered.
+    assert by_id["REC004"].core_battery_complete is False
+    assert by_id["REC004"].instrument_status["dietary_intake"] is False
+    assert by_id["REC004"].progression_stage == "Registered"
+
+    # REC005: registered only, nothing else started.
+    assert by_id["REC005"].core_battery_complete is False
+    assert all(v is False for k, v in by_id["REC005"].instrument_status.items() if k != "registration")
+
+
+@pytest.mark.asyncio
+async def test_registry_missing_instrument_filter(service: LiveDashboardService):
+    result = await service.get_registry(missing_instrument="dietary_intake")
+    ids = {c.redcap_child_id for c in result.children}
+    # REC001/REC002/REC003 completed dietary_intake (part of core_complete); REC004/REC005/REC006 did not.
+    assert ids == {"REC004", "REC005", "REC006"}
+
+
+@pytest.mark.asyncio
+async def test_registry_core_battery_complete_filter(service: LiveDashboardService):
+    result = await service.get_registry(core_battery_complete=True)
+    ids = {c.redcap_child_id for c in result.children}
+    assert ids == {"REC001", "REC002", "REC003"}
+
+
+@pytest.mark.asyncio
+async def test_registry_progression_stage_filter(service: LiveDashboardService):
+    result = await service.get_registry(progression_stage="SSRS Teacher")
+    ids = {c.redcap_child_id for c in result.children}
+    assert ids == {"REC002"}
+
+
+@pytest.mark.asyncio
+async def test_registry_progression_stage_filter_accepts_comma_separated_list(service: LiveDashboardService):
+    result = await service.get_registry(progression_stage="Core Assessment Battery,SSRS Child")
+    ids = {c.redcap_child_id for c in result.children}
+    # REC003: core battery complete, SSRS Child not started -> "Core Assessment Battery".
+    # REC001: core battery + SSRS Child complete, not SSRS Teacher -> "SSRS Child".
+    # REC002 (full pipeline through SSRS Teacher) must be excluded.
+    assert ids == {"REC001", "REC003"}
+
+
+@pytest.mark.asyncio
+async def test_registry_data_review_filter_flags_incomplete_profile(service: LiveDashboardService):
+    result = await service.get_registry(data_review=True)
+    ids = {c.redcap_child_id for c in result.children}
+    # REC005 has no child_dob set -> age_years is None -> flagged for data review.
+    assert "REC005" in ids
+
+
 # --- Overview: core battery / SSRS progression (the actual correction) ---
 
 

@@ -89,6 +89,9 @@ export interface RegistryChild {
   child_status: string | null;
   visit_date: string | null;
   registration_complete: boolean;
+  instrument_status: Record<string, boolean>;
+  core_battery_complete: boolean;
+  progression_stage: "Registered" | "Core Assessment Battery" | "SSRS Child" | "SSRS Teacher";
 }
 
 export interface RegistryResponse {

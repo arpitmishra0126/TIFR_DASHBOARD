@@ -925,21 +925,89 @@ asserted from memory. All 8 routes, both export formats (xlsx/csv), and
 every dashboard endpoint re-checked with 200 OK against a live local
 backend after the navigation/Overview redesign.
 
-### Participants
+### Participants (Registry) - redesigned 2026-09-09 as a study-operations panel
 
-Operational participant/registry view (`frontend/src/routes/Registry.tsx`).
+`frontend/src/routes/Registry.tsx` is a **find -> filter -> understand -> act**
+operational tool, deliberately distinct from Overview - no cohort KPIs/study
+profile/coverage charts are duplicated here.
 
-Contains:
+**Quick Queries** (`Study Operations` panel above the table) - actionable
+filters, not KPI cards:
+- **Assessment Follow-up** - children who cleared the Core Assessment Battery
+  gate but haven't yet cleared SSRS Teacher (`progression_stage` in
+  `{Core Assessment Battery, SSRS Child}`) - i.e. eligible/pending for their
+  next pipeline stage. Same cumulative definition as the Assessment Progress
+  funnel; no clinical/date rule invented (per this feature's explicit "do not
+  hardcode a follow-up-window rule" instruction).
+- **Incomplete Assessments** - Core Assessment Battery not yet complete
+  (`core_battery_complete=false`).
+- **Missing Instrument** - pick any of the 9 live instruments; shows
+  participants NOT complete on it (`missing_instrument=<key>`).
+- **Follow-up Window** - a generic visit-date range filter
+  (`visit_date_from`/`visit_date_to`) on the existing `visit_date` field - a
+  user-driven date range, not a hardcoded "+N days" protocol rule.
+- **Data Review** - registered children with an incomplete demographic
+  profile (missing sex/village/age) - a data-quality flag, not a clinical
+  rule.
 
-- Child ID
-- Sex
-- Age
-- Village
-- registration/status information
-- search
-- filtering
-- pagination
-- **"Export Active Cases" button** - see Export Feature section below.
+Quick Queries compose with the normal filters (search/sex/village) and are
+mutually exclusive with each other (selecting one clears any other active
+quick query) - all sent as query params to the same `/dashboard/registry`
+endpoint.
+
+**Participant table**: Child ID/Sex/Age/Village plus a compact per-instrument
+status view (✓/– dot per instrument: SES, DSEQ, Child Illness History, PAQ-A,
+Dietary Intake, SSRS Parent/Child/Teacher) and a pipeline-stage `StatusBadge`
+(Registered/Core Assessment Battery/SSRS Child/SSRS Teacher) - no long status
+text. Row click opens a compact slide-over **Participant Detail** panel
+(registration, status, visit date, pipeline stage, and the same per-instrument
+list) - study-statistics-free, participant-level only.
+
+**Result count**: shown above the table/export bar as "N matching
+participants" whenever any filter/quick query is active, "N registered
+participants" otherwise.
+
+**Export scoped to the current view**: both export buttons now read
+"Export Active Cases (Excel/CSV)" when unfiltered, or
+"Export matching participants (N) (Excel/CSV)" whenever a filter/quick query
+is active - the current search/sex/village/quick-query state is passed as
+query params to the export endpoints, so the downloaded file always matches
+what the table currently shows (still scoped to *active* cases within that
+filtered set - the Active Case definition is unchanged).
+
+**Backend additions supporting this** (`RegistryChild` schema, additive only
+- no existing field/calculation changed):
+- `instrument_status: dict[str, bool]` - per-instrument completion for all 9
+  live instruments (same keys as `ALL_INSTRUMENTS`), read straight from each
+  instrument's own REDCap completion field.
+- `core_battery_complete: bool` - same `CORE_BATTERY_COMPLETE_FIELDS`
+  definition used everywhere else.
+- `progression_stage` - same cumulative Registered -> Core Assessment
+  Battery -> SSRS Child -> SSRS Teacher definition as the funnel.
+
+New shared filter helper `_apply_registry_filters()` in
+`live_dashboard_service.py` (search, sex, village, `missing_instrument`,
+`core_battery_complete`, `progression_stage` [comma-separated list of exact
+stage names], `visit_date_from`/`visit_date_to`, `data_review`) is used by
+BOTH `get_registry()` and `get_active_cases_export()`/
+`get_active_cases_csv_export()`, so "export the currently filtered result"
+can never diverge from what the Registry table shows. New query params
+mirrored on `/dashboard/registry`, `/dashboard/export/active-cases`, and
+`/dashboard/export/active-cases.csv` in `api/routes/dashboard.py`. No REDCap
+mapping, denominator, analytics/scoring calculation, or the Active Case
+definition itself changed.
+
+Verified: backend **127/127** tests pass (6 new registry-filter tests in
+`test_live_dashboard_service.py`); frontend `tsc --noEmit` and `npm run
+build` succeed. Live-checked against REDCap (212 registered, 44 currently
+Core Assessment Battery complete): `instrument_status`/`core_battery_complete`/
+`progression_stage` all present and correct on live records; `missing_instrument`,
+`core_battery_complete`, `progression_stage` (including the comma-separated
+form), and `data_review` filters all cross-checked against the live
+`/dashboard/overview` counts; filtered Excel/CSV exports confirmed to contain
+only the matching row count. UI interaction was not verified in a live
+browser this session (no browser-automation tool was available) - verify
+visually before relying on this for a demo.
 
 ### Assessment Progress
 
@@ -1110,7 +1178,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **121/121 passing** (as of the 2026-09-03 senior-requirements audit + implementation - see that section above). Frontend `npm run build` succeeds.
+Backend test count: **127/127 passing** (121 as of the 2026-09-03 senior-requirements audit + implementation, +6 for the 2026-09-09 Registry redesign's filter/quick-query logic - see the "Participants (Registry)" section above). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

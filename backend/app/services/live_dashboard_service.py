@@ -103,6 +103,18 @@ def _child_id(record: dict) -> str:
     return (record.get("child_id") or "").strip()
 
 
+def _progression_stage(record: dict, core_battery_complete: bool) -> str:
+    """Same cumulative definition as the Assessment Progress funnel:
+    Registered -> Core Assessment Battery -> SSRS Child -> SSRS Teacher."""
+    if not core_battery_complete:
+        return "Registered"
+    if not parse_complete_flag(record.get(SSRS_CHILD_COMPLETE_FIELD)):
+        return "Core Assessment Battery"
+    if not parse_complete_flag(record.get(SSRS_TEACHER_COMPLETE_FIELD)):
+        return "SSRS Child"
+    return "SSRS Teacher"
+
+
 def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> RegistryChild | None:
     child_id = _child_id(record)
     if not child_id:
@@ -110,6 +122,8 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
 
     dob = parse_date(record.get("child_dob"))
     visit_date = parse_date(record.get("visit_date"))
+    instrument_status = {key: parse_complete_flag(record.get(field)) for key, field, _ in ALL_INSTRUMENTS}
+    core_battery_complete = all(parse_complete_flag(record.get(f)) for f in CORE_BATTERY_COMPLETE_FIELDS)
     return RegistryChild(
         redcap_child_id=child_id,
         sex=capitalize_label(_resolve_or_raw("baby_gender", record.get("baby_gender"), choice_maps)),
@@ -119,6 +133,9 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
         child_status=_resolve_or_raw("baby_status", record.get("baby_status"), choice_maps),
         visit_date=visit_date.isoformat() if visit_date else None,
         registration_complete=parse_complete_flag(record.get(REGISTRATION_COMPLETE_FIELD)),
+        instrument_status=instrument_status,
+        core_battery_complete=core_battery_complete,
+        progression_stage=_progression_stage(record, core_battery_complete),
     )
 
 
@@ -243,6 +260,52 @@ def _core_battery_ids(records: list[dict]) -> set[str]:
     return result
 
 
+def _apply_registry_filters(
+    children: list[RegistryChild],
+    *,
+    search: str | None = None,
+    sex: str | None = None,
+    village: str | None = None,
+    missing_instrument: str | None = None,
+    core_battery_complete: bool | None = None,
+    progression_stage: str | None = None,
+    visit_date_from: str | None = None,
+    visit_date_to: str | None = None,
+    data_review: bool = False,
+) -> list[RegistryChild]:
+    """Shared Registry filter set - used by both the paginated Registry
+    listing and the Active Cases exports, so 'export the currently filtered
+    result' can never diverge from what the Registry table actually shows."""
+    if search:
+        needle = search.strip().lower()
+        children = [c for c in children if needle in c.redcap_child_id.lower()]
+    if sex:
+        children = [c for c in children if (c.sex or "").strip().lower() == sex.strip().lower()]
+    if village:
+        children = [c for c in children if (c.village or "").strip().lower() == village.strip().lower()]
+    if missing_instrument:
+        children = [c for c in children if not c.instrument_status.get(missing_instrument, False)]
+    if core_battery_complete is not None:
+        children = [c for c in children if c.core_battery_complete == core_battery_complete]
+    if progression_stage:
+        # Comma-separated list of exact stage names supported (e.g. the
+        # Registry "Assessment Follow-up" quick query needs "cleared the
+        # Core Assessment Battery gate but hasn't finished SSRS Teacher",
+        # which is two stages: "Core Assessment Battery" and "SSRS Child").
+        stages = {s.strip() for s in progression_stage.split(",") if s.strip()}
+        children = [c for c in children if c.progression_stage in stages]
+    if visit_date_from:
+        children = [c for c in children if c.visit_date and c.visit_date >= visit_date_from]
+    if visit_date_to:
+        children = [c for c in children if c.visit_date and c.visit_date <= visit_date_to]
+    if data_review:
+        # Registered children with an incomplete demographic profile - a
+        # generic data-quality flag (missing sex/village/age), not a
+        # clinical/protocol rule.
+        children = [c for c in children if not c.sex or not c.village or c.age_years is None]
+    return children
+
+
 class LiveDashboardService:
     def __init__(self, repository: LiveRedCapRepository) -> None:
         self._repository = repository
@@ -257,16 +320,32 @@ class LiveDashboardService:
     def _normalize_children(self, records: list[dict], choice_maps: dict[str, ChoiceMap]) -> list[RegistryChild]:
         return [c for r in records if (c := _normalize_child(r, choice_maps)) is not None]
 
-    async def get_active_cases_export(self, force: bool = False) -> bytes:
-        """Build the Active Cases newsletter workbook (.xlsx bytes) from live data."""
+    async def get_active_cases_export(
+        self,
+        force: bool = False,
+        **filters,
+    ) -> bytes:
+        """Build the Active Cases newsletter workbook (.xlsx bytes) from live
+        data. Optional Registry filter kwargs (see _apply_registry_filters)
+        scope the export to the same set currently shown in the Registry
+        table, rather than always exporting every active case."""
         records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
+        if filters:
+            children = _apply_registry_filters(children, **filters)
         return build_active_cases_workbook(children, records, choice_maps)
 
-    async def get_active_cases_csv_export(self, force: bool = False) -> str:
-        """Build the Active Cases CSV export from live data."""
+    async def get_active_cases_csv_export(
+        self,
+        force: bool = False,
+        **filters,
+    ) -> str:
+        """Build the Active Cases CSV export from live data - see
+        get_active_cases_export for the optional filter kwargs."""
         records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
+        if filters:
+            children = _apply_registry_filters(children, **filters)
         return build_active_cases_csv(children, records)
 
     async def get_registry(
@@ -274,20 +353,30 @@ class LiveDashboardService:
         search: str | None = None,
         sex: str | None = None,
         village: str | None = None,
+        missing_instrument: str | None = None,
+        core_battery_complete: bool | None = None,
+        progression_stage: str | None = None,
+        visit_date_from: str | None = None,
+        visit_date_to: str | None = None,
+        data_review: bool = False,
         limit: int = 50,
         offset: int = 0,
         force: bool = False,
     ) -> RegistryResponse:
         records, choice_maps = await self._load(force=force)
         children = self._normalize_children(records, choice_maps)
-
-        if search:
-            needle = search.strip().lower()
-            children = [c for c in children if needle in c.redcap_child_id.lower()]
-        if sex:
-            children = [c for c in children if (c.sex or "").strip().lower() == sex.strip().lower()]
-        if village:
-            children = [c for c in children if (c.village or "").strip().lower() == village.strip().lower()]
+        children = _apply_registry_filters(
+            children,
+            search=search,
+            sex=sex,
+            village=village,
+            missing_instrument=missing_instrument,
+            core_battery_complete=core_battery_complete,
+            progression_stage=progression_stage,
+            visit_date_from=visit_date_from,
+            visit_date_to=visit_date_to,
+            data_review=data_review,
+        )
 
         total = len(children)
         page = children[offset : offset + limit]

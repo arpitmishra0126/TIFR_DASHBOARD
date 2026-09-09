@@ -5,7 +5,7 @@ provides - see app.ingestion.live_field_map for the field-by-field
 availability ledger. Modules with no live source data return an explicit
 `available=False` shape rather than an empty-looking populated one.
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SexDistribution(BaseModel):
@@ -84,6 +84,19 @@ class RegistryChild(BaseModel):
     child_status: str | None
     visit_date: str | None
     registration_complete: bool
+    # Per-instrument completion (all 9 live REDCap instruments, keyed by the
+    # same instrument keys as ALL_INSTRUMENTS/InstrumentCoverage - e.g. "ses",
+    # "dseq", "ssrs_child"), computed straight from each instrument's own
+    # REDCap completion field. Powers the Registry participant x assessment
+    # status view and the "Missing Instrument" quick query.
+    instrument_status: dict[str, bool] = Field(default_factory=dict)
+    # All six Core Assessment Battery instruments complete for this child -
+    # same CORE_BATTERY_COMPLETE_FIELDS definition used everywhere else.
+    core_battery_complete: bool = False
+    # Cumulative pipeline position, same definition as the Assessment
+    # Progress funnel: Registered -> Core Assessment Battery -> SSRS Child ->
+    # SSRS Teacher.
+    progression_stage: str = "Registered"
 
 
 class RegistryResponse(BaseModel):
