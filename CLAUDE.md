@@ -1200,6 +1200,66 @@ defined (still used by the separate `:root[data-theme="dark"] body` rule,
 which is unchanged - this was a light-theme-only change). Frontend
 `tsc --noEmit` and `npm run build` both succeed; no backend files touched.
 
+**Tinted regions brightened (2026-09-09, same day - palette values only, no
+layout/component change):** the white canvas above made the existing pastel
+tone tints read as washed out, so the shared alpha values behind every
+colored tint were raised slightly (still soft/pastel, not saturated/neon).
+Changed only CSS custom-property values in `app.css` - no new classes, no
+component/JSX changes, no layout/spacing/typography/functionality change:
+- Root status backgrounds (`--status-good-bg`, `--status-warning-bg`,
+  `--status-neutral-bg`, light theme `#e6f6e6`/`#fdf1dd`/`#eef0f4` -\>
+  `#d9f2d9`/`#fbebc7`/`#e6e9f1`; dark theme alphas raised ~0.16-\>0.2) - these
+  feed `StatusBadge` (good/warning/neutral) and the coverage
+  `.status-flag-tag-*` chips everywhere they're used (Overview, Registry
+  Stage column, Assessments, Assessment Progress), so badge/status
+  visibility improved consistently across all three areas from one edit.
+- `.quick-query-tone-{blue,green,violet,amber,coral}` (Registry Quick Query
+  cards, the active-query panel, `.active-filter-chip`, and
+  `.registry-instrument-col-highlighted` table-column tint - all already
+  shared off these same classes) - soft-tint alpha raised from ~0.08-0.10 to
+  ~0.14-0.18, the "-strong" active-state ring alpha from ~0.24-0.26 to
+  ~0.30-0.34 (dark-theme equivalents raised proportionally).
+- `.kpi-tone-*` and `.snapshot-tone-*` (Overview KPI/Snapshot cards and
+  instrument icon chips) bumped by the same proportion, so the tone system
+  stays visually consistent between Overview and Registry rather than only
+  fixing Registry in isolation.
+Text colors, `--series-*`/`--status-good`/`--status-warning`/
+`--status-critical` (the saturated foreground/icon colors), white
+`--surface-1` card backgrounds, borders, shadows, and every tone's color
+*meaning* (which query/instrument/status maps to which hue) are unchanged.
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend files
+touched.
+
+**Global vertical spacing tightened (2026-09-09, same day - shared layout
+tokens only, no component/content change):** an earlier pass (2026-09-08)
+had tightened the above-the-fold header spacing only on Overview, via a
+page-specific `.overview-page` CSS override. This pass promoted those same
+tightened values into the shared rules every page already uses, so Registry
+and the Assessments hub/detail pages now match Overview instead of only
+Overview being compact:
+- `.app-content`'s top padding (every route's shared content wrapper in
+  `Layout.tsx`) went from a uniform `--space-6`/32px to `calc(--space-6 *
+  0.6)` ≈ 19px (~40% reduction) - side/bottom padding unchanged.
+- `.page-header` margin-bottom: `--space-6` (32px) -\> `--space-4` (16px).
+- `.page-header-eyebrow` margin-bottom: `--space-3` (12px) -\> 6px.
+- `.page-header-subtitle` margin-top: `--space-2` (8px) -\> 3px.
+- `.section-header:first-of-type` (the first section heading on every
+  page, e.g. Registry's "Quick Queries") margin-bottom: `--space-4` (16px)
+  -\> `--space-3` (12px).
+The now-redundant `.overview-page .page-header`/`-eyebrow`/`-subtitle`/
+`.section-header:first-of-type` overrides were removed as dead CSS (their
+values are now the shared defaults); `.overview-page
+.snapshot-strip + .section-header` was kept as-is since it targets a
+structure (`.snapshot-strip`) that only exists on Overview. `PageBackNav`
+("Back"/"Back to Home", `frontend/src/components/PageBackNav.tsx` +
+`.page-back-nav`/`.back-nav-button` CSS) was **not** touched - it keeps its
+existing top-right alignment, size, and styling; it simply sits closer to
+the nav now because the shared `.app-content` padding above it shrank, the
+same effect every page's content gets. No component internal padding,
+Quick Query card sizing, chart/table sizing, or PageHeader/SectionHeader
+markup changed - only the shared spacing tokens around them. Frontend
+`tsc --noEmit` and `npm run build` both succeed; no backend files touched.
+
 ---
 
 ## EXPORT FEATURE - IMPLEMENTED (2026-08-26; CSV format, Excel field-audit expansion, and Excel grouped/analytical refinement all added same day)
