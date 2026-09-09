@@ -1306,6 +1306,22 @@ labels, so none needed updating). Frontend `tsc --noEmit` and
 one new CSS modifier - no REDCap field mapping, Overview, Registry, or
 other assessment page was changed.
 
+**Scatter plot fix (2026-09-09, same day):** the "Screen Time vs Physical
+Activity" scatter (`frontend/src/components/charts/ScreenActivityScatter.tsx`)
+had overlapping/repeating Y-axis text - both axes set a Recharts `unit="
+min/day"` (appended to *every* tick, e.g. "40 min/day") **and** a separate
+axis-title `label` also saying "(min/day)", so the unit text collided with
+the rotated Y-axis title. Fix: removed the `unit` prop from both axes so
+ticks render as plain numbers; the single axis-title `label` is the only
+place "(min/day)" now appears. Also darkened/regularized the tick and
+axis-title text (`var(--text-muted)` → `var(--text-secondary)`, title
+weight 600) to match the rest of the page's chart typography - not bold,
+just no longer looking faint. Y-axis title/tooltip wording changed from
+"Outdoor activity" to "Outdoor play" per this fix's exact wording. No
+data, point positions, scale/domain, `n=44`, or chart height/margins
+changed - this was a label-rendering fix only. Frontend `tsc --noEmit` and
+`npm run build` both succeed; no other DSEQ chart or page touched.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)

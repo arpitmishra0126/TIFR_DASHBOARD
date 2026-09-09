@@ -17,22 +17,34 @@ export default function ScreenActivityScatter({ data, height = 260 }: ScreenActi
           type="number"
           dataKey="screen_minutes"
           name="Screen time"
-          unit=" min/day"
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          tick={{ fill: "var(--text-secondary)", fontSize: 11, fontWeight: 500 }}
           axisLine={{ stroke: "var(--baseline)" }}
           tickLine={false}
-          label={{ value: "Estimated screen time (min/day)", position: "insideBottom", offset: -2, fill: "var(--text-muted)", fontSize: 11 }}
+          label={{
+            value: "Estimated screen time (min/day)",
+            position: "insideBottom",
+            offset: -2,
+            fill: "var(--text-secondary)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
         />
         <YAxis
           type="number"
           dataKey="activity_minutes"
-          name="Outdoor activity"
-          unit=" min/day"
-          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          name="Outdoor play"
+          tick={{ fill: "var(--text-secondary)", fontSize: 11, fontWeight: 500 }}
           axisLine={false}
           tickLine={false}
           width={44}
-          label={{ value: "Outdoor activity (min/day)", angle: -90, position: "insideLeft", fill: "var(--text-muted)", fontSize: 11 }}
+          label={{
+            value: "Outdoor play (min/day)",
+            angle: -90,
+            position: "insideLeft",
+            fill: "var(--text-secondary)",
+            fontSize: 12,
+            fontWeight: 600,
+          }}
         />
         <ZAxis range={[70, 70]} />
         <Tooltip
