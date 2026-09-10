@@ -39,12 +39,18 @@ const GEOMETRY = {
     minHeight: 150,
   },
   dense: {
-    rowHeight: 28,
+    // Row height and category gap both nudged up slightly (from 28/14%) for
+    // a bit more breathing room between bars - `barSize` (bar thickness)
+    // is unchanged, so this adds space around each bar rather than making
+    // bars themselves larger. Every dependent value (computeHorizontalBar
+    // ChartHeight, the multi-line tick's dy math) reads this constant, so
+    // row-height alignment stays exact.
+    rowHeight: 32,
     lineHeight: 13,
     tickFontSize: 11,
     barSize: 16,
     barRadius: [0, 3, 3, 0] as [number, number, number, number],
-    categoryGap: "14%",
+    categoryGap: "20%",
     margin: { top: 2, right: 58, left: 0, bottom: 2 },
     minHeight: 110,
   },

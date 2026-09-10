@@ -477,15 +477,26 @@ against the chart's right edge, especially in a narrower column; this was
 the root cause of the "squeezed" SES chart, not a ResponsiveContainer or
 grid sizing defect.
 
-**Known data characteristic (not a bug, flagged for the study team)**: the
-10 Dietary Intake frequency fields' (`die_*_freq`) REDCap choice labels are
-**Hindi-only** (no English segment at all, confirmed live 2026-09-03 - 
-unlike most other bilingual fields in this project, which are "English
-/Hindi"). `choice_maps.py`'s English-segment extraction has nothing English
-to extract for these, so the Dietary Intake page currently displays these
-category labels in Hindi, exactly as REDCap defines them - no English
-label was invented. This needs a study-team decision (translate on the
-REDCap form, or accept Hindi-only category labels on this one page).
+**Known data characteristic - Hindi-only REDCap choice labels, resolved by
+a frontend display translation (2026-09-10):** the 10 Dietary Intake
+frequency fields' (`die_*_freq`) REDCap choice labels, plus the separate
+`die_other_freq` item, are **Hindi-only** (no English segment at all,
+confirmed live - unlike most other bilingual fields in this project, which
+are "English/Hindi"). `choice_maps.py`'s English-segment extraction has
+nothing English to extract for these, so the API still returns/resolves
+these labels in Hindi exactly as REDCap defines them - **no backend
+mapping, choice code, or stored value was changed**. Per an explicit senior
+request that the dashboard present in English, `frontend/src/routes
+/DietaryIntake.tsx` now has a small display-only lookup,
+`FREQUENCY_LABEL_EN` (the 8 known Hindi choice strings -> English:
+Daily/3-6 times per week/1-2 times per week/Once every 15 days/Monthly/
+Once every 6 months/Annually/Rarely-Never), applied via
+`toEnglishFrequencyLabel()` just before charting the 10 food-group
+distributions and before rendering the Other Food Specified table's
+Frequency column. A label with no match (should never occur for these 8
+known categories) renders unchanged rather than disappearing. This is a
+presentation mapping only - REDCap choice codes, the API's resolved label
+text, category ordering, and every denominator/calculation are unchanged.
 
 **Dietary Intake - portion size + Other Food Specified (2026-09-09,
 implemented after a read-only inspection pass against the senior's
@@ -683,6 +694,34 @@ used (Overview/Demographics' SES and village charts get the same
 with no visible change there since they were never hitting recharts'
 tick-skipping threshold in the first place). Backend: 138/138 tests pass
 (unaffected). Frontend `tsc --noEmit` and `npm run build` both succeed.
+
+**English chart labels + slightly more vertical row spacing (2026-09-10,
+presentation-only, no data/calculation/mapping change):** two senior-
+requested refinements, both scoped to Dietary Intake's charts:
+- **English labels**: see the "Known data characteristic" note above -
+  `DietaryIntake.tsx` now translates the 8 Hindi `die_*_freq`/`die_other_freq`
+  choice labels to English for display via a local lookup
+  (`FREQUENCY_LABEL_EN`/`toEnglishFrequencyLabel()`), applied to the 10
+  food-group chart distributions and the Other Food Specified table's
+  Frequency column. Backend/API/REDCap side is completely unchanged.
+- **Row spacing**: `HorizontalBarChart.tsx`'s `dense` geometry (used only by
+  Dietary Intake - confirmed no other page opts into `dense`) had its
+  `rowHeight` raised from 28 to 32px and `categoryGap` from 14% to 20%;
+  `barSize` (bar thickness) is unchanged, so this adds breathing room
+  around each bar rather than enlarging the bars themselves. Both
+  `computeHorizontalBarChartHeight()` and the multi-line tick renderer read
+  the same `GEOMETRY.dense.rowHeight` constant, so row-height alignment
+  (bars centered in their row, ticks matching their bar) stays exact - no
+  separate fix needed. Since `dense` is Dietary-Intake-only today, no other
+  page's charts are visually affected by this change.
+Re-verified visually via a full-page headless-browser screenshot against
+live REDCap data: all 10 food-group charts show English labels, all 8
+categories (including zero-count ones, e.g. Grains' zero-count rows) still
+render with reserved row space, bars remain aligned with their labels, and
+the extra vertical spacing is clearly visible without reintroducing the
+excessive whitespace the earlier density pass had removed. Frontend
+`tsc --noEmit` and `npm run build` both succeed; no backend files touched
+(backend: 143/143 tests still pass, unaffected).
 
 ---
 

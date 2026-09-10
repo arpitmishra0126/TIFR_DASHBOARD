@@ -17,11 +17,35 @@ const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   "No Data": "neutral",
 };
 
-// Wide enough for the longest known REDCap frequency choice labels
-// (including the Hindi-only die_*_freq categories - see CLAUDE.md) without
+// Wide enough for the longest known REDCap frequency choice labels without
 // truncating; shared by every food-group chart so their y-axis columns
 // line up.
 const FOOD_GROUP_LABEL_WIDTH = 190;
+
+// Display-only English labels for the 10 die_*_freq fields' Hindi-only
+// REDCap choices (confirmed live, e.g. die_grains_freq: "1, प्रतिदिन | 2,
+// सप्ताह में 3-6 बार | ..." - see CLAUDE.md's "Known data characteristic"
+// note) and the separate die_other_freq item, which shares the identical
+// 8-level scale. This is a presentation mapping only, applied just before
+// charting/table rendering - the REDCap choice codes, the resolved label
+// text returned by the API, and every calculation/denominator/ordering
+// upstream of this file are completely unchanged. A label with no match
+// here (should never occur for these known 8 categories) renders as-is
+// rather than disappearing.
+const FREQUENCY_LABEL_EN: Record<string, string> = {
+  "प्रतिदिन": "Daily",
+  "सप्ताह में 3-6 बार": "3–6 times/week",
+  "सप्ताह में 1-2 बार": "1–2 times/week",
+  "15 दिनों में एक बार": "Once every 15 days",
+  "मासिक": "Monthly",
+  "6 महीने में एक बार": "Once every 6 months",
+  "वार्षिक": "Annually",
+  "शायद ही कभी/कभी नहीं": "Rarely/Never",
+};
+
+function toEnglishFrequencyLabel(label: string): string {
+  return FREQUENCY_LABEL_EN[label] ?? label;
+}
 
 export default function DietaryIntake() {
   const [data, setData] = useState<DietaryIntakeResponse | null>(null);
@@ -41,7 +65,9 @@ export default function DietaryIntake() {
 
   const { completion } = data;
   const otherFood = data.other_food_specified;
-  const distributions = data.items.map((item) => item.distribution.map((c) => ({ label: c.code, count: c.count })));
+  const distributions = data.items.map((item) =>
+    item.distribution.map((c) => ({ label: toEnglishFrequencyLabel(c.code), count: c.count })),
+  );
   const sharedChartHeight = computeHorizontalBarChartHeight(distributions, FOOD_GROUP_LABEL_WIDTH, true);
 
   return (
@@ -105,7 +131,7 @@ export default function DietaryIntake() {
                 <tr key={`${entry.food_name}-${index}`}>
                   <td>{entry.food_name}</td>
                   <td>{entry.portion_status === "recorded" ? entry.portion : entry.portion_status === "not_applicable" ? "Not applicable (rarely/never)" : "Not answered"}</td>
-                  <td>{entry.frequency_status === "recorded" ? entry.frequency : "Not answered"}</td>
+                  <td>{entry.frequency_status === "recorded" && entry.frequency ? toEnglishFrequencyLabel(entry.frequency) : "Not answered"}</td>
                 </tr>
               ))}
             </tbody>
