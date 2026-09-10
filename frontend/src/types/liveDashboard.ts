@@ -143,6 +143,29 @@ export interface HealthScreeningResponse {
   notes: Record<string, string>;
 }
 
+export interface ScoredItemSummary {
+  key: string;
+  label: string;
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface WeeklyActivityDay {
+  day: string;
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
 export interface PhysicalActivityResponse {
   instrument: string;
   completion: InstrumentCompletion;
@@ -150,6 +173,9 @@ export interface PhysicalActivityResponse {
   item8_summary: ScoreSummary;
   total_summary: ScoreSummary;
   total_score_distribution: CategoryCount[];
+  item_scores: ScoredItemSummary[];
+  weekly_activity: WeeklyActivityDay[];
+  item10_exclusion: ConditionIndicator;
   notes: Record<string, string>;
 }
 
@@ -188,11 +214,19 @@ export interface ScreenActivityPoint {
   activity_minutes: number;
 }
 
+export interface DseqCodingScores {
+  frequency: ScoreSummary;
+  duration: ScoreSummary;
+  supervision: ScoreSummary;
+  household_rules: ScoreSummary;
+}
+
 export interface ScreenTimeResponse {
   instrument: string;
   completion: InstrumentCompletion;
   missing_count: number;
   missing_percent: number;
+  coding_scores: DseqCodingScores;
 
   average_daily_summary: MinutesSummary;
   school_day_summary: MinutesSummary;

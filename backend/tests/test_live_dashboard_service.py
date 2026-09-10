@@ -221,7 +221,7 @@ async def test_overview_instrument_coverage_uses_readable_labels(service: LiveDa
     assert labels["ses"] == "SES"
     assert labels["dseq"] == "DSEQ"
     assert labels["child_illness_history"] == "Child Illness History"
-    assert labels["paq_a"] == "PAQ-A"
+    assert labels["paq_a"] == "PAQ-C"
     assert labels["dietary_intake"] == "Dietary Intake"
     assert labels["ssrs_parent"] == "SSRS Parent"
 
@@ -368,7 +368,7 @@ async def test_progress_core_battery_description_matches_required_wording(servic
     result = await service.get_progress()
     core_stage = next(s for s in result.stages if s.key == "core_assessment_battery")
     assert core_stage.description == (
-        "SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent completed."
+        "SES, DSEQ, Child Illness History, PAQ-C, Dietary Intake and SSRS Parent completed."
     )
 
 
@@ -415,7 +415,7 @@ async def test_health_screening_reports_real_completion_and_conditions(service: 
 @pytest.mark.asyncio
 async def test_physical_activity_reports_real_score_summaries(service: LiveDashboardService):
     result = await service.get_physical_activity()
-    assert result.instrument == "PAQ-A"
+    assert result.instrument == "PAQ-C"
     assert result.total_summary.valid_n == 1
     assert result.total_summary.missing_n == 5
     assert result.total_summary.mean == 3.2

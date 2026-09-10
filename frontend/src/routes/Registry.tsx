@@ -22,7 +22,7 @@ const INSTRUMENT_COLUMNS: { key: string; short: string; label: string }[] = [
   { key: "ses", short: "SES", label: "SES" },
   { key: "dseq", short: "DSEQ", label: "DSEQ" },
   { key: "child_illness_history", short: "CHH", label: "Child Illness History" },
-  { key: "paq_a", short: "PAQ-A", label: "PAQ-A" },
+  { key: "paq_a", short: "PAQ-C", label: "PAQ-C" },
   { key: "dietary_intake", short: "Diet", label: "Dietary Intake" },
   { key: "ssrs_parent", short: "SSRS-P", label: "SSRS Parent" },
   { key: "ssrs_child", short: "SSRS-C", label: "SSRS Child" },

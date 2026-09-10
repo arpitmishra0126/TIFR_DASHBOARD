@@ -371,19 +371,78 @@ def build_health_screening_analysis(records: list[dict], choice_maps: dict[str, 
     }
 
 
+# --- PAQ-C item-level fields (approved 2026-09-10 scoring specification) ---
+# Confirmed live against the `paq_c` REDCap form's own metadata, including
+# each `calc` field's actual formula (not assumed): `paq_item1_score` =
+# mean of the 27 spare-time activity items (REDCap's own calc); `paq_q2_pe`
+# .. `paq_q7_describe` are single retained radio scores (1-5 each, no
+# averaging); `paq_item8_score` = REDCap's own calc, the mean of
+# `paq_q8_mon`..`paq_q8_sun` (each answered on the approved None=1/
+# Little=2/Medium=3/Often=4/Very often=5 scale). `paq_total_score` =
+# REDCap's own calc, `(item1 + q2..q7 + item8)/8`.
+#
+# Numbering note: REDCap's own field labels call the Monday-Sunday mean
+# "Item 8" and the illness/exclusion item "Item 9". The study's *approved*
+# scoring specification numbers these one higher - the Monday-Sunday mean
+# is "Item 9" (see the Key Scores cards) and the illness/exclusion item is
+# "Item 10" - because the specification counts the daily-activity question
+# itself as "Item 8" (a block of 7 sub-answers) and its derived mean as the
+# separate "Item 9". Both numbering schemes describe the exact same REDCap
+# fields; only the label shown to users follows the approved numbering.
+PAQC_ITEM_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("item1", "paq_item1_score", "Item 1 - Spare-Time Activities"),
+    ("item2", "paq_q2_pe", "Item 2 - Physical Education Class"),
+    ("item3", "paq_q3_lunch", "Item 3 - Lunchtime Activity"),
+    ("item4", "paq_q4_afterschool", "Item 4 - After School"),
+    ("item5", "paq_q5_evening", "Item 5 - Evenings"),
+    ("item6", "paq_q6_weekend", "Item 6 - Weekend"),
+    ("item7", "paq_q7_describe", "Item 7 - Self-Description"),
+    ("item8", "paq_item8_score", "Item 8/9 - Daily Activity (Mon-Sun mean)"),
+)
+
+PAQC_WEEKDAY_FIELDS: tuple[tuple[str, str], ...] = (
+    ("Monday", "paq_q8_mon"),
+    ("Tuesday", "paq_q8_tue"),
+    ("Wednesday", "paq_q8_wed"),
+    ("Thursday", "paq_q8_thu"),
+    ("Friday", "paq_q8_fri"),
+    ("Saturday", "paq_q8_sat"),
+    ("Sunday", "paq_q8_sun"),
+)
+
+PAQC_ITEM10_FIELD = "paq_q9_sick"
+PAQC_ITEM10_LABEL = "Item 10 - Illness or Prevented Activity"
+
+
 def build_physical_activity_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
     reg = registered_records(records)
     total = len(reg)
-    completed = complete_count(reg, "paq_a_complete")
+    # The REDCap form was renamed live from "PAQ-A" (paq_a) to "PAQ C"
+    # (paq_c) - confirmed 2026-09-10 via the REDCap `instrument` API - so
+    # its completion field is now paq_c_complete, not paq_a_complete. The
+    # score fields below were NOT renamed and are unchanged.
+    completed = complete_count(reg, "paq_c_complete")
 
     item1 = numeric_values(reg, "paq_item1_score", parse_float)
     item8 = numeric_values(reg, "paq_item8_score", parse_float)
     total_scores = numeric_values(reg, "paq_total_score", parse_float)
 
+    item_scores = [
+        {"key": key, "label": label, **numeric_summary(numeric_values(reg, field, parse_float), total)}
+        for key, field, label in PAQC_ITEM_FIELDS
+    ]
+
+    weekly_activity = [
+        {"day": day, **numeric_summary(numeric_values(reg, field, parse_float), total)}
+        for day, field in PAQC_WEEKDAY_FIELDS
+    ]
+
+    item10_exclusion = build_condition_indicator(reg, PAQC_ITEM10_FIELD, PAQC_ITEM10_LABEL, choice_maps, completed)
+
     return {
-        "instrument": "PAQ-A",
+        "instrument": "PAQ-C",
         "completion": {
-            "instrument": "PAQ-A",
+            "instrument": "PAQ-C",
             "completed": completed,
             "total_registered": total,
             "percent": percent(completed, total),
@@ -393,7 +452,68 @@ def build_physical_activity_analysis(records: list[dict], choice_maps: dict[str,
         "item8_summary": numeric_summary(item8, total),
         "total_summary": numeric_summary(total_scores, total),
         "total_score_distribution": bucket_counts(total_scores, PAQA_SCORE_BUCKET_EDGES, PAQA_SCORE_BUCKET_LABELS),
+        "item_scores": item_scores,
+        "weekly_activity": weekly_activity,
+        "item10_exclusion": item10_exclusion,
     }
+
+
+# --- DSEQ Coding Scores (approved 2026-09-10 coding specification) ---
+# Traced against the live `dseq` form's own metadata: REDCap's own numeric
+# choice codes on each field below are IDENTICAL to the approved coding
+# scale (Never=0/1-2 days=1/3-5 days=2/6-7 days=3 for Frequency; Does not
+# use=0/<30min=1/30min-1hr=2/1-2hrs=3/>2hrs=4 for Duration; Always=3/
+# Often=2/Sometimes=1/Never=0 for Supervision; Yes=1/No=0 for Rules) - so
+# no re-coding/transformation is applied, only reading each field's own
+# REDCap-stored numeric code directly.
+#
+# Frequency: q1_tv_freq (TV), q4_phone_freq (smartphone/tablet), and
+# q7_laptop_freq (laptop/computer) share the exact same 4-level
+# Never..6-7 days/week scale (confirmed live: identical
+# select_choices_or_calculations string on all three). q11_outdoor_school/
+# q12_outdoor_holiday were considered and excluded - they use a *different*
+# 1-4 scale (no "Never"/0 option) and belong to DSEQ Section B (Physical
+# Activity), not Section A (Screen Time), per the form's own section
+# headers.
+DSEQ_FREQUENCY_FIELDS: tuple[str, ...] = ("q1_tv_freq", "q4_phone_freq", "q7_laptop_freq")
+
+# Duration: the 4 screen-duration fields sharing the exact same 5-level
+# Does not use/watch..>2 hours scale (TV and smartphone/tablet, each on a
+# school day and a holiday). q11_outdoor_school/q12_outdoor_holiday were
+# again excluded - same Section B / different-scale reasoning as above
+# (their own scale starts at 1, with no "Does not use" 0-level).
+DSEQ_DURATION_FIELDS: tuple[str, ...] = ("q2_tv_school", "q3_tv_holiday", "q5_phone_school", "q6_phone_holiday")
+
+# Supervision and Household Rules are each a single REDCap field - no
+# pooling needed.
+DSEQ_SUPERVISION_FIELD = "q8_supervision"
+DSEQ_HOUSEHOLD_RULES_FIELD = "q9_household_rules"
+
+# q14_school_use/q15_entertainment_use were evaluated for a "Yes/No
+# Indicators" coding-score card and deliberately NOT included: they are
+# both individually Yes=1/No=0 coded, but they measure two unrelated
+# constructs (school/homework use vs. entertainment use, not two items on
+# one underlying scale) - averaging them would produce a number with no
+# defensible meaning (e.g. a "0.5" doesn't describe any real construct).
+# This matches the project's own existing precedent - DSEQ_YES_NO_ITEMS
+# above already reports q9/q14/q15 as three independent Yes-counts, never
+# as one averaged composite. No aggregate card is built for q14/q15; this
+# is a reported pending item, not an invented metric.
+
+
+def _pooled_dseq_coded_score(records: list[dict], fields: tuple[str, ...], total_registered: int) -> dict:
+    """Descriptive coded-score summary pooling every individual valid
+    response across `fields` into one list (not a per-child average) -
+    the simplest, least-invented way to summarize several parallel
+    same-scale items into one domain-level figure. `total` for the
+    percent-valid/missing-N denominator is `total_registered * len(fields)`
+    - the number of individual item-responses that would exist if every
+    registered child had answered every field in this domain - kept
+    separate from (never substituted for) instrument-level completion."""
+    pooled_values: list[float] = []
+    for field in fields:
+        pooled_values.extend(numeric_values(records, field, parse_float))
+    return numeric_summary(pooled_values, total_registered * len(fields))
 
 
 _SCREEN_MINUTES_BUCKET_EDGES: list[float] = [30, 60, 90, 120, 180, 240]
@@ -488,6 +608,13 @@ def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, Choic
 
     household_rules = response_breakdown(reg, "q9_household_rules", choice_maps)
 
+    coding_scores = {
+        "frequency": _pooled_dseq_coded_score(reg, DSEQ_FREQUENCY_FIELDS, total),
+        "duration": _pooled_dseq_coded_score(reg, DSEQ_DURATION_FIELDS, total),
+        "supervision": numeric_summary(numeric_values(reg, DSEQ_SUPERVISION_FIELD, parse_float), total),
+        "household_rules": numeric_summary(numeric_values(reg, DSEQ_HOUSEHOLD_RULES_FIELD, parse_float), total),
+    }
+
     return {
         "instrument": "DSEQ",
         "completion": {
@@ -539,6 +666,7 @@ def build_screen_time_analysis(records: list[dict], choice_maps: dict[str, Choic
         "screen_vs_activity_scatter": [{"screen_minutes": s, "activity_minutes": a} for s, a in scatter_points],
         "total_screen_time_distribution": ordered_category_counts(reg, "q10_total_screen_time", choice_maps),
         "yes_no_items": [(label, yes_count(reg, field, choice_maps)) for field, label in DSEQ_YES_NO_ITEMS],
+        "coding_scores": coding_scores,
     }
 
 

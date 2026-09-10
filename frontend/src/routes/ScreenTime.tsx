@@ -14,7 +14,7 @@ import StudyDataLoader from "../components/StudyDataLoader";
 import GroupedBarChart from "../components/charts/GroupedBarChart";
 import ScreenActivityScatter from "../components/charts/ScreenActivityScatter";
 import { useRefresh } from "../context/RefreshContext";
-import type { GroupedMinutesPoint, MinutesSummary, PairedMinutesPoint, ScreenTimeResponse } from "../types/liveDashboard";
+import type { GroupedMinutesPoint, MinutesSummary, PairedMinutesPoint, ScoreSummary, ScreenTimeResponse } from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
@@ -32,6 +32,18 @@ const FUTURE_ANALYSES = [
 
 function minutesLabel(value: number | null): string {
   return value === null ? "—" : `${value} min`;
+}
+
+// Approved DSEQ coding specification (2026-09-10). Each card's value is a
+// derived coded-score summary (pooled or single-field mean of REDCap's own
+// numeric codes) - a descriptive statistic, not a validated clinical scale.
+function codingScoreValue(summary: ScoreSummary): string {
+  return summary.mean !== null ? summary.mean.toFixed(2) : "-";
+}
+
+function codingScoreSublabel(summary: ScoreSummary, range: string): string {
+  if (summary.valid_n === 0) return `${range} · no data (0/${summary.total})`;
+  return `${range} · n=${summary.valid_n}/${summary.total} (${summary.percent_valid}%)`;
 }
 
 function pairedToGrouped(points: PairedMinutesPoint[]) {
@@ -117,7 +129,7 @@ export default function ScreenTime() {
   const summaryOf = (m: MinutesSummary) => `n=${m.valid_n}/${m.total} · median ${minutesLabel(m.median)}`;
 
   return (
-    <section>
+    <section className="screen-time-page">
       <PageHeader
         eyebrow="Study Assessment"
         title="Screen Time"
@@ -128,6 +140,35 @@ export default function ScreenTime() {
         <StatusBadge
           label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
+        />
+      </div>
+
+      {/* --- DSEQ Coding Scores --- */}
+      <SectionHeader title="DSEQ Coding Scores" note="Derived coded scores · not validated clinical scale scores" />
+      <div className="kpi-row coding-score-row">
+        <KpiCard
+          tone="blue"
+          label="Frequency Score"
+          value={codingScoreValue(data.coding_scores.frequency)}
+          sublabel={codingScoreSublabel(data.coding_scores.frequency, "Range 0–3")}
+        />
+        <KpiCard
+          tone="violet"
+          label="Duration Score"
+          value={codingScoreValue(data.coding_scores.duration)}
+          sublabel={codingScoreSublabel(data.coding_scores.duration, "Range 0–4")}
+        />
+        <KpiCard
+          tone="aqua"
+          label="Supervision Score"
+          value={codingScoreValue(data.coding_scores.supervision)}
+          sublabel={codingScoreSublabel(data.coding_scores.supervision, "Range 0–3")}
+        />
+        <KpiCard
+          tone="amber"
+          label="Household Rules Score"
+          value={codingScoreValue(data.coding_scores.household_rules)}
+          sublabel={codingScoreSublabel(data.coding_scores.household_rules, "Range 0–1")}
         />
       </div>
 
@@ -238,7 +279,7 @@ export default function ScreenTime() {
       </div>
 
       {/* --- Physical Activity (DSEQ Section B) --- */}
-      <SectionHeader title="Physical Activity" note="DSEQ Section B (outdoor play), separate from the PAQ-A Physical Activity page" />
+      <SectionHeader title="Physical Activity" note="DSEQ Section B (outdoor play), separate from the PAQ-C Physical Activity page" />
       {paAnyData ? (
         <div className="chart-grid two-col">
           <ChartCard title="Outdoor Play: School-Day vs Weekend" subtitle="Mean and median, minutes/day (est.)">

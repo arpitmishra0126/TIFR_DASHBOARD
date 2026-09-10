@@ -103,7 +103,7 @@ def test_physical_activity_endpoint_returns_real_score_summaries():
     response = client.get("/api/v1/dashboard/physical-activity")
     assert response.status_code == 200
     body = response.json()
-    assert body["instrument"] == "PAQ-A"
+    assert body["instrument"] == "PAQ-C"
     assert body["total_summary"]["valid_n"] == 1
     assert body["total_summary"]["missing_n"] == 5
     assert body["total_summary"]["mean"] == 3.2
@@ -120,6 +120,10 @@ def test_screen_time_endpoint_returns_real_distribution():
     assert dist_list == [("Less than 30 minutes", 0), ("30 minutes-1 hour", 1)]
     yes_no = {c["code"]: c["count"] for c in body["yes_no_items"]}
     assert yes_no["Household has screen-use rules (Q9)"] == 1
+    for domain in ("frequency", "duration", "supervision", "household_rules"):
+        assert domain in body["coding_scores"]
+        for key in ("valid_n", "missing_n", "total", "percent_valid", "mean", "minimum", "maximum"):
+            assert key in body["coding_scores"][domain]
 
 
 def test_dietary_intake_endpoint_returns_per_food_group_distribution():

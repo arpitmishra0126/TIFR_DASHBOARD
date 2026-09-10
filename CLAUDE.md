@@ -121,7 +121,7 @@ The correct project contains these 9 instruments:
 2. SES
 3. DSEQ
 4. Child Illness History
-5. PAQ-A
+5. PAQ-C
 6. Dietary Intake
 7. SSRS Parent
 8. SSRS Child
@@ -129,7 +129,46 @@ The correct project contains these 9 instruments:
 
 The project is classic/non-longitudinal.
 
-Field-level content is mapped into the **dashboard modules** (Overview/Registry/Demographics/Progress) for **Registration** and **SES** only - the other 6 instruments still show only completion status there. Separately, the **Active Cases Excel export** (see EXPORT FEATURE below) additionally reads real acquired/derived field-level data from **DSEQ, Child Illness History, PAQ-A, and Dietary Intake** (approved per the 2026-08-26 field audit) - this is export-only and does not change any dashboard module or calculation. SSRS Parent/Child/Teacher remain completion-status-only everywhere (dashboard and export) - their item-level data is mostly empty in the live project today and was not approved for export. See `backend/app/ingestion/live_field_map.py` for the dashboard field-availability ledger and `backend/app/services/export_service.py`'s `ACTIVE_CASES_FIELD_SPECS` for the export's field-by-field documentation.
+**PAQ-A → PAQ-C rename (fixed 2026-09-10):** the live REDCap Physical
+Activity instrument was renamed on the REDCap side from "PAQ-A" (form
+`paq_a`) to "PAQ C" (form `paq_c`) - confirmed via the REDCap `instrument`
+API. REDCap auto-derives a form's completion field name from the form
+name, so this also silently changed the completion field from
+`paq_a_complete` to `paq_c_complete`. `paq_a_complete` was still hardcoded
+in `CORE_BATTERY_INSTRUMENTS` (`live_field_map.py`) and
+`build_physical_activity_analysis()` (`module_analytics.py`), so every
+`LIVE_FIELDS`-driven record fetch (Overview, Registry, Physical Activity,
+the Excel/CSV export) started failing with REDCap's `"The following values
+in the parameter 'fields' are not valid: 'paq_a_complete'"` error, surfaced
+to the frontend as a 502 on `/dashboard/registry` (and every other
+endpoint, since they all share the same record fetch). Fixed by updating
+the completion field to `paq_c_complete` in both places, and the display
+label from "PAQ-A" to "PAQ-C" everywhere it represents the current live
+instrument (`CORE_BATTERY_INSTRUMENTS`'s label, `CORE_BATTERY_DESCRIPTION`,
+`build_physical_activity_analysis()`'s `instrument` field). The
+`paq_item1_score`/`paq_item8_score`/`paq_total_score` REDCap-calculated
+score fields were **not** renamed on the REDCap side and are unchanged.
+The internal dict/route key `"paq_a"` (used to match instrument status
+across `RegistryChild.instrument_status`, `ALL_INSTRUMENTS`,
+`all_instrument_coverage`, and frontend code) was deliberately **left
+as-is** - it's a stable internal identifier, never sent to REDCap, same
+precedent as `core_assessment_battery` staying an internal key after its
+own display-label rename. The Active Cases Excel export's own hardcoded
+group header (`_GROUP_E = "E. PAQ-A"`) and Data Dictionary/Summary-sheet
+prose in `export_service.py` were deliberately left saying "PAQ-A" -
+out of scope for this fix, consistent with this export's established
+precedent of frozen wording (see EXPORT FEATURE below) - only the CSV
+export's `<Instrument> Status` column header changed automatically to
+"PAQ-C Status" since it derives from the now-corrected shared
+`CORE_BATTERY_INSTRUMENTS` label (not a separate hardcoded string).
+Verified: backend 138/138 tests pass; the full live `LIVE_FIELDS` list
+(336 fields, including `paq_c_complete`) is accepted by REDCap's record
+export; `/api/v1/dashboard/overview` and
+`/api/v1/dashboard/registry?limit=25&offset=0` both return 200 against
+live REDCap (212 registered, PAQ-C 44/212 complete, matching the other
+core-battery instruments' live completion counts).
+
+Field-level content is mapped into the **dashboard modules** (Overview/Registry/Demographics/Progress) for **Registration** and **SES** only - the other 6 instruments still show only completion status there. Separately, the **Active Cases Excel export** (see EXPORT FEATURE below) additionally reads real acquired/derived field-level data from **DSEQ, Child Illness History, PAQ-C, and Dietary Intake** (approved per the 2026-08-26 field audit) - this is export-only and does not change any dashboard module or calculation. SSRS Parent/Child/Teacher remain completion-status-only everywhere (dashboard and export) - their item-level data is mostly empty in the live project today and was not approved for export. See `backend/app/ingestion/live_field_map.py` for the dashboard field-availability ledger and `backend/app/services/export_service.py`'s `ACTIVE_CASES_FIELD_SPECS` for the export's field-by-field documentation.
 
 ---
 
@@ -140,7 +179,7 @@ Core Assessment Battery means ALL SIX of these instruments are complete for the 
 - SES
 - DSEQ
 - Child Illness History
-- PAQ-A
+- PAQ-C
 - Dietary Intake
 - SSRS Parent
 
@@ -702,6 +741,42 @@ theme-toggle buttons as icon-only controls (functionality preserved) and
 drops the last-updated text and nav links in favor of the hamburger menu.
 Brand title truncates with an ellipsis rather than wrapping/overflowing on
 very narrow screens.
+
+**Header status-control vertical centering + timestamp contrast (2026-09-10,
+CSS-only, no functional change; refined same day - see below):** the live
+badge/last-updated/refresh/theme-toggle group in `.topnav-header-row` read
+as pinned to the row's top edge. `.last-updated` gained
+`color: var(--text-secondary)` (darker than the previous inherited
+`--text-muted`) and `font-weight: 600` for stronger contrast against the
+white header; the live badge and buttons' own colors/styling are
+untouched.
+
+The first attempt at the vertical fix used a `position: relative; top: 2px`
+nudge on `.topnav-status`/`.app-topbar`. Measurement showed the group was
+already within ~1px of `.topnav-header-row`'s true center (that row's
+height is set almost entirely by the 34px theme-toggle button + its own
+padding), so a pixel-offset hack was the only way to move it at all - it
+didn't survive review. **Refined fix (same day):** real padding
+redistributed between the header's two rows instead, with zero pixel
+hacks and centering left entirely to the existing `align-items: center`:
+`.topnav-header-row`'s padding is now top-biased, `1rem var(--space-6)
+0.6rem` (was `0.65rem var(--space-6) 0.5rem`), and `.topnav-links`'
+bottom padding was reduced by the exact same amount it grew by, `0.15rem
+var(--space-6) 0.2rem` (was `0.15rem var(--space-6) 0.65rem`). Measured
+before/after: `.app-topnav`'s total height is unchanged (96.6px both
+times, sub-pixel rounding only); the status/control group's content now
+sits a real, visible 5.6px lower with balanced padding around it (16px
+top / ~10px bottom around the 34px-tall content, vs. the original tight
+10.4px/8px); nav-link elements themselves (size, gap, position relative to
+each other) are pixel-identical before/after - only the whitespace *below*
+the nav-links row (before page content starts) shrank by the same ~7.6px
+the status row gained, keeping the header's combined height fixed without
+touching link items. `align-items: center` (unchanged, already present on
+both rows) does the actual centering, so this holds responsively at any
+viewport width, including the icon-only mobile layout below 900px.
+Verified with headless-browser screenshots + `getBoundingClientRect()`
+measurements before and after. Frontend `tsc --noEmit` and `npm run build`
+both succeed; no backend files touched.
 
 The dashboard should look like a polished modern clinical/research analytics dashboard, not a Streamlit/admin template.
 
@@ -1316,7 +1391,124 @@ Do not claim an instrument does not exist if it exists in PID 196.
 **IMPLEMENTED as real analytics (2026-08-26)** - the Active Cases Excel export's "DOMAIN ANALYSIS" section (see EXPORT FEATURE below) was approved as the official V1 analytical specification, and these four pages now render real live data instead of a placeholder. Source of truth for every metric: `backend/app/services/module_analytics.py` - a shared calculation engine used by BOTH these dashboard endpoints and the Excel export's Summary sheet (export_service.py imports its low-level helpers and field-list constants from this module), so the two can never compute different numbers for the same metric. Population = **all registered children** (same convention as Overview/Demographics/Progress), not "Active Cases" (the export's newsletter-specific scope) - only the underlying arithmetic is shared, not the population filter.
 
 - **Health & Screening** (`/api/v1/dashboard/health`, `HealthScreeningResponse`): Child Illness History instrument completion + 11 named-condition Yes-counts (asthma, heart disease, TB, diabetes, thyroid, anaemia, malnutrition, kidney, liver, recurrent infections, other) + 8 general-flag Yes-counts (currently ill, chronic condition, hospitalised, allergy, vision/hearing difficulty, seizures, developmental diagnosis). No other CHH fields (e.g. health rating, fit-for-assessment) are in the approved dashboard analysis - they're exported in the Excel sheet only.
-- **Physical Activity** (`/api/v1/dashboard/physical-activity`, `PhysicalActivityResponse`): PAQ-A instrument completion + Item 1/Item 8/Total score summaries (REDCap-calculated fields `paq_item1_score`/`paq_item8_score`/`paq_total_score`; valid N/missing N/mean/min/max, never treating missing as zero) + a 4-bucket Total score distribution.
+- **Physical Activity** (`/api/v1/dashboard/physical-activity`, `PhysicalActivityResponse`): PAQ-C instrument completion + Item 1/Item 8/Total score summaries (REDCap-calculated fields `paq_item1_score`/`paq_item8_score`/`paq_total_score`; valid N/missing N/mean/min/max, never treating missing as zero) + a 4-bucket Total score distribution.
+
+**PAQ-C Key Scores section (2026-09-10, `PhysicalActivity.tsx` only - no
+backend field/schema/calculation change):** a compact 3-card "PAQ-C Key
+Scores" `KpiCard` row (reusing the existing `.kpi-row`/`KpiCard` design
+language, no new components) was added directly below the Instrument
+Completion badge and before the Total score distribution chart, replacing
+the page's previous ad-hoc "Item 1/Item 8/Total score" KPI row. Traced
+against the live `paq_c` REDCap form's metadata (including each `calc`
+field's own formula) before implementing:
+- **Final PAQ-C Score** = `total_summary` (`paq_total_score`) - REDCap's
+  own calc, `(item1 + q2..q7 + item8)/8`; its field label already says
+  "excludes item 9" (REDCap's numbering for the illness/exclusion item,
+  `paq_q9_sick`) - the only "final" score field on the instrument, and it
+  already satisfies "the exclusion item is not included" with no code
+  change needed.
+- **Item 9 Score** = `item8_summary` (`paq_item8_score`) - REDCap's own
+  calc, the mean of `paq_q8_mon`..`paq_q8_sun` (each on the approved
+  None=1/Little=2/Medium=3/Often=4/Very often=5 scale).
+- **Daily Activity Score** = the **same** `item8_summary` value. The
+  approved spec's own text ("Daily Activity Score: Item 8 scored
+  None=1...Very often=5") describes the identical Monday-Sunday scale as
+  "Item 9 Score" ("mean of Monday-Sunday scores") - there is no second,
+  independently-collected REDCap field for a distinct Daily Activity
+  Score anywhere on the live `paq_c` form, so both cards intentionally
+  read the same summary rather than inventing a second calculation. This
+  is documented in code comments and locked in by a new backend test,
+  `test_physical_activity_key_scores_match_approved_paqc_specification`
+  in `test_module_analytics.py`.
+Each card shows the mean (2 dp), a static "Range 1–5" (the instrument's
+fixed theoretical scale, not participant data), and `n=valid/total (%)`.
+The former "Item 1 composite score" KPI card was dropped from the visible
+row (the underlying `item1_summary` field is unchanged in the API
+response, just no longer surfaced as its own KPI here) since it isn't
+part of this 3-card approved spec. The Total score distribution chart
+itself, its data, and its calculation are unchanged - only the page's
+title/subtitle were also corrected from the stale "PAQ-A" to "PAQ-C" for
+consistency with the new section (the chart's own "PAQ-A total score"
+title text was deliberately left as-is, out of scope for this pass).
+Live-verified: `total_summary` mean 2.33 (n=43/212), `item8_summary` mean
+2.94 (n=44/212), both within the 1-5 range. Backend: **139/139 tests
+pass**. Frontend `tsc --noEmit` and `npm run build` both succeed; verified
+visually via a headless-browser screenshot with zero console errors.
+
+**PAQ-C page scoring correction + restructuring (2026-09-10, same day,
+supersedes the "PAQ-A total score" chart above):** the Key Scores cards
+above were correct, but the page below them still had the old chart
+literally titled "PAQ-A total score" with a stale subtitle, no item-level
+analysis, and a long implementation-note paragraph exposed to dashboard
+users. Fixed per the approved PAQ-C scoring specification (Items 1-9 mean
+= Final PAQ-C Score; Item 10 separate/excluded):
+- **Field-fetch bug found and fixed**: `paq_q2_pe`..`paq_q7_describe`
+  (Items 2-7), `paq_q8_mon`..`paq_q8_sun` (the 7 Monday-Sunday day fields),
+  and `paq_q9_sick` (Item 10) were **never added to `LIVE_FIELDS`** - only
+  the three calc fields (`paq_item1_score`/`paq_item8_score`/
+  `paq_total_score`) were ever fetched from REDCap, so any per-item/
+  per-day/Item-10 analysis had zero real data available even though the
+  fields exist and are populated live. Added all 14 to `PAQA_EXPORT_FIELDS`
+  in `live_field_map.py` (feeds `LIVE_FIELDS`) - confirmed by live-checking
+  the `/physical-activity` endpoint before and after: before, `item_scores`
+  2-7/`weekly_activity`/`item10_exclusion` all showed `valid_n=0`/`mean:
+  null` despite 44/212 completions; after, all populate correctly (e.g.
+  Item 2 mean 2.45 n=44, Sunday mean 4.57 n=44, Item 10 1 Yes/43 No n=44).
+- New constants in `module_analytics.py`: `PAQC_ITEM_FIELDS` (8 entries,
+  Items 1-8 per the approved numbering - Item 8 here is REDCap's own
+  `paq_item8_score`, i.e. the Monday-Sunday mean, since the approved spec's
+  numbering runs one higher than REDCap's own field labels from this point
+  on - documented in a code comment so the discrepancy isn't rediscovered
+  each session), `PAQC_WEEKDAY_FIELDS` (the 7 day fields), `PAQC_ITEM10_FIELD`/
+  `_LABEL` (`paq_q9_sick`). `build_physical_activity_analysis()` now
+  additionally returns `item_scores` (list, one `numeric_summary` per Item
+  1-8), `weekly_activity` (list, one `numeric_summary` per weekday), and
+  `item10_exclusion` (a `build_condition_indicator()` Yes/No/Don't-know
+  breakdown, `asked_n` = PAQ-C completion count - the existing
+  denominator-discipline helper, reused as-is, not reimplemented). New
+  schemas `ScoredItemSummary`/`WeeklyActivityDay` in `dashboard.py`;
+  `PhysicalActivityResponse` gained `item_scores`/`weekly_activity`/
+  `item10_exclusion`. 4 new backend tests in `test_module_analytics.py`
+  (`test_physical_activity_item_scores_cover_items_1_through_8_...`,
+  `test_physical_activity_weekly_activity_covers_all_seven_days`,
+  `test_physical_activity_item10_exclusion_is_separately_denominated_...`)
+  lock in the field mapping and denominators.
+- `PhysicalActivity.tsx`: removed the long `chart-card-note` paragraph
+  below the Key Scores cards (implementation/debug commentary, not
+  dashboard content - per this task's explicit instruction). Relabeled the
+  distribution chart from "PAQ-A total score"/"Mean of items 1-8 (excludes
+  item 9)" to **"Final PAQ-C Score Distribution"**/"Final PAQ-C Score" -
+  same underlying data (`paq_total_score`, already the mean of the approved
+  spec's Items 1-9 excluding Item 10 - no calculation change, label only).
+  Added three new sections: **"Items 1-8"** (a `GroupedBarChart` of each
+  item's mean score, one series, reusing the shared component - not a new
+  chart type), **"Item 9 - Monday-Sunday Activity"** (a `GroupedBarChart` of
+  each weekday's mean rating), and **"Item 10"** (`ConditionCompositionChart`
+  - the same Yes/No/Don't-know composition bar already used by Child
+  Illness History - fed a single-item list, with an explicit subtitle
+  stating it is "not included in the Final PAQ-C Score"). No new
+  statistical method was introduced - every new number is a direct
+  `numeric_summary`/`build_condition_indicator` over an existing field.
+- **Stale "PAQ-A" sweep**: `Registry.tsx`'s `INSTRUMENT_COLUMNS` row
+  (`short`/`label`) and `ScreenTime.tsx`'s Physical Activity section note
+  both said "PAQ-A" referring to the current instrument - corrected to
+  "PAQ-C" (the internal `key: "paq_a"` identifiers in `Registry.tsx` and
+  `AssessmentsHub.tsx` were left unchanged, per the established
+  don't-rename-internal-identifiers precedent from the original rename).
+  The Active Cases Excel export's own "PAQ-A" column groups/headers/chart
+  titles (`export_service.py`) remain **unchanged** - out of scope, same
+  precedent as every other export-vs-dashboard terminology split
+  documented elsewhere in this file.
+Backend: **142/142 tests pass**. Frontend `tsc --noEmit` and `npm run
+build` both succeed. Live-verified against a local backend hitting the
+live REDCap project (212 registered, 44/212 PAQ-C complete): Item 2 mean
+2.45, Item 3 mean 3.07, Item 4 mean 2.0, Item 5 mean 2.27, Item 6 mean
+1.95, Item 7 mean 2.59 (all n=44/212); Monday-Sunday means 2.45/2.55/3.02/
+2.43/2.43/3.16/4.57 (all n=44/212); Item 10 1 Yes/43 No (n=44/212,
+asked_n=44). No browser-automation tool was available this session, so
+pixel-level visual QA of the new charts was **not** performed - verify
+visually before treating this as demo-ready.
+
 - **Screen Time** (`/api/v1/dashboard/screen-time`, `ScreenTimeResponse`) - superseded 2026-09-09, see the dedicated section below. DSEQ instrument completion + Q10 "Total Daily Screen Time" distribution + Q9/Q14/Q15 Yes/No items are kept as **secondary/descriptive** fields; the page's primary analysis is now a derived continuous minutes-per-day variable.
 - **Neurodevelopment** (`/api/v1/dashboard/neurodevelopment`, `NeurodevelopmentResponse`): SSRS Parent/Child/Teacher, each showing "children with any rating item answered", REDCap completion count, and cohort-level mean-of-per-child-means for the frequency and importance rating scales (same per-child derivation as the Excel export's `<Instrument>: Avg Frequency/Importance Rating` columns, aggregated here with no participant identifiers). Explicitly **not** a validated SSRS composite score. SSRS Teacher (0/212 live completions) shows `valid_n=0`/`mean=null` - computed the same way as Parent/Child, not a special-cased placeholder, so it will populate automatically once real Teacher data exists. The individual SSRS Teacher item ratings (`t43_rating`...`t51_rating`) are **not** part of the approved specification and remain unmapped (see `NEURODEVELOPMENT_STATUS` in `live_field_map.py`).
 
@@ -1545,6 +1737,76 @@ input count. Backend: **132/132 tests pass**. Frontend `tsc --noEmit` and
 `npm run build` both succeed. No REDCap mapping, calculation, denominator,
 or any other DSEQ chart/page changed.
 
+**DSEQ Coding Scores section added (2026-09-10):** a new "DSEQ Coding
+Scores" 4-card KPI row was added directly below the Instrument Completion
+badge and above "Screen Time Summary" - `build_screen_time_analysis()`'s
+existing minutes-based analysis (average/median/school-day/weekend,
+weighted 5:2, difference, distribution, age/sex, device, purpose/
+supervision/rules distributions, physical activity, scatter, missing-data
+logic) is **entirely unchanged**; this is an additive analysis alongside it,
+per an approved DSEQ coding specification distinct from the minutes-based
+one. Traced against the live `dseq` form's own metadata before
+implementing - REDCap's own numeric choice codes on the relevant fields are
+already identical to the approved coding scale, so no re-coding is applied,
+only reading each field's own stored code:
+- **Frequency Score** (range 0-3) - pools every valid response across
+  `q1_tv_freq`/`q4_phone_freq`/`q7_laptop_freq` (TV/smartphone/laptop
+  weekly-use frequency - confirmed live to share the identical
+  Never=0/1-2 days=1/3-5 days=2/6-7 days=3 choice string) into one list and
+  reports its `numeric_summary()` - not a per-child average, a pooled
+  descriptive statistic across all three same-scale items.
+- **Duration Score** (range 0-4) - pools `q2_tv_school`/`q3_tv_holiday`/
+  `q5_phone_school`/`q6_phone_holiday` (TV/smartphone school-day+holiday
+  duration bands, confirmed identical Does not use/watch=0..>2 hours=4
+  choice string). `q11_outdoor_school`/`q12_outdoor_holiday` were
+  considered and excluded - they use a *different* 1-4 scale with no
+  "Does not use" 0-level and belong to DSEQ Section B (Physical Activity),
+  confirmed by the form's own section headers.
+- **Supervision Score** (range 0-3) - `q8_supervision` alone (Always=3/
+  Often=2/Sometimes=1/Never=0), a single field, so its own
+  `numeric_summary()` directly.
+- **Household Rules Score** (range 0-1) - `q9_household_rules` alone
+  (Yes=1/No=0); the coded-score mean is the proportion of valid respondents
+  who answered Yes.
+- **No "Yes/No Indicators" card was added** - `q14_school_use` and
+  `q15_entertainment_use` are both individually Yes=1/No=0 coded, but
+  measure two unrelated constructs (school/homework use vs. entertainment
+  use), not two items on one underlying scale; averaging them would produce
+  a number with no defensible meaning. This matches the project's own
+  existing precedent - `DSEQ_YES_NO_ITEMS` already reports q9/q14/q15 as
+  three independent Yes-counts, never one averaged composite. This was
+  evaluated and explicitly left out, per instruction not to invent an
+  aggregate where none is methodologically defensible - `q14`/`q15` remain
+  available individually via the existing `yes_no_items` field.
+New constants in `module_analytics.py` (`DSEQ_FREQUENCY_FIELDS`,
+`DSEQ_DURATION_FIELDS`, `DSEQ_SUPERVISION_FIELD`,
+`DSEQ_HOUSEHOLD_RULES_FIELD`) and a new `_pooled_dseq_coded_score()`
+helper; `build_screen_time_analysis()` returns an additional
+`coding_scores` dict. New `DseqCodingScores` schema
+(`backend/app/schemas/dashboard.py`, reusing the existing `ScoreSummary`
+model for each domain - no new per-field schema needed) added to
+`ScreenTimeResponse`; wired in `LiveDashboardService.get_screen_time()`.
+Frontend: `ScreenTime.tsx` renders the 4 cards using the existing
+`KpiCard` component (colored top accent via existing `tone` prop), each
+showing the derived value, "Range 0-N", and `n=valid/total (%)` - no
+implementation detail, REDCap field name, or long paragraph exposed to
+users, matching the polished PAQ-C Key Scores/Dietary Intake visual
+language. A new page-scoped CSS rule, `.coding-score-row .kpi-card`
+(reuses the existing `--radius-control` token for sharper/subtle corners),
+is scoped to only this new row - the existing 6-card "Screen Time Summary"
+row below is visually unchanged. Tests: `test_dseq_coding_scores_pooled_and_single_field_domains`
+in `test_module_analytics.py` (locks in the field mapping/pooling method
+and each domain's denominator) + a `coding_scores` shape assertion added
+to the existing `/screen-time` endpoint test. Backend: **143/143 tests
+pass**. Frontend `tsc --noEmit` and `npm run build` both succeed.
+Live-verified (212 registered, 44/212 DSEQ complete): Frequency mean 0.71
+(n=132/636 = 44×3 pooled fields), Duration mean 1.06 (n=176/848 = 44×4),
+Supervision mean 1.14 (n=44/212), Household Rules mean 0.52 (n=44/212) -
+every completed DSEQ record fully answered every underlying field in each
+domain, confirming the pooled denominators are exactly `completed ×
+field_count` as designed, not silently diverging from instrument
+completion.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)
@@ -1738,7 +2000,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **127/127 passing** (121 as of the 2026-09-03 senior-requirements audit + implementation, +6 for the 2026-09-09 Registry redesign's filter/quick-query logic - see the "Participants (Registry)" section above). Frontend `npm run build` succeeds.
+Backend test count: **143/143 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-10 DSEQ Coding Scores tests). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

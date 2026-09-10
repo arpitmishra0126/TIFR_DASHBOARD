@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { ChartTooltipBox } from "./charts/ChartTooltip";
@@ -59,6 +59,10 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: 
     : 1;
   const bottomMargin = xTickMaxChars ? 4 + (maxWrappedLines - 1) * X_LABEL_LINE_HEIGHT : 4;
   const resolvedHeight = height ?? (xTickMaxChars ? 220 + (maxWrappedLines - 1) * X_LABEL_LINE_HEIGHT : 220);
+  // Stable across hover-only re-renders (activeIndex changing below) -
+  // without this, `tick` gets a new component identity on every render,
+  // so Recharts remounts the X-axis tick nodes on every mouse move.
+  const wrappedXTick = useMemo(() => (xTickMaxChars ? makeWrappedXTick(xTickMaxChars) : undefined), [xTickMaxChars]);
 
   return (
     <ResponsiveContainer width="100%" height={resolvedHeight}>
@@ -66,7 +70,7 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: 
         <CartesianGrid vertical={false} stroke="var(--gridline)" strokeDasharray="3 4" />
         <XAxis
           dataKey="label"
-          tick={xTickMaxChars ? makeWrappedXTick(xTickMaxChars) : { fill: "var(--text-secondary)", fontSize: 12, fontWeight: 600 }}
+          tick={wrappedXTick ?? { fill: "var(--text-secondary)", fontSize: 12, fontWeight: 600 }}
           axisLine={{ stroke: "var(--baseline)" }}
           tickLine={false}
           interval={xTickMaxChars ? 0 : undefined}
@@ -99,6 +103,7 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: 
           dataKey="count"
           radius={[7, 7, 0, 0]}
           maxBarSize={56}
+          isAnimationActive={false}
           onMouseEnter={(_, index) => setActiveIndex(index)}
           onMouseLeave={() => setActiveIndex(undefined)}
         >

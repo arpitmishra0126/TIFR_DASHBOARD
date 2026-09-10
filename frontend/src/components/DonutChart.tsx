@@ -86,6 +86,7 @@ export default function DonutChart({ data, height = 200, centerValue, centerLabe
               paddingAngle={3}
               cornerRadius={4}
               strokeWidth={0}
+              isAnimationActive={false}
               activeShape={renderActiveShape}
               onMouseEnter={handleSliceEnter}
               onMouseLeave={() => {

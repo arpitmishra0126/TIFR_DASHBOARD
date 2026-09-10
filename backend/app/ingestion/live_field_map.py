@@ -4,14 +4,21 @@ Verified against a live, read-only metadata export (RedCapClient.fetch_metadata(
 against project PID 196, "ICMR Neurodevelopment Study".
 
 PID 196 has 9 instruments: Registration Form, SES questionnaire, Digital-
-Screen Exposure Questionnaire (DSEQ), Child Illness History, PAQ-A, Dietary
-Intake, SSRS Parent, SSRS Child, SSRS Teacher.
+Screen Exposure Questionnaire (DSEQ), Child Illness History, PAQ-C, Dietary
+Intake, SSRS Parent, SSRS Child, SSRS Teacher. (The Physical Activity
+instrument was renamed live on REDCap from "PAQ-A" [form `paq_a`] to
+"PAQ C" [form `paq_c`] - confirmed 2026-09-10 via the REDCap `instrument`
+API; its completion field changed accordingly from `paq_a_complete` to
+`paq_c_complete`, which is why `paq_a_complete` started being rejected by
+REDCap's record-export `fields` parameter. The underlying score fields
+`paq_item1_score`/`paq_item8_score`/`paq_total_score` were NOT renamed and
+are unchanged.)
 
 Resolution rule applied below: a live field is mapped to an approved V1
 metric ONLY when it measures the same underlying construct, not merely a
 similarly-labelled field. As of 2026-08-26, field-level content is mapped
 into the dashboard for Registration, SES, Child Illness History (Health &
-Screening), PAQ-A (Physical Activity), and DSEQ (Screen Time) - following
+Screening), PAQ-C (Physical Activity), and DSEQ (Screen Time) - following
 the approved Active Cases Excel analytical specification (see
 app.services.module_analytics). SSRS Parent/Child/Teacher contribute
 items-answered/mean-rating summaries to Neurodevelopment (not the
@@ -108,11 +115,11 @@ HEALTH_SCREENING_STATUS: tuple[LiveFieldStatus, ...] = (
 
 PHYSICAL_ACTIVITY_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus(
-        "Physical Activity", "item1_composite_score", True, "paq_item1_score", "paq_a",
+        "Physical Activity", "item1_composite_score", True, "paq_item1_score", "paq_c",
         "REDCap-calculated field; approved 2026-08-26.",
     ),
-    LiveFieldStatus("Physical Activity", "item8_composite_score", True, "paq_item8_score", "paq_a"),
-    LiveFieldStatus("Physical Activity", "paqa_final_score", True, "paq_total_score", "paq_a"),
+    LiveFieldStatus("Physical Activity", "item8_composite_score", True, "paq_item8_score", "paq_c"),
+    LiveFieldStatus("Physical Activity", "paqa_final_score", True, "paq_total_score", "paq_c"),
 )
 
 SCREEN_TIME_STATUS: tuple[LiveFieldStatus, ...] = (
@@ -163,7 +170,12 @@ CORE_BATTERY_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
     ("ses", "screening_rural_complete", "SES"),
     ("dseq", "dseq_complete", "DSEQ"),
     ("child_illness_history", "child_illness_history_complete", "Child Illness History"),
-    ("paq_a", "paq_a_complete", "PAQ-A"),
+    # Key "paq_a" is a stable internal identifier (matched by RegistryChild
+    # .instrument_status/frontend code), left as-is even though the REDCap
+    # form itself was renamed - see the module docstring above. Only the
+    # completion FIELD (which REDCap actually validates) and the
+    # user-facing LABEL were updated to match the live rename.
+    ("paq_a", "paq_c_complete", "PAQ-C"),
     ("dietary_intake", "dietary_intake_complete", "Dietary Intake"),
     ("ssrs_parent", SSRS_PARENT_COMPLETE_FIELD, "SSRS Parent"),
 )
@@ -171,7 +183,7 @@ CORE_BATTERY_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
 CORE_BATTERY_COMPLETE_FIELDS: tuple[str, ...] = tuple(field for _, field, _ in CORE_BATTERY_INSTRUMENTS)
 
 CORE_BATTERY_DESCRIPTION = (
-    "SES, DSEQ, Child Illness History, PAQ-A, Dietary Intake and SSRS Parent completed."
+    "SES, DSEQ, Child Illness History, PAQ-C, Dietary Intake and SSRS Parent completed."
 )
 
 # All nine live instruments in PID 196, each paired with its own completion
@@ -188,7 +200,7 @@ ALL_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
 
 PROGRESSION_STATUS: tuple[LiveFieldStatus, ...] = (
     LiveFieldStatus("Assessment Progress", "registered", True, "child_id", "registration_form"),
-    LiveFieldStatus("Assessment Progress", "core_assessment_battery", True, None, "screening_rural, dseq, child_illness_history, paq_a, dietary_intake, ssrs_parent", CORE_BATTERY_DESCRIPTION),
+    LiveFieldStatus("Assessment Progress", "core_assessment_battery", True, None, "screening_rural, dseq, child_illness_history, paq_c, dietary_intake, ssrs_parent", CORE_BATTERY_DESCRIPTION),
     LiveFieldStatus("Assessment Progress", "ssrs_child", True, SSRS_CHILD_COMPLETE_FIELD, "ssrs_child"),
     LiveFieldStatus("Assessment Progress", "ssrs_teacher", True, SSRS_TEACHER_COMPLETE_FIELD, "ssrs_teacher"),
 )
@@ -285,7 +297,29 @@ CHH_EXPORT_FIELDS: tuple[str, ...] = (
     "chh_assessor_decision",
 )
 
-PAQA_EXPORT_FIELDS: tuple[str, ...] = ("paq_item1_score", "paq_item8_score", "paq_total_score")
+PAQA_EXPORT_FIELDS: tuple[str, ...] = (
+    "paq_item1_score",
+    "paq_item8_score",
+    "paq_total_score",
+    # Item-level fields (approved 2026-09-10 PAQ-C scoring specification) -
+    # confirmed live via the `paq_c` form's own metadata; not previously
+    # fetched, so the PAQ-C page's item-level, Monday-Sunday, and Item 10
+    # sections had no data until these were added here.
+    "paq_q2_pe",
+    "paq_q3_lunch",
+    "paq_q4_afterschool",
+    "paq_q5_evening",
+    "paq_q6_weekend",
+    "paq_q7_describe",
+    "paq_q8_mon",
+    "paq_q8_tue",
+    "paq_q8_wed",
+    "paq_q8_thu",
+    "paq_q8_fri",
+    "paq_q8_sat",
+    "paq_q8_sun",
+    "paq_q9_sick",
+)
 
 DIETARY_EXPORT_FIELDS: tuple[str, ...] = (
     "die_grains_freq",

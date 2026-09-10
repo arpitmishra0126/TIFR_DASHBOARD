@@ -229,8 +229,8 @@ def test_build_other_food_specified_records_real_entries_and_respects_skip_logic
 
 def test_physical_activity_analysis_missing_stays_missing():
     records = [
-        {"child_id": "A", "paq_a_complete": "2", "paq_item1_score": "2.0", "paq_item8_score": "3.0", "paq_total_score": "2.5"},
-        {"child_id": "B", "paq_a_complete": "0"},
+        {"child_id": "A", "paq_c_complete": "2", "paq_item1_score": "2.0", "paq_item8_score": "3.0", "paq_total_score": "2.5"},
+        {"child_id": "B", "paq_c_complete": "0"},
     ]
     result = ma.build_physical_activity_analysis(records, {})
     assert result["completion"]["completed"] == 1
@@ -239,6 +239,151 @@ def test_physical_activity_analysis_missing_stays_missing():
     assert result["item1_summary"]["missing_n"] == 1
     assert result["total_summary"]["mean"] == 2.5
     assert dict(result["total_score_distribution"])["2.0-2.99"] == 1
+
+
+def test_physical_activity_key_scores_match_approved_paqc_specification():
+    """Approved PAQ-C "Key Scores" specification, traced against the live
+    REDCap `paq_c` form metadata (2026-09-10):
+
+    - Final PAQ-C Score = `paq_total_score` - REDCap's own calc field,
+      `(item1 + q2..q7 + item8)/8`, which already excludes the illness/
+      exclusion item (REDCap's own field label: "excludes item 9"). No
+      other field on the instrument represents a "final"/overall score.
+    - Item 9 Score / Daily Activity Score = `paq_item8_score` - REDCap's
+      own calc field, the mean of the 7 Monday-Sunday ratings
+      (`paq_q8_mon`..`paq_q8_sun`), each answered on the approved
+      None=1/Little=2/Medium=3/Often=4/Very often=5 scale. There is no
+      second, independently-collected field for a distinct "Daily
+      Activity Score" anywhere on the instrument, so both dashboard cards
+      intentionally read this same summary - this test locks that mapping
+      in so a future refactor can't silently point either card at the
+      wrong field.
+
+    This is a regression/documentation test for the field wiring, not a
+    reimplementation of REDCap's own calc engine - `paq_item1_score`/
+    `paq_item8_score`/`paq_total_score` are computed by REDCap itself and
+    passed through unchanged.
+    """
+    records = [
+        # Child A: fully answered - realistic values consistent with the
+        # 1-5 possible range of every underlying PAQ-C item.
+        {
+            "child_id": "A", "paq_c_complete": "2",
+            "paq_item1_score": "2.11",  # mean of the 27 spare-time activity items
+            "paq_item8_score": "3.43",  # mean of paq_q8_mon..sun (Item 9 / Daily Activity Score)
+            "paq_total_score": "2.75",  # mean of item1 + q2..q7 + item8 (Final PAQ-C Score)
+        },
+        # Child B: instrument not completed, no calculated scores at all -
+        # must be excluded from valid_n, never treated as a 0.
+        {"child_id": "B", "paq_c_complete": "0"},
+    ]
+    result = ma.build_physical_activity_analysis(records, {})
+
+    # Final PAQ-C Score
+    assert result["total_summary"]["mean"] == 2.75
+    assert result["total_summary"]["valid_n"] == 1
+    assert result["total_summary"]["total"] == 2
+    assert result["total_summary"]["percent_valid"] == ma.percent(1, 2)
+
+    # Item 9 Score / Daily Activity Score - same underlying field
+    assert result["item8_summary"]["mean"] == 3.43
+    assert result["item8_summary"]["valid_n"] == 1
+    assert result["item8_summary"]["total"] == 2
+    assert result["item8_summary"]["percent_valid"] == ma.percent(1, 2)
+
+    # Every score's theoretical range is 1-5 (not enforced by this
+    # function - REDCap's own calc formula guarantees it structurally,
+    # since every contributing item is itself scored 1-5 - but confirmed
+    # here as documentation that no value in this fixture falls outside it).
+    for summary_key in ("item1_summary", "item8_summary", "total_summary"):
+        mean = result[summary_key]["mean"]
+        assert mean is None or 1 <= mean <= 5
+
+
+def test_physical_activity_item_scores_cover_items_1_through_8_with_correct_means():
+    """Items 1-8 (approved numbering) - retained scores 1-5, read directly
+    from their own REDCap fields (no re-derivation - REDCap already stores
+    each as a plain 1-5 radio/calc value)."""
+    records = [
+        {
+            "child_id": "A", "paq_c_complete": "2",
+            "paq_item1_score": "2.11", "paq_q2_pe": "3", "paq_q3_lunch": "4",
+            "paq_q4_afterschool": "2", "paq_q5_evening": "5", "paq_q6_weekend": "1",
+            "paq_q7_describe": "3", "paq_item8_score": "3.43",
+        },
+        {"child_id": "B", "paq_c_complete": "0"},
+    ]
+    result = ma.build_physical_activity_analysis(records, {})
+    by_key = {item["key"]: item for item in result["item_scores"]}
+    assert [item["key"] for item in result["item_scores"]] == [
+        "item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8",
+    ]
+    assert by_key["item1"]["mean"] == 2.11
+    assert by_key["item2"]["mean"] == 3
+    assert by_key["item3"]["mean"] == 4
+    assert by_key["item4"]["mean"] == 2
+    assert by_key["item5"]["mean"] == 5
+    assert by_key["item6"]["mean"] == 1
+    assert by_key["item7"]["mean"] == 3
+    assert by_key["item8"]["mean"] == 3.43
+    for item in result["item_scores"]:
+        assert item["valid_n"] == 1
+        assert item["missing_n"] == 1
+        assert item["total"] == 2
+
+
+def test_physical_activity_weekly_activity_covers_all_seven_days():
+    """Item 9 (approved numbering) - mean of Monday-Sunday scores, each
+    day's own raw value shown independently on the same None=1..Very
+    often=5 scale."""
+    records = [
+        {
+            "child_id": "A", "paq_c_complete": "2",
+            "paq_q8_mon": "1", "paq_q8_tue": "2", "paq_q8_wed": "3",
+            "paq_q8_thu": "4", "paq_q8_fri": "5", "paq_q8_sat": "3", "paq_q8_sun": "2",
+        },
+        {"child_id": "B", "paq_c_complete": "0"},
+    ]
+    result = ma.build_physical_activity_analysis(records, {})
+    by_day = {day["day"]: day for day in result["weekly_activity"]}
+    assert [day["day"] for day in result["weekly_activity"]] == [
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    ]
+    assert by_day["Monday"]["mean"] == 1
+    assert by_day["Tuesday"]["mean"] == 2
+    assert by_day["Wednesday"]["mean"] == 3
+    assert by_day["Thursday"]["mean"] == 4
+    assert by_day["Friday"]["mean"] == 5
+    assert by_day["Saturday"]["mean"] == 3
+    assert by_day["Sunday"]["mean"] == 2
+    for day in result["weekly_activity"]:
+        assert day["valid_n"] == 1
+        assert day["missing_n"] == 1
+        assert day["total"] == 2
+
+
+def test_physical_activity_item10_exclusion_is_separately_denominated_and_excluded_from_score():
+    """Item 10 (approved numbering) - the illness/exclusion item
+    (paq_q9_sick) - must be reported as its own Yes/No breakdown, denominated
+    against instrument completion (asked_n), and must never feed into
+    total_summary (Final PAQ-C Score)."""
+    choice_maps = {"paq_q9_sick": {"1": "Yes", "0": "No"}}
+    records = [
+        {"child_id": "A", "paq_c_complete": "2", "paq_q9_sick": "1", "paq_total_score": "2.75"},
+        {"child_id": "B", "paq_c_complete": "2", "paq_q9_sick": "0", "paq_total_score": "3.0"},
+        {"child_id": "C", "paq_c_complete": "2"},  # completed instrument, skipped this item
+        {"child_id": "D", "paq_c_complete": "0"},  # instrument not completed at all
+    ]
+    result = ma.build_physical_activity_analysis(records, choice_maps)
+    item10 = result["item10_exclusion"]
+    assert item10["yes_count"] == 1
+    assert item10["no_count"] == 1
+    assert item10["valid_n"] == 2
+    assert item10["asked_n"] == 3  # completed == 3, independent of this item's own valid_n
+    assert item10["missing_count"] == 1
+    # Final PAQ-C Score is unaffected by item10 - still just paq_total_score.
+    assert result["total_summary"]["mean"] == round((2.75 + 3.0) / 2, 2)
+    assert result["total_summary"]["valid_n"] == 2
 
 
 def test_screen_time_analysis_distribution_and_yes_no():
@@ -379,6 +524,61 @@ def test_screen_time_analysis_minutes_derivation_and_denominators():
     # --- Secondary/descriptive Q10 distribution is unaffected by the new
     # minutes fields (still present, still categorical). ---
     assert dict(result["total_screen_time_distribution"])["1-2 hours"] == 1
+
+
+def test_dseq_coding_scores_pooled_and_single_field_domains():
+    """Approved 2026-09-10 DSEQ coding specification. REDCap's own numeric
+    codes on q1/q4/q7 (Frequency), q2/q3/q5/q6 (Duration), q8 (Supervision)
+    and q9 (Household Rules) are already identical to the approved coding
+    scale, so this test locks in the field mapping/aggregation method (pool
+    every valid response across a domain's fields into one list; a
+    single-field domain is just that field's own numeric_summary), not a
+    re-derivation of the scale itself."""
+    records = [
+        {
+            "child_id": "A", "dseq_complete": "2",
+            "q1_tv_freq": "3", "q4_phone_freq": "2", "q7_laptop_freq": "1",
+            "q2_tv_school": "2", "q3_tv_holiday": "3", "q5_phone_school": "1", "q6_phone_holiday": "2",
+            "q8_supervision": "3", "q9_household_rules": "1",
+        },
+        {
+            "child_id": "B", "dseq_complete": "2",
+            "q1_tv_freq": "0",  # q4/q7 unanswered
+            "q2_tv_school": "1", "q3_tv_holiday": "1", "q6_phone_holiday": "1",  # q5 unanswered
+            "q9_household_rules": "0",  # q8 unanswered
+        },
+    ]
+    result = ma.build_screen_time_analysis(records, {})
+    scores = result["coding_scores"]
+
+    # Frequency: pooled q1+q4+q7 - A contributes 3 values (3,2,1), B only 1
+    # (0) since q4/q7 are blank for B - never treated as a 0.
+    freq = scores["frequency"]
+    assert freq["valid_n"] == 4
+    assert freq["total"] == 2 * 3  # total_registered(2) * 3 pooled fields
+    assert freq["missing_n"] == 2
+    assert freq["mean"] == round((3 + 2 + 1 + 0) / 4, 2)
+
+    # Duration: pooled q2+q3+q5+q6 - A contributes 4 values, B contributes 3
+    # (q5 blank for B).
+    duration = scores["duration"]
+    assert duration["valid_n"] == 7
+    assert duration["total"] == 2 * 4
+    assert duration["missing_n"] == 1
+    assert duration["mean"] == round((2 + 3 + 1 + 2 + 1 + 1 + 1) / 7, 2)
+
+    # Supervision: single field (q8) - only A answered.
+    supervision = scores["supervision"]
+    assert supervision["valid_n"] == 1
+    assert supervision["total"] == 2
+    assert supervision["mean"] == 3.0
+
+    # Household Rules: single field (q9) - both answered (1 Yes, 1 No), so
+    # the coded-score mean is the proportion who answered Yes (0-1 scale).
+    rules = scores["household_rules"]
+    assert rules["valid_n"] == 2
+    assert rules["total"] == 2
+    assert rules["mean"] == 0.5
 
 
 def test_difference_distribution_has_six_contiguous_bins_in_order():

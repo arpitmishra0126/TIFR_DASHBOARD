@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { ChartTooltipBox } from "./charts/ChartTooltip";
@@ -139,6 +139,13 @@ export default function HorizontalBarChart({ data, height, mode = "categorical",
   const resolvedHeight = height ?? Math.max(geo.minHeight, data.length * rowHeight);
   const total = data.reduce((sum, d) => sum + d.count, 0);
   const maxCount = Math.max(1, ...data.map((d) => d.count));
+  // Stable across hover-only re-renders (activeIndex changing below) -
+  // without this, `tick` gets a new component identity on every render,
+  // so Recharts remounts the Y-axis tick nodes on every mouse move.
+  const categoryTick = useMemo(
+    () => makeCategoryTick(labelWidth, geo.lineHeight, geo.tickFontSize),
+    [labelWidth, geo.lineHeight, geo.tickFontSize],
+  );
 
   return (
     <ResponsiveContainer width="100%" height={resolvedHeight}>
@@ -159,7 +166,7 @@ export default function HorizontalBarChart({ data, height, mode = "categorical",
         <YAxis
           type="category"
           dataKey="label"
-          tick={makeCategoryTick(labelWidth, geo.lineHeight, geo.tickFontSize)}
+          tick={categoryTick}
           axisLine={false}
           tickLine={false}
           width={labelWidth}
@@ -198,6 +205,7 @@ export default function HorizontalBarChart({ data, height, mode = "categorical",
           dataKey="count"
           radius={geo.barRadius}
           maxBarSize={geo.barSize}
+          isAnimationActive={false}
           onMouseEnter={(_, index) => setActiveIndex(index)}
           onMouseLeave={() => setActiveIndex(undefined)}
         >

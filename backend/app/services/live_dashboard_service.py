@@ -35,6 +35,7 @@ from app.schemas.dashboard import (
     ConditionIndicator,
     DemographicsResponse,
     DeviceMinutes,
+    DseqCodingScores,
     DietaryFoodItem,
     DietaryIntakeResponse,
     OtherFoodEntry,
@@ -53,11 +54,13 @@ from app.schemas.dashboard import (
     ProgressStage,
     RegistryChild,
     RegistryResponse,
+    ScoredItemSummary,
     ScoreSummary,
     ScreenActivityPoint,
     ScreenTimeResponse,
     SexDistribution,
     SSRSInstrumentSummary,
+    WeeklyActivityDay,
 )
 
 
@@ -516,9 +519,14 @@ class LiveDashboardService:
             item8_summary=ScoreSummary(**analysis["item8_summary"]),
             total_summary=ScoreSummary(**analysis["total_summary"]),
             total_score_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["total_score_distribution"]],
+            item_scores=[ScoredItemSummary(**item) for item in analysis["item_scores"]],
+            weekly_activity=[WeeklyActivityDay(**day) for day in analysis["weekly_activity"]],
+            item10_exclusion=ConditionIndicator(**analysis["item10_exclusion"]),
             notes={
                 "scores": "Item 1, Item 8 and Total scores are REDCap-calculated fields (paq_item1_score, "
-                "paq_item8_score, paq_total_score), not derived by this dashboard.",
+                "paq_item8_score, paq_total_score), not derived by this dashboard. Item 9 (Monday-Sunday mean) "
+                "and Item 10 (illness/exclusion) follow the approved PAQ-C scoring specification's numbering, "
+                "which is one higher than REDCap's own internal field labels for these two items.",
             },
         )
 
@@ -530,6 +538,12 @@ class LiveDashboardService:
             completion=InstrumentCompletion(**analysis["completion"]),
             missing_count=analysis["missing_count"],
             missing_percent=analysis["missing_percent"],
+            coding_scores=DseqCodingScores(
+                frequency=ScoreSummary(**analysis["coding_scores"]["frequency"]),
+                duration=ScoreSummary(**analysis["coding_scores"]["duration"]),
+                supervision=ScoreSummary(**analysis["coding_scores"]["supervision"]),
+                household_rules=ScoreSummary(**analysis["coding_scores"]["household_rules"]),
+            ),
             average_daily_summary=MinutesSummary(**analysis["average_daily_summary"]),
             school_day_summary=MinutesSummary(**analysis["school_day_summary"]),
             weekend_summary=MinutesSummary(**analysis["weekend_summary"]),
@@ -564,7 +578,7 @@ class LiveDashboardService:
                 "excluded from every minutes total. Q10 (total daily screen time) and Q9/Q14/Q15 remain as "
                 "secondary, purely descriptive categorical cross-checks per the approved 2026-08-26 scope, "
                 "not the primary analysis. Physical activity here is DSEQ's own Section B outdoor-play items "
-                "(q11/q12) - distinct from the separate PAQ-A-based Physical Activity page.",
+                "(q11/q12) - distinct from the separate PAQ-C-based Physical Activity page.",
             },
         )
 

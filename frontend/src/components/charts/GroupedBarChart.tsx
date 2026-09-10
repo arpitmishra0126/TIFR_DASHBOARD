@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { ChartTooltipBox } from "./ChartTooltip";
@@ -27,14 +28,24 @@ interface GroupedBarChartProps {
 }
 
 export default function GroupedBarChart({ data, series, stacked = false, height = 240, unit = "" }: GroupedBarChartProps) {
-  const chartData = data.map((d) => {
-    const row: Record<string, unknown> = { group: d.group };
-    series.forEach((s) => {
-      row[s.key] = d.values[s.key] ?? null;
-      row[`${s.key}__validN`] = d.validN?.[s.key];
-    });
-    return row;
-  });
+  // Memoized so this derived array keeps a stable reference across
+  // re-renders that don't actually change `data`/`series` (e.g. a parent
+  // re-rendering for an unrelated reason while the user is hovering this
+  // chart) - a fresh array reference on every render was otherwise handed
+  // straight to recharts' <BarChart data=...>, which is exactly the kind
+  // of "data recreated on interaction" this component must avoid.
+  const chartData = useMemo(
+    () =>
+      data.map((d) => {
+        const row: Record<string, unknown> = { group: d.group };
+        series.forEach((s) => {
+          row[s.key] = d.values[s.key] ?? null;
+          row[`${s.key}__validN`] = d.validN?.[s.key];
+        });
+        return row;
+      }),
+    [data, series],
+  );
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -87,6 +98,7 @@ export default function GroupedBarChart({ data, series, stacked = false, height 
             radius={stacked ? [0, 0, 0, 0] : [6, 6, 0, 0]}
             maxBarSize={stacked ? 64 : 48}
             stackId={stacked ? "stack" : undefined}
+            isAnimationActive={false}
           />
         ))}
       </BarChart>

@@ -64,7 +64,7 @@ export default function ScreenActivityScatter({ data, height = 260 }: ScreenActi
             );
           }}
         />
-        <Scatter data={data} fill="var(--series-1)" fillOpacity={0.65} />
+        <Scatter data={data} fill="var(--series-1)" fillOpacity={0.65} isAnimationActive={false} />
       </ScatterChart>
     </ResponsiveContainer>
   );

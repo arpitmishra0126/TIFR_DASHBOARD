@@ -96,7 +96,14 @@ a, button {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: 0.65rem var(--space-6) 0.5rem;
+  /* Top-biased padding (vs. the shared .topnav-links row below, which gave
+     up the matching amount from its own bottom padding - see that rule) so
+     this row's content, including the right-side status/control group,
+     sits genuinely lower with balanced space above/below it, centered via
+     align-items: center (no position/pixel hack) rather than being pinned
+     close to the row's top edge. .app-topnav's total height is unchanged -
+     this only redistributes padding already spent between the two rows. */
+  padding: 1rem var(--space-6) 0.6rem;
 }
 
 .topnav-brand {
@@ -152,7 +159,12 @@ a, button {
   justify-content: center;
   flex-wrap: wrap;
   gap: 2px;
-  padding: 0.15rem var(--space-6) 0.65rem;
+  /* Bottom padding reduced by exactly the amount .topnav-header-row's own
+     padding grew by (see that rule) - nav links themselves (size, gap,
+     position relative to each other) are unchanged; only the outer
+     whitespace this row contributes below the header is smaller, keeping
+     .app-topnav's combined height identical to before. */
+  padding: 0.15rem var(--space-6) 0.2rem;
 }
 
 .topnav-link {
@@ -315,6 +327,8 @@ a, button {
 
 .last-updated {
   font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-weight: 600;
 }
 
 .refresh-error {
@@ -591,6 +605,31 @@ a, button {
    pages (Health & Screening, Physical Activity, Screen Time) also use. */
 .dietary-intake-page .module-status-line {
   margin-bottom: var(--space-3);
+}
+
+/* Physical Activity (PAQ-C) only - matches Dietary Intake's compact
+   above-the-fold spacing and sharper/subtle card corners, without changing
+   the shared .kpi-card/.chart-card/.section-header rules every other page
+   also uses. Radius reuses the existing --radius-control token (8px, the
+   same one .chart-card-compact already switches to) rather than a new
+   value. */
+.physical-activity-page .module-status-line {
+  margin-bottom: var(--space-3);
+}
+
+.physical-activity-page .kpi-card {
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Screen Time (DSEQ) - DSEQ Coding Scores cards only, scoped to this one
+   row (`.coding-score-row`) rather than every `.kpi-card` on the page, so
+   the page's existing "Screen Time Summary" 6-card row (already shipped,
+   unchanged) keeps its current look. Same sharper-corner treatment as
+   Physical Activity's Key Scores row. */
+.coding-score-row .kpi-card {
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
 }
 
 /* --- Grids --- */

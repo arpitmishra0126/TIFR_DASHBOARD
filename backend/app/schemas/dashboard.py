@@ -170,6 +170,39 @@ class HealthScreeningResponse(BaseModel):
     notes: dict[str, str]
 
 
+class ScoredItemSummary(BaseModel):
+    """One PAQ-C item's mean score (1-5 scale). `key`/`label` identify the
+    item per the approved PAQ-C scoring specification's numbering, which
+    differs from REDCap's own internal field-label numbering for the
+    Monday-Sunday mean and the illness/exclusion item - see
+    module_analytics.py's PAQC_ITEM_FIELDS docstring."""
+
+    key: str
+    label: str
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    minimum: float | None
+    maximum: float | None
+
+
+class WeeklyActivityDay(BaseModel):
+    """One day's mean activity rating - Item 9's Monday-Sunday sub-scores,
+    each answered on the approved None=1/Little=2/Medium=3/Often=4/
+    Very often=5 scale."""
+
+    day: str
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    minimum: float | None
+    maximum: float | None
+
+
 class PhysicalActivityResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
@@ -177,6 +210,9 @@ class PhysicalActivityResponse(BaseModel):
     item8_summary: ScoreSummary
     total_summary: ScoreSummary
     total_score_distribution: list[CategoryCount]
+    item_scores: list[ScoredItemSummary]
+    weekly_activity: list[WeeklyActivityDay]
+    item10_exclusion: ConditionIndicator
     notes: dict[str, str]
 
 
@@ -229,11 +265,28 @@ class ScreenActivityPoint(BaseModel):
     activity_minutes: float
 
 
+class DseqCodingScores(BaseModel):
+    """Approved 2026-09-10 DSEQ coding specification, applied to the
+    verified applicable REDCap fields (see module_analytics.py's
+    DSEQ_FREQUENCY_FIELDS/DSEQ_DURATION_FIELDS docstrings) - each is a
+    descriptive pooled/single-field coded-score summary, not a validated
+    clinical scale score. No "Yes/No Indicators" field is included here -
+    q14_school_use/q15_entertainment_use measure unrelated constructs with
+    no defensible combined aggregate (see the same module's DSEQ_YES_NO_ITEMS
+    note); they remain available individually via `yes_no_items` above."""
+
+    frequency: ScoreSummary
+    duration: ScoreSummary
+    supervision: ScoreSummary
+    household_rules: ScoreSummary
+
+
 class ScreenTimeResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
     missing_count: int
     missing_percent: float
+    coding_scores: DseqCodingScores
 
     # Primary continuous variable (minutes/day) - see module_analytics
     # .build_screen_time_analysis for the full derivation/estimation notes.
