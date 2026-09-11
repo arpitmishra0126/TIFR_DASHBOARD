@@ -199,10 +199,27 @@ async def test_overview_ssrs_parent_percentage_computed_dynamically(service: Liv
 
 
 @pytest.mark.asyncio
-async def test_overview_ssrs_child_counts_only_within_core_battery_cohort(service: LiveDashboardService):
+async def test_overview_ssrs_child_count_uses_independent_completion(service: LiveDashboardService):
     result = await service.get_overview()
-    # REC001 and REC002 have ssrs_child complete AND are in the core-battery set.
+    # The fixture's SSRS Child completions happen to be core-complete, but the
+    # Overview metric is defined independently of the core-battery intersection.
     assert result.ssrs_child_count == 2
+
+
+@pytest.mark.asyncio
+async def test_overview_ssrs_child_completion_is_independent_of_progression(service: LiveDashboardService):
+    partial_core_record = next(r for r in service._repository._records if r["child_id"] == "REC004")
+    partial_core_record["ssrs_child_complete"] = "2"
+
+    overview = await service.get_overview()
+    coverage = {item.key: item.completed_count for item in overview.all_instrument_coverage}
+    progress = await service.get_progress()
+    stages = {stage.key: stage.count for stage in progress.stages}
+
+    assert overview.ssrs_child_count == 3
+    assert coverage["ssrs_child"] == 3
+    assert overview.ssrs_child_count == coverage["ssrs_child"]
+    assert stages["ssrs_child"] == 2
 
 
 @pytest.mark.asyncio
@@ -226,7 +243,7 @@ async def test_overview_blank_child_id_excluded_even_with_all_instruments_comple
     # fixture specifically to prove it must never be counted anywhere.
     result = await service.get_overview()
     assert result.core_assessment_count <= result.total_registered
-    assert result.ssrs_teacher_count <= result.ssrs_child_count <= result.core_assessment_count
+    assert result.ssrs_teacher_count <= result.ssrs_child_count
 
 
 @pytest.mark.asyncio
@@ -317,10 +334,9 @@ async def test_overview_all_instrument_coverage_counts_are_independent(service: 
         "ssrs_teacher": 1,
     }
     # SSRS Child/Teacher here are raw independent completion counts, distinct
-    # from the cumulative (gated) ssrs_child_count/ssrs_teacher_count used by
-    # the progression funnel - both of which happen to equal these same raw
-    # values in this fixture, since every SSRS Child/Teacher completion here
-    # already sits within the core-battery cohort.
+    # The Overview Snapshot and Assessment Coverage use the same independent
+    # SSRS Child/Teacher completion definitions; progression remains cumulative
+    # and is tested separately through get_progress().
     assert result.ssrs_child_count == counts["ssrs_child"]
     assert result.ssrs_teacher_count == counts["ssrs_teacher"]
     # An individual instrument's count must never be silently overwritten by

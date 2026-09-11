@@ -1185,6 +1185,12 @@ Signals, dropped "Last refresh" stat, `DonutChart` height fix - still
 stand unchanged). SSRS Parent/Child/Teacher live counts also remain fully
 available in the Assessment Coverage instrument cards and on `/progress`.
 
+Current SSRS Child definition: `OverviewResponse.ssrs_child_count` and the
+Assessment Coverage `ssrs_child` entry both count unique registered child IDs
+with `ssrs_child_complete == "2"`, independently of the six-instrument core
+intersection. Progression analysis remains cumulative and still gates the
+SSRS Child and SSRS Teacher stages on the core instrument set.
+
 **Study Snapshot visual refinement (2026-09-08, third pass - cards only,
 no data change):** the 4 headline cards felt generic, so a dedicated
 presentation was built for this row only (the shared `KpiCard.tsx` used

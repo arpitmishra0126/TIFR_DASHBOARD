@@ -437,8 +437,12 @@ class LiveDashboardService:
 
         core_ids = _core_battery_ids(records)
         ssrs_parent_ids = _unique_ids_with_complete_field(records, SSRS_PARENT_COMPLETE_FIELD)
-        ssrs_child_ids = core_ids & _unique_ids_with_complete_field(records, SSRS_CHILD_COMPLETE_FIELD)
-        ssrs_teacher_ids = ssrs_child_ids & _unique_ids_with_complete_field(records, SSRS_TEACHER_COMPLETE_FIELD)
+        ssrs_child_completion_ids = _unique_ids_with_complete_field(records, SSRS_CHILD_COMPLETE_FIELD)
+        ssrs_teacher_ids = (
+            core_ids
+            & ssrs_child_completion_ids
+            & _unique_ids_with_complete_field(records, SSRS_TEACHER_COMPLETE_FIELD)
+        )
 
         udai_categories = [r.get("scr_pareek_category") or None for r in records]
         registration_complete_count = sum(1 for c in children if c.registration_complete)
@@ -454,8 +458,8 @@ class LiveDashboardService:
             core_assessment_percent=_percent(len(core_ids), total_registered),
             ssrs_parent_count=len(ssrs_parent_ids),
             ssrs_parent_percent=_percent(len(ssrs_parent_ids), total_registered),
-            ssrs_child_count=len(ssrs_child_ids),
-            ssrs_child_percent=_percent(len(ssrs_child_ids), total_registered),
+            ssrs_child_count=len(ssrs_child_completion_ids),
+            ssrs_child_percent=_percent(len(ssrs_child_completion_ids), total_registered),
             ssrs_teacher_count=len(ssrs_teacher_ids),
             ssrs_teacher_percent=_percent(len(ssrs_teacher_ids), total_registered),
             instrument_coverage=_instrument_coverage(records, total_registered),
