@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, type ComponentType, type SVGProps } from 
 
 import { exportActiveCases, exportActiveCasesCsv, getRegistry, type RegistryFilterQuery } from "../api/dashboard";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import { IconArrowUpRight, IconCalendar, IconClipboardAlert, IconClipboardX, IconFlag } from "../components/icons";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import { usePopulation } from "../hooks/usePopulation";
 import { distinctVillages } from "../lib/populationAnalytics";
@@ -222,6 +222,9 @@ export default function Registry() {
 
   const exportLabel = data && isFiltered ? `matching participants (${data.total})` : "Active Cases";
 
+  if (error && !data) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
+  if (!data) return <FullScreenLoader message="Loading Registry..." />;
+
   return (
     <section>
       <PageHeader
@@ -435,7 +438,6 @@ export default function Registry() {
       </div>
 
       {error && <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />}
-      {!error && !data && <StudyDataLoader label="Loading participant registry" subLabel="Connecting to live REDCap data…" />}
 
       {data && data.children.length === 0 && (
         <div className="table-card registry-empty-state">

@@ -6,11 +6,11 @@ import ChartCard from "../components/ChartCard";
 import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
 import ItemScoreBarChart from "../components/charts/ItemScoreBarChart";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { PhysicalActivityResponse, ScoreSummary, ScoredItemSummary, WeeklyActivityDay } from "../types/liveDashboard";
 
@@ -69,7 +69,7 @@ export default function PhysicalActivity() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Physical Activity..." />;
 
   const { completion } = data;
   const distribution = data.total_score_distribution.map((c) => ({ label: c.code, count: c.count }));

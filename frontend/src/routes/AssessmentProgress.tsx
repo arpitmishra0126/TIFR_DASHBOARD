@@ -5,9 +5,9 @@ import ChartCard from "../components/ChartCard";
 import CoverageBar from "../components/CoverageBar";
 import DataLoadError from "../components/DataLoadError";
 import Funnel from "../components/Funnel";
+import FullScreenLoader from "../components/FullScreenLoader";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse, ProgressResponse } from "../types/liveDashboard";
 
@@ -29,7 +29,7 @@ export default function AssessmentProgress() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data || !overview) return <StudyDataLoader label="Loading assessment progress" />;
+  if (!data || !overview) return <FullScreenLoader message="Loading Assessment Progress..." />;
 
   return (
     <section>

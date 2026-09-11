@@ -5,11 +5,11 @@ import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import FilterBar from "../components/FilterBar";
+import FullScreenLoader from "../components/FullScreenLoader";
 import HorizontalBarChart, { computeHorizontalBarChartHeight } from "../components/HorizontalBarChart";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import { usePopulation } from "../hooks/usePopulation";
 import {
@@ -42,7 +42,7 @@ export default function Demographics() {
   const isFiltered = Boolean(filters.sex || filters.ageGroup || filters.village || filters.status);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading demographics data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Demographics..." />;
 
   const udaiData = data.udai_pareek_category_distribution.map((c) => ({ label: c.code, count: c.count }));
   const prasadData = data.bg_prasad_category_distribution.map((c) => ({ label: c.code, count: c.count }));

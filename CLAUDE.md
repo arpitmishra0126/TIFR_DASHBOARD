@@ -967,6 +967,56 @@ build served the app with 200 OK and valid HTML. `StudyDataLoader` /
 `DataLoadError` were already in place from this pass - a later refinement
 pass (same day) reused them unchanged; no loader rework was needed.
 
+**Loading state replaced with one shared full-screen loader (2026-09-11,
+supersedes `StudyDataLoader` above - that component and its `.study-loader*`
+CSS are deleted, not kept alongside the new one):** every page's in-content
+hexagon loader was replaced by a single full-viewport branded loader,
+`frontend/src/components/FullScreenLoader.tsx` (`<FullScreenLoader
+message="..." />`) - `position: fixed; inset: 0; z-index: 1000` with a
+fixed dark-navy background (`#0c1220`, the same navy used by the app's own
+dark theme) and a small centered spinner (plain CSS `border-top-color`
+rotation, wrapped in `@media (prefers-reduced-motion: no-preference)`) plus
+one line of text - no sub-status line, no gradients. Colors are fixed, not
+theme-toggled - a consistent branded loading screen regardless of the
+user's light/dark preference. Because it's a fixed overlay above the
+sticky header (`z-index: 30`), the header/nav are visually fully hidden
+while it's shown, without needing to restructure `Layout.tsx`/routing -
+they remain mounted underneath but are completely covered.
+
+Every route that previously called `StudyDataLoader` now calls
+`FullScreenLoader` with a page-specific message instead, still gated on
+the exact same `!data` (or `!overview`) check as before - no artificial
+delay, immediate transition once the fetch resolves, existing
+`DataLoadError`/retry handling for the error path is completely
+unchanged: Overview "Loading ICMR Neurodevelopment Study Dashboard...",
+Registry "Loading Registry...", Assessments (hub) "Loading Assessments...",
+Demographics "Loading Demographics...", Dietary Intake "Loading Dietary
+Intake...", Child Illness History "Loading Child Illness History...",
+Physical Activity "Loading Physical Activity...", Screen Time "Loading
+Screen Time...", Neurodevelopment "Loading Neurodevelopment...",
+Assessment Progress "Loading Assessment Progress...", Assessment Tool
+Status "Loading Assessment Tool Status...". Registry's loader was
+previously shown *inside* the already-rendered page (below the filter bar,
+`{!error && !data && <StudyDataLoader .../>}`) rather than gating the whole
+page - it now uses the same early-return pattern as every other route
+(`if (!data) return <FullScreenLoader .../>`, moved before the page's own
+`return`), so its initial load now also gets the full-screen treatment;
+Registry's *existing* inline error banner for a refetch failure after data
+has already loaded once (e.g. a failed filter change) is preserved exactly
+as before (`{error && <DataLoadError .../>}` further down, unaffected) -
+only the true "no data has ever loaded yet" case changed. No REDCap
+mapping, API call, calculation, or the global "Refresh data" button's
+behavior was touched - this is a loading-UI-only change. Verified via a
+network-throttled headless-browser test (every `/api/v1/dashboard/*`
+response delayed ~1.5s) that the loader text is exactly correct for fresh
+load / Registry / Assessments, the header is visually fully covered during
+load, and the page transitions immediately and correctly to full content
+the moment data arrives (screenshots confirmed for all three, plus a
+normal untouched Registry load showing the Quick Queries/filters/table
+rendering correctly right after the loader clears). Frontend `tsc --noEmit`
+and `npm run build` both succeed; backend untouched (147/147 tests still
+pass).
+
 **Content trim for senior-facing readability (2026-09-01, same day):**
 removed long implementation/governance-note paragraphs that were rendering
 directly in the UI - e.g. Health & Screening's/Screen Time's

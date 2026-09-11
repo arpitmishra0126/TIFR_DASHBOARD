@@ -5,12 +5,12 @@ import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
+import FullScreenLoader from "../components/FullScreenLoader";
 import { IconBrain, IconCalendar, IconClipboardAlert, IconClipboardCheck, IconMonitor } from "../components/icons";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import GroupedBarChart from "../components/charts/GroupedBarChart";
 import ScreenActivityScatter from "../components/charts/ScreenActivityScatter";
 import { useRefresh } from "../context/RefreshContext";
@@ -97,7 +97,7 @@ export default function ScreenTime() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Screen Time..." />;
 
   const { completion } = data;
   const avg = data.average_daily_summary;

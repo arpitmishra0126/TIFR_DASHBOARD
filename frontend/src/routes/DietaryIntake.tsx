@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { getDietaryIntake } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import HorizontalBarChart, { computeHorizontalBarChartHeight } from "../components/HorizontalBarChart";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { DietaryIntakeResponse } from "../types/liveDashboard";
 
@@ -61,7 +61,7 @@ export default function DietaryIntake() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Dietary Intake..." />;
 
   const { completion } = data;
   const otherFood = data.other_food_specified;

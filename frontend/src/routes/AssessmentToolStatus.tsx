@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 
 import { getAssessmentToolStatus } from "../api/dashboard";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { AssessmentDomainStatus, AssessmentToolStatusResponse } from "../types/liveDashboard";
 
@@ -39,7 +39,7 @@ export default function AssessmentToolStatus() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Assessment Tool Status..." />;
 
   const { completion } = data;
 

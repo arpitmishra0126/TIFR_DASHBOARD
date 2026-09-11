@@ -5,10 +5,10 @@ import ChartCard from "../components/ChartCard";
 import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
 import DataLoadError from "../components/DataLoadError";
 import DetailDisclosure from "../components/DetailDisclosure";
+import FullScreenLoader from "../components/FullScreenLoader";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { ConditionIndicator, HealthScreeningResponse } from "../types/liveDashboard";
 
@@ -85,7 +85,7 @@ export default function HealthScreening() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Child Illness History..." />;
 
   const { completion } = data;
 

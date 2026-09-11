@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { getNeurodevelopment } from "../api/dashboard";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { ScoreSummary, SSRSInstrumentSummary } from "../types/liveDashboard";
 
@@ -68,7 +68,7 @@ export default function Neurodevelopment() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <StudyDataLoader label="Loading assessment data" subLabel="Connecting to live REDCap data…" />;
+  if (!data) return <FullScreenLoader message="Loading Neurodevelopment..." />;
 
   return (
     <section>

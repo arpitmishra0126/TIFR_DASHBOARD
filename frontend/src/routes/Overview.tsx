@@ -7,6 +7,7 @@ import { percentOf } from "../components/charts/chartHelpers";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
+import FullScreenLoader from "../components/FullScreenLoader";
 import HorizontalBarChart from "../components/HorizontalBarChart";
 import { IconClipboardCheck, IconMonitor, IconUserCheck, IconUsers } from "../components/icons";
 import InstrumentCoverageCard from "../components/InstrumentCoverageCard";
@@ -14,7 +15,6 @@ import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import SnapshotMetricCard, { SnapshotCardShell } from "../components/SnapshotMetricCard";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { AssessmentToolStatusResponse, ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
 import { GROUPS } from "./AssessmentsHub";
@@ -150,7 +150,7 @@ export default function Overview() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!overview) return <StudyDataLoader />;
+  if (!overview) return <FullScreenLoader message="Loading ICMR Neurodevelopment Study Dashboard..." />;
 
   const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");
   const noDataCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "No Data");

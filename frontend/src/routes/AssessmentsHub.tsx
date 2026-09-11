@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType, type SVGProps } from "react";
 
 import { getOverview } from "../api/dashboard";
 import DataLoadError from "../components/DataLoadError";
+import FullScreenLoader from "../components/FullScreenLoader";
 import {
   IconActivity,
   IconBrain,
@@ -18,7 +19,6 @@ import InstrumentCoverageCard, { type AvailableInstrument } from "../components/
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
-import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
 import type { OverviewResponse } from "../types/liveDashboard";
 
@@ -135,7 +135,7 @@ export default function AssessmentsHub() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!overview) return <StudyDataLoader label="Loading study instruments" subLabel="Connecting to live REDCap data…" />;
+  if (!overview) return <FullScreenLoader message="Loading Assessments..." />;
 
   return (
     <section>
