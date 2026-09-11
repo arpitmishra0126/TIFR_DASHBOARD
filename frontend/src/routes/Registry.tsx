@@ -27,7 +27,29 @@ const INSTRUMENT_COLUMNS: { key: string; short: string; label: string }[] = [
   { key: "ssrs_parent", short: "SSRS-P", label: "SSRS Parent" },
   { key: "ssrs_child", short: "SSRS-C", label: "SSRS Child" },
   { key: "ssrs_teacher", short: "SSRS-T", label: "SSRS Teacher" },
+  { key: "assessment_tool_status", short: "ATS", label: "Assessment Tool Status" },
 ];
+
+// The Participant Detail panel's generic "Assessment Status" tile grid
+// shows Assessment Tool Status separately (as its 4 individual tests -
+// SANGIAN/VWM/DCCS/CD - not one generic Complete/Not Complete tile), so it
+// is excluded from that one grid/count. The main table, the export, and
+// the Quick Query instrument pickers still use the full INSTRUMENT_COLUMNS
+// above (with ATS included) unchanged.
+const DETAIL_GRID_INSTRUMENT_COLUMNS = INSTRUMENT_COLUMNS.filter((col) => col.key !== "assessment_tool_status");
+
+const ATS_TESTS: { key: "sangian" | "vwm" | "dccs" | "cd"; label: string }[] = [
+  { key: "sangian", label: "SANGIAN" },
+  { key: "vwm", label: "VWM" },
+  { key: "dccs", label: "DCCS" },
+  { key: "cd", label: "CD" },
+];
+
+function atsStatusText(status: string | undefined): string {
+  if (status === "done") return "Done";
+  if (status === "not_done") return "Not Done";
+  return "Not answered";
+}
 
 type QuickQueryKey = "follow_up" | "incomplete" | "missing_instrument" | "recent_visits" | "data_review";
 
@@ -511,7 +533,7 @@ export default function Registry() {
 }
 
 function ParticipantDetailPanel({ child, onClose }: { child: RegistryChild; onClose: () => void }) {
-  const completedCount = INSTRUMENT_COLUMNS.filter((col) => child.instrument_status[col.key]).length;
+  const completedCount = DETAIL_GRID_INSTRUMENT_COLUMNS.filter((col) => child.instrument_status[col.key]).length;
 
   return (
     <div className="registry-detail-overlay" onClick={onClose}>
@@ -555,12 +577,12 @@ function ParticipantDetailPanel({ child, onClose }: { child: RegistryChild; onCl
           <div className="registry-detail-section-head">
             <span className="registry-detail-section-label">Assessment Status</span>
             <span className="registry-detail-section-count">
-              {completedCount}/{INSTRUMENT_COLUMNS.length} completed
+              {completedCount}/{DETAIL_GRID_INSTRUMENT_COLUMNS.length} completed
             </span>
           </div>
 
           <div className="registry-detail-instrument-grid">
-            {INSTRUMENT_COLUMNS.map((col) => {
+            {DETAIL_GRID_INSTRUMENT_COLUMNS.map((col) => {
               const complete = child.instrument_status[col.key] ?? false;
               return (
                 <div key={col.key} className={`registry-detail-instrument-tile ${complete ? "registry-detail-instrument-tile-complete" : ""}`}>
@@ -568,6 +590,28 @@ function ParticipantDetailPanel({ child, onClose }: { child: RegistryChild; onCl
                   <div className="registry-detail-instrument-text">
                     <span className="registry-detail-instrument-name">{col.label}</span>
                     <span className="registry-detail-instrument-status">{complete ? "Completed" : "Not completed"}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="registry-detail-divider" />
+
+          <div className="registry-detail-section-head">
+            <span className="registry-detail-section-label">Assessment Tool Status</span>
+          </div>
+
+          <div className="registry-detail-instrument-grid">
+            {ATS_TESTS.map((test) => {
+              const status = child.assessment_tool_status_detail[test.key];
+              const complete = status === "done";
+              return (
+                <div key={test.key} className={`registry-detail-instrument-tile ${complete ? "registry-detail-instrument-tile-complete" : ""}`}>
+                  <InstrumentDot complete={complete} />
+                  <div className="registry-detail-instrument-text">
+                    <span className="registry-detail-instrument-name">{test.label}</span>
+                    <span className="registry-detail-instrument-status">{atsStatusText(status)}</span>
                   </div>
                 </div>
               );

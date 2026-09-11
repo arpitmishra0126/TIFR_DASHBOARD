@@ -8,6 +8,7 @@ from app.ingestion.live_field_map import (
     CORE_BATTERY_DESCRIPTION,
     CORE_BATTERY_INSTRUMENTS,
     REGISTRATION_COMPLETE_FIELD,
+    REGISTRY_INSTRUMENT_ENTRIES,
     SSRS_CHILD_COMPLETE_FIELD,
     SSRS_CHILD_FREQ_FIELDS,
     SSRS_CHILD_IMP_FIELDS,
@@ -22,6 +23,8 @@ from app.ingestion.normalize import capitalize_label, compute_age_years, parse_c
 from app.redcap.live_repository import LiveRedCapRepository
 from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
 from app.services.module_analytics import (
+    SANGIAN_ASSESSMENT_FIELDS,
+    VWM_ASSESSMENT_FIELDS,
     build_assessment_tool_status_analysis,
     build_dietary_analysis,
     build_health_screening_analysis,
@@ -106,6 +109,32 @@ def _progression_stage(record: dict, core_battery_complete: bool) -> str:
     return "SSRS Teacher"
 
 
+def _ats_group_status(record: dict, fields: tuple[str, ...]) -> str:
+    """One of "done" / "not_done" / "not_answered" for a group of Assessment
+    Tool Status fields (Done=1/Not Done=2, blank=unanswered) - "done" only
+    when every field in the group is answered Done, "not_answered" only
+    when none are answered at all, "not_done" for anything else (an
+    explicit Not Done, or a partial mix of done/blank). No score or
+    denominator is derived - a status label only."""
+    resolved = [(record.get(f) or "").strip() for f in fields]
+    if all(v == "" for v in resolved):
+        return "not_answered"
+    if all(v == "1" for v in resolved):
+        return "done"
+    return "not_done"
+
+
+def _assessment_tool_status_detail(record: dict) -> dict[str, str]:
+    sangian_fields = tuple(field for field, _ in SANGIAN_ASSESSMENT_FIELDS)
+    vwm_field, dccs_field, cd_field = (field for field, _ in VWM_ASSESSMENT_FIELDS)
+    return {
+        "sangian": _ats_group_status(record, sangian_fields),
+        "vwm": _ats_group_status(record, (vwm_field,)),
+        "dccs": _ats_group_status(record, (dccs_field,)),
+        "cd": _ats_group_status(record, (cd_field,)),
+    }
+
+
 def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> RegistryChild | None:
     child_id = _child_id(record)
     if not child_id:
@@ -113,7 +142,7 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
 
     dob = parse_date(record.get("child_dob"))
     visit_date = parse_date(record.get("visit_date"))
-    instrument_status = {key: parse_complete_flag(record.get(field)) for key, field, _ in ALL_INSTRUMENTS}
+    instrument_status = {key: parse_complete_flag(record.get(field)) for key, field, _ in REGISTRY_INSTRUMENT_ENTRIES}
     core_battery_complete = all(parse_complete_flag(record.get(f)) for f in CORE_BATTERY_COMPLETE_FIELDS)
     return RegistryChild(
         redcap_child_id=child_id,
@@ -125,6 +154,7 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
         visit_date=visit_date.isoformat() if visit_date else None,
         registration_complete=parse_complete_flag(record.get(REGISTRATION_COMPLETE_FIELD)),
         instrument_status=instrument_status,
+        assessment_tool_status_detail=_assessment_tool_status_detail(record),
         core_battery_complete=core_battery_complete,
         progression_stage=_progression_stage(record, core_battery_complete),
     )

@@ -1596,6 +1596,73 @@ only the matching row count. UI interaction was not verified in a live
 browser this session (no browser-automation tool was available) - verify
 visually before relying on this for a demo.
 
+**Assessment Tool Status added to Registry (2026-09-11):** the 10th
+instrument (see the "CURRENT REDCAP INSTRUMENTS" section above) is now
+part of Registry's table, filtering, participant detail panel, and the
+Excel/CSV export.
+- **Table**: a compact "ATS" column (`INSTRUMENT_COLUMNS` in `Registry.tsx`
+  gained `{ key: "assessment_tool_status", short: "ATS", label:
+  "Assessment Tool Status" }`), positioned right before "Stage" - the same
+  generic loop that renders every other instrument column, so it reuses
+  the exact same `InstrumentDot` ✓/– styling automatically, and is
+  automatically included in the "Missing Assessment"/"Incomplete
+  Assessments" instrument pickers (both driven by the same array) with no
+  extra filter-logic code needed.
+- **Backend**: `RegistryChild.instrument_status` is now built from a new
+  `REGISTRY_INSTRUMENT_ENTRIES` tuple (`live_field_map.py`) -
+  `ALL_INSTRUMENTS` plus `("assessment_tool_status",
+  ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD, "Assessment Tool Status")` -
+  deliberately a *separate* tuple, not an addition to `ALL_INSTRUMENTS`
+  itself, since that constant also feeds Overview's `all_instrument_coverage`
+  (the Data Collection & Quality Status stats/flag list) - keeping them
+  separate means Overview's instrument count/denominators are completely
+  unaffected by this change, per the task's explicit "do not change
+  unrelated UI."
+- **Participant detail panel**: the generic "Assessment Status" tile grid
+  now explicitly excludes `assessment_tool_status` (via a new
+  `DETAIL_GRID_INSTRUMENT_COLUMNS` filtered list, so its "N/8 completed"
+  count is unchanged) and a **separate** "Assessment Tool Status" section
+  was added below it, showing the full label and the **four tests
+  separately** - SANGIAN / VWM / DCCS / CD - each derived from that
+  child's own raw Done=1/Not Done=2 REDCap codes via a new
+  `RegistryChild.assessment_tool_status_detail` field (`dict[str, str]`,
+  one of `"done"`/`"not_done"`/`"not_answered"` per test - a status label
+  only, no score or denominator). New helpers in `live_dashboard_service
+  .py`: `_ats_group_status()` ("done" only when every field in the group is
+  answered Done; "not_answered" only when none are answered at all;
+  "not_done" for anything else - an explicit Not Done, or a partial
+  done/blank mix) and `_assessment_tool_status_detail()` (SANGIAN = all 6
+  `SANGIAN_ASSESSMENT_FIELDS`; VWM/DCCS/CD = their own single field each,
+  from `VWM_ASSESSMENT_FIELDS`).
+- **Export** (`export_service.py`): `ASSESSMENT_INSTRUMENTS` (the CSV's
+  `<Instrument> Status` columns, Excel Sheet 1 Group J's per-instrument
+  Complete/Not Complete FieldSpecs, Sheet 2's Assessment Status table, and
+  the Summary sheet's ASSESSMENT ACQUISITION/DATA COVERAGE tiers - all
+  already written generically off this one tuple, no hardcoded column
+  counts anywhere) now includes `("assessment_tool_status",
+  ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD, "Assessment Tool Status")` as a
+  9th entry (comment updated from "8" to "9"). The CSV's mechanically-
+  generated column name is "Assessment Tool Status Status" (the existing
+  `f"{label} Status"` convention applied to a label that already contains
+  the word "Status") - left as-is rather than special-cased, since no
+  different column name was specified and every other column follows the
+  identical convention. Two existing export tests updated to match:
+  `test_csv_header_matches_approved_field_set` (new trailing column) and
+  the renamed `test_assessment_instruments_cover_all_nine_non_registration_instruments`
+  (was "...eight...").
+Tests: 3 new/updated in `test_live_dashboard_service.py`
+(`test_ats_group_status_done_not_done_and_not_answered`,
+`test_assessment_tool_status_detail_covers_all_four_tests_independently`,
+plus an assertion added to the existing `test_registry_instrument_status_and_progression_stage`)
+and the 2 export test updates above. Backend: **149/149 tests pass**.
+Frontend `tsc --noEmit` and `npm run build` both succeed. Live-verified:
+the instrument still has 0/212 completions, so the ATS table column
+correctly shows "–" for every child and the slide-over's four tests all
+correctly show "Not answered" (never fabricated) - confirmed via
+screenshots of both the table and the participant detail panel; the CSV
+export's header correctly gained the trailing "Assessment Tool Status
+Status" column against a live fetch.
+
 ### Assessment Progress
 
 Focus on:
@@ -2301,7 +2368,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **147/147 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-11 Assessment Tool Status tests). Frontend `npm run build` succeeds.
+Backend test count: **149/149 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-11 Registry Assessment Tool Status integration tests). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

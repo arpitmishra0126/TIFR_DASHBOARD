@@ -411,6 +411,18 @@ ASSESSMENT_TOOL_STATUS_ITEM_FIELDS: tuple[str, ...] = (
     "cd_3",
 )
 
+# Registry-only extension of ALL_INSTRUMENTS (2026-09-11) - adds Assessment
+# Tool Status to the Registry participant x instrument status matrix
+# (`RegistryChild.instrument_status`) and its "Missing Instrument" filter.
+# Deliberately a SEPARATE tuple, not an addition to ALL_INSTRUMENTS itself -
+# ALL_INSTRUMENTS also feeds Overview's `all_instrument_coverage` (the
+# Data Collection & Quality Status stats/flag list), which this task did
+# not ask to change; keeping them separate means Overview's instrument
+# count/denominators stay exactly as they were.
+REGISTRY_INSTRUMENT_ENTRIES: tuple[tuple[str, str, str], ...] = ALL_INSTRUMENTS + (
+    ("assessment_tool_status", ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD, "Assessment Tool Status"),
+)
+
 # The fixed set of live REDCap field names the application requests and caches.
 LIVE_FIELDS: tuple[str, ...] = (
     "child_id",

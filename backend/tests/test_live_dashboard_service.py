@@ -2,7 +2,11 @@ from datetime import date
 
 import pytest
 
-from app.services.live_dashboard_service import LiveDashboardService
+from app.services.live_dashboard_service import (
+    LiveDashboardService,
+    _assessment_tool_status_detail,
+    _ats_group_status,
+)
 from tests.fixtures.live_redcap import FIXTURE_METADATA, FakeRedCapRepository, build_fixture_records
 
 AS_OF = date(2026, 8, 25)
@@ -71,6 +75,51 @@ async def test_registry_instrument_status_and_progression_stage(service: LiveDas
     # REC005: registered only, nothing else started.
     assert by_id["REC005"].core_battery_complete is False
     assert all(v is False for k, v in by_id["REC005"].instrument_status.items() if k != "registration")
+
+    # Assessment Tool Status (2026-09-11, the 10th instrument) is included
+    # in the same instrument_status matrix, alongside the original 9 - the
+    # shared fixture has no ATS data for any child, so it's False for all.
+    assert "assessment_tool_status" in by_id["REC001"].instrument_status
+    assert by_id["REC001"].instrument_status["assessment_tool_status"] is False
+
+
+def test_ats_group_status_done_not_done_and_not_answered():
+    """"done" only when every field in the group is answered Done (1);
+    "not_answered" only when none are answered at all; "not_done" for
+    anything else (an explicit Not Done, or a partial done/blank mix) -
+    never a fabricated score/denominator, a status label only."""
+    assert _ats_group_status({"vwm_1": "1"}, ("vwm_1",)) == "done"
+    assert _ats_group_status({"vwm_1": "2"}, ("vwm_1",)) == "not_done"
+    assert _ats_group_status({}, ("vwm_1",)) == "not_answered"
+    assert _ats_group_status({"vwm_1": ""}, ("vwm_1",)) == "not_answered"
+
+    sangian_fields = ("pkb_1", "ank_2", "lkt_3", "hp_4", "cmc_5", "chmc_6")
+    all_done = {f: "1" for f in sangian_fields}
+    assert _ats_group_status(all_done, sangian_fields) == "done"
+
+    one_not_done = {**all_done, "hp_4": "2"}
+    assert _ats_group_status(one_not_done, sangian_fields) == "not_done"
+
+    partial_blank = {"pkb_1": "1", "ank_2": "1"}  # rest genuinely blank
+    assert _ats_group_status(partial_blank, sangian_fields) == "not_done"
+
+    assert _ats_group_status({}, sangian_fields) == "not_answered"
+
+
+def test_assessment_tool_status_detail_covers_all_four_tests_independently():
+    record = {
+        "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",  # SANGIAN fully done
+        "vwm_1": "2",  # VWM explicitly not done
+        "dccs_2": "1",  # DCCS done
+        # cd_3 left blank - not answered
+    }
+    detail = _assessment_tool_status_detail(record)
+    assert detail == {
+        "sangian": "done",
+        "vwm": "not_done",
+        "dccs": "done",
+        "cd": "not_answered",
+    }
 
 
 @pytest.mark.asyncio

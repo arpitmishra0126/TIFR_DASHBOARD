@@ -90,6 +90,11 @@ export interface RegistryChild {
   visit_date: string | null;
   registration_complete: boolean;
   instrument_status: Record<string, boolean>;
+  // Assessment Tool Status (2026-09-11) - one of "done" / "not_done" /
+  // "not_answered" for each of the four separate tests, keyed by
+  // "sangian" / "vwm" / "dccs" / "cd". A status label only - no score or
+  // denominator.
+  assessment_tool_status_detail: Record<string, string>;
   core_battery_complete: boolean;
   progression_stage: "Registered" | "Core Assessment Battery" | "SSRS Child" | "SSRS Teacher";
 }

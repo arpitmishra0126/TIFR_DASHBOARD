@@ -354,12 +354,14 @@ def test_csv_header_matches_approved_field_set():
         "SSRS Parent Status",
         "SSRS Child Status",
         "SSRS Teacher Status",
+        "Assessment Tool Status Status",
     ]
 
 
-def test_assessment_instruments_cover_all_eight_non_registration_instruments():
+def test_assessment_instruments_cover_all_nine_non_registration_instruments():
     labels = {label for _, _, label in ASSESSMENT_INSTRUMENTS}
     assert labels == {
+        "Assessment Tool Status",
         "SES",
         "DSEQ",
         "Child Illness History",

@@ -86,10 +86,21 @@ class RegistryChild(BaseModel):
     registration_complete: bool
     # Per-instrument completion (all 9 live REDCap instruments, keyed by the
     # same instrument keys as ALL_INSTRUMENTS/InstrumentCoverage - e.g. "ses",
-    # "dseq", "ssrs_child"), computed straight from each instrument's own
-    # REDCap completion field. Powers the Registry participant x assessment
-    # status view and the "Missing Instrument" quick query.
+    # "dseq", "ssrs_child" - plus "assessment_tool_status", the 10th
+    # instrument, added 2026-09-11 via REGISTRY_INSTRUMENT_ENTRIES), computed
+    # straight from each instrument's own REDCap completion field. Powers the
+    # Registry participant x assessment status view and the "Missing
+    # Instrument" quick query.
     instrument_status: dict[str, bool] = Field(default_factory=dict)
+    # Assessment Tool Status per-child detail (2026-09-11) - one of "done" /
+    # "not_done" / "not_answered" for each of the four separate tests
+    # (sangian/vwm/dccs/cd), derived directly from that child's own raw
+    # Done=1/Not Done=2 REDCap codes - "done" only when every field in the
+    # test is answered Done, "not_answered" only when none are answered at
+    # all, "not_done" otherwise (any explicit Not Done, or a partial mix).
+    # No score/denominator is computed here - this is a status label only,
+    # for the Registry participant detail panel.
+    assessment_tool_status_detail: dict[str, str] = Field(default_factory=dict)
     # All six Core Assessment Battery instruments complete for this child -
     # same CORE_BATTERY_COMPLETE_FIELDS definition used everywhere else.
     core_battery_complete: bool = False
