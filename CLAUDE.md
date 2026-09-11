@@ -1017,6 +1017,49 @@ rendering correctly right after the loader clears). Frontend `tsc --noEmit`
 and `npm run build` both succeed; backend untouched (147/147 tests still
 pass).
 
+**FullScreenLoader refined: DNA-strand spinner + translucent overlay for
+in-app navigation (2026-09-11, same day):** two changes to `FullScreenLoader
+.tsx` only - no other page file touched, no props added (still just
+`message`):
+- **Spinner**: the plain rotating ring was replaced with a compact
+  (56x28px) two-strand "DNA" animation - 6 small dots per strand, blue/cyan
+  (`#3fa9f5`) for strand A and pink/magenta (`#e05bb0`) for strand B, each
+  dot bobbing vertically with a per-dot `animation-delay` so the row reads
+  as a traveling wave rather than synchronized blinking; the two strands
+  run in opposite phase so they visibly cross over, like a double helix
+  viewed edge-on. Plain solid-color dots, no glow/gradient. Wrapped in
+  `@media (prefers-reduced-motion: no-preference)` - a reduced-motion
+  preference yields the two static rows of dots instead of no loader.
+- **Overlay for in-app navigation**: a new session-lifetime flag
+  (`appHasLoadedOnce`, a plain module-level variable in `FullScreenLoader
+  .tsx` - not React state, not touching any other file) is set the moment
+  a `FullScreenLoader` instance unmounts (i.e. the exact moment its page's
+  data has just arrived and real content is about to render). Each new
+  `FullScreenLoader` mount reads this flag once (`useRef`) to decide its
+  own variant: the very first mount in a browser tab (nothing has ever
+  loaded yet) renders fully opaque (`#0c1220`) as before; every later
+  mount (a subsequent in-app navigation) adds the `.fullscreen-loader-
+  overlay` modifier class instead - `rgba(9, 13, 24, 0.84)` (84% opacity,
+  within the requested 80-88% range) plus a 3px backdrop blur, so the
+  still-mounted header/nav (and, on a same-page data refresh, whatever of
+  the page itself remains) stay dimly recognizable underneath rather than
+  being fully hidden. This required no change to `Layout.tsx`, routing, or
+  any individual page - the flag is entirely self-contained inside
+  `FullScreenLoader.tsx`, satisfying "modify the shared loader only."
+Verified via a network-throttled headless-browser test (dashboard API
+calls delayed ~1.5s): initial load renders `class="fullscreen-loader"`
+(opaque, confirmed via screenshot - solid navy, DNA dots + text only);
+navigating to Registry and then Assessments both render `class=
+"fullscreen-loader fullscreen-loader-overlay"` with the exact required
+text, and the screenshot confirms the header/nav/Back buttons are visibly
+present but dimmed/blurred behind the loader, with the DNA spinner and
+white text as the clear visual focus; a follow-up screenshot after the
+loader detaches confirms the destination page (Assessments hub) renders
+its real content immediately, with no stuck or delayed state. No REDCap
+mapping, API call, calculation, routing, or "Refresh data" behavior
+touched. Frontend `tsc --noEmit` and `npm run build` both succeed; backend
+untouched (147/147 tests still pass).
+
 **Content trim for senior-facing readability (2026-09-01, same day):**
 removed long implementation/governance-note paragraphs that were rendering
 directly in the UI - e.g. Health & Screening's/Screen Time's

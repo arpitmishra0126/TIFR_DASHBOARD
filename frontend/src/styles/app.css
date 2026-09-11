@@ -2157,13 +2157,20 @@ table.data-table tbody tr:hover {
 
 /* --- Full-screen loader: the single shared loading state for the whole
    app (2026-09-11, replaces the old in-content "study-loader" hexagon
-   graphic everywhere). Fixed, covers the entire viewport including the
-   header/nav (which stay mounted underneath but are visually hidden by
-   this opaque overlay) - a page shows this only while its own data is
-   genuinely null, no artificial delay. Colors are fixed (not theme-
-   toggled) - a branded navy loading screen, same navy/blue as the app's
-   own dark theme, shown consistently regardless of the user's light/dark
-   preference. */
+   graphic everywhere; refined same day with a DNA-strand spinner + a
+   translucent overlay variant for in-app navigation). Fixed, covers the
+   entire viewport including the header/nav (which stay mounted
+   underneath) - a page shows this only while its own data is genuinely
+   null, no artificial delay. Colors are fixed (not theme-toggled) - a
+   branded navy loading screen, same navy/blue as the app's own dark
+   theme, shown consistently regardless of the user's light/dark
+   preference.
+   - Default (no modifier) = the very first load in this tab, nothing has
+     rendered yet: fully opaque.
+   - `.fullscreen-loader-overlay` = a later in-app navigation (something
+     has already rendered once): a translucent scrim + light blur, so the
+     previously-rendered header/page stay dimly recognizable underneath
+     instead of being fully hidden. */
 .fullscreen-loader {
   position: fixed;
   inset: 0;
@@ -2176,23 +2183,65 @@ table.data-table tbody tr:hover {
   background: #0c1220;
 }
 
-.fullscreen-loader-spinner {
-  width: 40px;
-  height: 40px;
+.fullscreen-loader-overlay {
+  background: rgba(9, 13, 24, 0.84);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+/* --- DNA-strand spinner: two rows of small dots (blue/cyan + pink/
+   magenta), each dot bobbing with a per-dot delay so the row reads as a
+   traveling wave rather than dots blinking in place; the two strands run
+   in opposite phase so they visibly cross over, like a double helix seen
+   edge-on. Compact, no glow/gradient - plain solid-color dots. */
+.fullscreen-loader-dna {
+  position: relative;
+  width: 56px;
+  height: 28px;
+}
+
+.fullscreen-loader-dna-dot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  border: 3px solid rgba(57, 135, 229, 0.22);
-  border-top-color: #3987e5;
+  transform: translate(-50%, -50%);
+}
+
+.fullscreen-loader-dna-dot-a {
+  background: #3fa9f5;
+}
+
+.fullscreen-loader-dna-dot-b {
+  background: #e05bb0;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .fullscreen-loader-spinner {
-    animation: fullscreen-loader-spin 0.8s linear infinite;
+  .fullscreen-loader-dna-dot-a {
+    animation: fullscreen-loader-dna-wave-a 1.6s ease-in-out infinite;
+  }
+
+  .fullscreen-loader-dna-dot-b {
+    animation: fullscreen-loader-dna-wave-b 1.6s ease-in-out infinite;
   }
 }
 
-@keyframes fullscreen-loader-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes fullscreen-loader-dna-wave-a {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(-8px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(8px);
+  }
+}
+
+@keyframes fullscreen-loader-dna-wave-b {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(8px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-8px);
   }
 }
 
