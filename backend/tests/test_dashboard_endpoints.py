@@ -139,6 +139,30 @@ def test_dietary_intake_endpoint_returns_per_food_group_distribution():
     assert body["other_food_specified"]["total"] == 6
 
 
+def test_assessment_tool_status_endpoint_shape_and_denominators():
+    response = client.get("/api/v1/dashboard/assessment-tool-status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["instrument"] == "Assessment Tool Status"
+    assert body["completion"]["total_registered"] == 6
+    assert len(body["items"]) == 9
+    keys = [item["key"] for item in body["items"]]
+    assert keys == ["pkb_1", "ank_2", "lkt_3", "hp_4", "cmc_5", "chmc_6", "vwm_1", "dccs_2", "cd_3"]
+    for domain in ("sangian", "vwm", "overall"):
+        assert domain in body
+        assert body[domain]["total"] == 6
+    assert body["sangian"]["field_count"] == 6
+    assert body["vwm"]["field_count"] == 3
+    assert body["overall"]["field_count"] == 9
+    # The live-shaped fixture has no assessment_tool_status data at all yet -
+    # every domain/item must report a real zero/null, not a fabricated value.
+    assert body["overall"]["valid_n"] == 0
+    assert body["overall"]["mean_done"] is None
+    assert "overall_pooled" in body
+    assert body["overall_pooled"]["valid_n"] == 0
+    assert body["overall_pooled"]["completion_percent"] == 0.0
+
+
 def test_neurodevelopment_endpoint_shows_teacher_with_no_acquired_data():
     response = client.get("/api/v1/dashboard/neurodevelopment")
     assert response.status_code == 200

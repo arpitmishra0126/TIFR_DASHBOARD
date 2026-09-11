@@ -302,6 +302,42 @@ export interface DietaryIntakeResponse {
   notes: Record<string, string>;
 }
 
+export interface AssessmentToolItemStatus {
+  key: string;
+  label: string;
+  done_count: number;
+  not_done_count: number;
+  valid_n: number;
+  completion_percent: number;
+}
+
+export interface AssessmentDomainStatus {
+  field_count: number;
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean_done: number | null;
+  completion_percent: number | null;
+}
+
+export interface AssessmentPooledStatus {
+  done_count: number;
+  not_done_count: number;
+  valid_n: number;
+  completion_percent: number;
+}
+
+export interface AssessmentToolStatusResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  sangian: AssessmentDomainStatus;
+  vwm: AssessmentDomainStatus;
+  overall: AssessmentDomainStatus;
+  overall_pooled: AssessmentPooledStatus;
+  items: AssessmentToolItemStatus[];
+}
+
 export interface ProgressStage {
   key: string;
   label: string;

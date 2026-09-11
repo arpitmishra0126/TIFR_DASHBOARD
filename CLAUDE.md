@@ -115,7 +115,8 @@ belonged to the wrong project and must never be reintroduced.
 
 ## CURRENT REDCAP INSTRUMENTS
 
-The correct project contains these 9 instruments:
+The correct project contains these 10 instruments (confirmed live
+2026-09-11 via the REDCap `instrument` API):
 
 1. Registration
 2. SES
@@ -126,6 +127,7 @@ The correct project contains these 9 instruments:
 7. SSRS Parent
 8. SSRS Child
 9. SSRS Teacher
+10. Assessment Tool Status (added 2026-09-11 - see below)
 
 The project is classic/non-longitudinal.
 
@@ -169,6 +171,118 @@ live REDCap (212 registered, PAQ-C 44/212 complete, matching the other
 core-battery instruments' live completion counts).
 
 Field-level content is mapped into the **dashboard modules** (Overview/Registry/Demographics/Progress) for **Registration** and **SES** only - the other 6 instruments still show only completion status there. Separately, the **Active Cases Excel export** (see EXPORT FEATURE below) additionally reads real acquired/derived field-level data from **DSEQ, Child Illness History, PAQ-C, and Dietary Intake** (approved per the 2026-08-26 field audit) - this is export-only and does not change any dashboard module or calculation. SSRS Parent/Child/Teacher remain completion-status-only everywhere (dashboard and export) - their item-level data is mostly empty in the live project today and was not approved for export. See `backend/app/ingestion/live_field_map.py` for the dashboard field-availability ledger and `backend/app/services/export_service.py`'s `ACTIVE_CASES_FIELD_SPECS` for the export's field-by-field documentation.
+
+**Assessment Tool Status - 10th instrument added (2026-09-11):** a brand-
+new live REDCap instrument, `assessment_tool_status`, discovered via a
+fresh `instrument` API check while implementing this feature (it did not
+exist in earlier sessions' 9-instrument audits). It is a simple
+administration/status tracker - NOT the actual SANGIAN/VWM/DCCS/CD Task
+outcome data (those 4 tools plus ASER remain unmapped "Under Development"
+placeholders on the Assessments hub, unchanged by this addition). It has 9
+independent `radio` fields, each confirmed live to share the identical
+`1, a) Done | 2, b) Not Done` choice string:
+- **SANGIAN** (6 fields): `pkb_1` (Padh Ke Batao), `ank_2` (Angkanit),
+  `lkt_3` (Lottery Ka Ticket), `hp_4` (Her Pher), `cmc_5` (Chalo Mela
+  Chale), `chmc_6` (Chor Machaye Shor).
+- **VWM & Related Tasks** (3 fields): `vwm_1` (VWM Mallet Box Assessment),
+  `dccs_2` (DCCS Assessment), `cd_3` (CD Task Assessment).
+- Completion field: `assessment_tool_status_complete` (same REDCap
+  auto-derived `<form_name>_complete` convention as every other
+  instrument).
+
+All 9 fields + the completion field were added to `LIVE_FIELDS`
+(`ASSESSMENT_TOOL_STATUS_ITEM_FIELDS`/`ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD`
+in `live_field_map.py`). New `build_assessment_tool_status_analysis()` in
+`module_analytics.py` (field-name -> English-display-name tuples:
+`SANGIAN_ASSESSMENT_FIELDS`/`VWM_ASSESSMENT_FIELDS` - REDCap's own labels
+are bilingual English/Hindi; only the English name is ever shown) computes:
+- **Per-field item status** (`items`, 9 rows) - `done_count`/`not_done_count`/
+  `valid_n` (= done+not_done, i.e. children who actually answered that
+  specific field - blank is excluded from both counts, never treated as
+  Not Done) / `completion_percent` (done/valid_n).
+- **Per-domain status** (`sangian`/`vwm`/`overall`, the last pooling all 9
+  fields) - for each child who answered *at least one* field in the
+  domain, counts how many of that domain's fields are marked Done (0..
+  field_count); `mean_done` is the mean of these per-child counts across
+  such children (`valid_n`), and `completion_percent` is
+  `mean_done/field_count*100`. A domain nobody has answered reports
+  `mean_done`/`completion_percent` as `null`, never a fabricated 0 - same
+  no-data convention as every other coded-score card in this app.
+New `AssessmentDomainStatus`/`AssessmentToolItemStatus`/
+`AssessmentToolStatusResponse` schemas; `LiveDashboardService
+.get_assessment_tool_status()`; new endpoint `GET /api/v1/dashboard
+/assessment-tool-status`. Frontend: new page
+`frontend/src/routes/AssessmentToolStatus.tsx` at route
+`/assessment-tool-status` - 3 compact KPI cards (SANGIAN/VWM/Overall,
+value = `mean_done/field_count`, e.g. "4.5/6", sublabel = completion % +
+n/N (%)) followed by a compact 9-row Done/Not Done/Valid N/Completion %
+table, both using the same sharp/almost-square `--radius-sharp` (3px)
+corner token introduced for Demographics. **This route is intentionally
+not wired into the top nav or the Assessments hub** - the hub's
+`InstrumentCoverageCard` is tightly coupled to `OverviewResponse
+.all_instrument_coverage` (Registry/Overview/Excel-export's `ALL_INSTRUMENTS`
+list), which this feature deliberately does NOT touch, to keep this
+addition scoped to its own analytics module rather than rippling into
+Registry's per-child instrument-status columns or the Excel export - same
+"reachable by direct URL only" precedent already established for
+Neurodevelopment and `/progress`. Add it to the hub/nav explicitly if a
+future task asks for that. Tests: `test_assessment_tool_status_done_flag_and_item_breakdown`,
+`test_assessment_tool_status_analysis_field_mapping_and_denominators`,
+`test_assessment_tool_status_domain_with_no_respondents_is_none_not_zero`
+in `test_module_analytics.py`, plus an endpoint shape test in
+`test_dashboard_endpoints.py`. Backend: **147/147 tests pass**. Frontend
+`tsc --noEmit` and `npm run build` both succeed. Live-verified: the
+instrument is genuinely brand-new with 0/212 completions and no field data
+yet - every card/row correctly shows "No data (0/212)"/`0%`/null, not a
+fabricated value; denominator logic itself is covered by the unit tests
+above using synthetic records.
+
+**Assessment Tool Status added to Overview (2026-09-11, same day -
+presentation/new-section only; the dedicated `/assessment-tool-status` page
+above is unchanged):** a compact "Assessment Tool Status" section was added
+to Overview, positioned directly below Study Snapshot and clearly separate
+from it (own `SectionHeader`, own container) - Study Snapshot's own 4 cards
+are byte-for-byte unchanged. Per an explicit correction to the first draft
+of this section: **SANGIAN, VWM, DCCS, and CD Task are four genuinely
+separate tests** - VWM/DCCS/CD are each backed by exactly one REDCap field
+(`vwm_1`/`dccs_2`/`cd_3`), confirmed live, so they are **never** shown with
+a fabricated "/3" denominator; only SANGIAN (which genuinely has 6 fields)
+shows a "done sub-tests / 6" figure.
+- **New backend field**: `overall_pooled` on `AssessmentToolStatusResponse`
+  (`AssessmentPooledStatus` schema, `_pooled_assessment_tool_status()` in
+  `module_analytics.py`) - sums `done_count`/`not_done_count` directly
+  across the 9 already-computed per-field `items` (i.e. a genuine
+  field-response-level completion rate: done responses / valid responses
+  across all 9 fields), explicitly **not** a per-child participant
+  denominator, per instruction. This is additive - the existing per-child
+  `sangian`/`vwm`/`overall` domain fields (used by the dedicated page) are
+  unchanged.
+- **Overview card** (`Overview.tsx`, new `AssessmentToolStatusCard` local
+  component + `.ats-*` CSS in `app.css`): one container, "Overall
+  Assessment Tool Status" (`overall_pooled`, e.g. "11/15 (73.3%)") on top
+  with a divider, then exactly 4 equal columns below - **SANGIAN** (from
+  the existing `sangian` domain: mean sub-tests done / 6), **VWM**, **DCCS**,
+  **CD** (each read directly from its own single item in `items` by key -
+  `done_count`/`valid_n`/`completion_percent`, e.g. "18/44 (40.9%)") - no
+  column says "Assessment" repeatedly, labels are exactly SANGIAN/VWM/DCCS/CD.
+  Almost-square corners via the existing `--radius-sharp` (3px) token (same
+  one introduced for Demographics); top accent bars reuse the existing
+  `.snapshot-tone-blue/aqua/amber/violet` classes (no new color system). A
+  domain/item with `valid_n === 0` renders "No data"/"—", never a
+  fabricated ratio or 0%. Overview fetches `getAssessmentToolStatus()`
+  alongside `getOverview()` in the same `useEffect`; a failure on this
+  secondary fetch is swallowed (`setAssessmentToolStatus(null)`) so it
+  cannot break or block the rest of the Overview page - the section simply
+  doesn't render if the data isn't available. No other Overview section,
+  the population filters, or any REDCap mapping/calculation/denominator
+  was touched. Tests: `overall_pooled` assertions added to the existing
+  `test_assessment_tool_status_analysis_field_mapping_and_denominators`
+  and the `/assessment-tool-status` endpoint test. Backend: **147/147**
+  tests pass. Frontend `tsc --noEmit` and `npm run build` both succeed.
+  Live-verified: the instrument still has 0 live responses, so Overview
+  correctly shows "No data" throughout this new section (screenshot
+  confirmed layout/labels/dividers/corners render correctly even in the
+  fully-empty state).
 
 ---
 
@@ -1416,6 +1530,61 @@ Use available approved fields such as:
 
 Do not duplicate this entire analysis on Overview.
 
+**Page redesign (2026-09-11, presentation/layout only - no REDCap data,
+field mapping, SES category derivation, age/sex/village/income/household
+calculation, denominator, or filter logic changed):** `Demographics.tsx`
+was restructured from three equal-width cards + a loose KPI row into a
+deliberate layout: **Row 1** (`chart-grid two-col`) Sex Distribution + Age
+Distribution; **Row 2** (`chart-grid`, single child so it fills the full
+width) Geographic Distribution; **Row 3** (`kpi-row ses-metric-row`) the
+two compact SES KPI cards; **Row 4** (`chart-grid two-col`) Udai Pareek SES
+Category + BG Prasad Category. `populationAnalytics.ts` (sex/age/village
+derivation) and the `/dashboard/demographics` response are both untouched -
+only how the same arrays are rendered changed.
+- `CategoryBarChart.tsx` gained two **opt-in** props (every other caller -
+  Physical Activity, Screen Time, Overview, PAQ-C - omits them and is
+  byte-for-byte unchanged): `showPercent` (LabelList shows `"n (%)"` above
+  each bar instead of a bare count, reusing the same `percentOf()` helper
+  already used for the chart's tooltip) and `yAxisLabel` (an optional
+  rotated Y-axis title). Demographics' Sex/Age charts pass both
+  (`yAxisLabel="Number of children"`); Sex Distribution's "Unknown"
+  zero-count category and Age Distribution's category set are unaffected -
+  still whatever `populationAnalytics.ts` returns.
+- The Udai Pareek/BG Prasad pair now shares one computed height via the
+  existing `computeHorizontalBarChartHeight()` export (same shared-height
+  convention already used by Dietary Intake's 10 food-group charts) so the
+  two charts line up even though `_ordered_labeled_category_distribution()`
+  only includes categories with at least one respondent - one chart having
+  3 represented categories and the other 4 no longer produces mismatched
+  card heights.
+- **Removed the two technical implementation notes** ("Category labels
+  (Upper/Upper-middle/...) are parsed from the REDCap calc field's
+  `field_note` text" and "Category labels parsed the same way...") that
+  were rendering directly on the Udai Pareek/BG Prasad `ChartCard`s - the
+  backend `notes.udai_pareek_category`/`notes.bg_prasad_category` fields
+  in `DemographicsResponse` still exist unchanged (same precedent as the
+  2026-09-01 "Content trim" pass elsewhere in this file); only the frontend
+  `note={...}` props reading them were removed, with no replacement text.
+- The two SES metric cards (Mean Per-Capita Income / Mean Household Size)
+  get the same sharper-corner/compact-padding treatment as the other
+  pages' Key Scores rows, via a new scoped rule, `.ses-metric-row
+  .kpi-card` (reuses the existing `--radius-control` token) - no other
+  `.kpi-card` on the site is affected.
+- Village labels, the Top-8-plus-Other logic, `n (%)` end-of-bar labels,
+  category ordering, and the shared `HorizontalBarChart`/hover-stability
+  fixes (from the earlier global chart-hover fix pass) are all unchanged -
+  Geographic Distribution simply renders in a full-width card now instead
+  of a cramped third of a three-column row.
+Live-verified via a full-page headless-browser screenshot: Sex 110 Male
+(51.9%)/102 Female (48.1%)/0 Unknown (row reserved, visible), Age 0/185/27
+across 8/9/10 years, Geographic Distribution's 8 named villages + "Other
+villages" 78 (36.8%) all readable at full width, SES KPIs "₹2,471 · n=53"
+and "5.98 · n=53", Udai Pareek (Middle/Lower-middle/Lower) and BG Prasad
+(Upper-middle/Middle/Lower-middle/Lower) both showing real descriptive
+labels at matching chart heights, no technical note text visible anywhere.
+Backend: 143/143 tests pass (unaffected, no backend file touched).
+Frontend `tsc --noEmit` and `npm run build` both succeed.
+
 ### Assessment Modules
 
 Health & Screening
@@ -2039,7 +2208,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **143/143 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-10 DSEQ Coding Scores tests). Frontend `npm run build` succeeds.
+Backend test count: **147/147 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-11 Assessment Tool Status tests). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

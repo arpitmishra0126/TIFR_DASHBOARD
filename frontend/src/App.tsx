@@ -5,6 +5,7 @@ import { RefreshProvider } from "./context/RefreshContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import AssessmentProgress from "./routes/AssessmentProgress";
 import AssessmentsHub from "./routes/AssessmentsHub";
+import AssessmentToolStatus from "./routes/AssessmentToolStatus";
 import Demographics from "./routes/Demographics";
 import DietaryIntake from "./routes/DietaryIntake";
 import HealthScreening from "./routes/HealthScreening";
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/screen-time" element={<ScreenTime />} />
             <Route path="/dietary-intake" element={<DietaryIntake />} />
             <Route path="/assessments" element={<AssessmentsHub />} />
+            <Route path="/assessment-tool-status" element={<AssessmentToolStatus />} />
             <Route path="/neurodevelopment" element={<Neurodevelopment />} />
             <Route path="/progress" element={<AssessmentProgress />} />
           </Route>

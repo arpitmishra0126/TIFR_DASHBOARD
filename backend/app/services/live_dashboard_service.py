@@ -22,6 +22,7 @@ from app.ingestion.normalize import capitalize_label, compute_age_years, parse_c
 from app.redcap.live_repository import LiveRedCapRepository
 from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
 from app.services.module_analytics import (
+    build_assessment_tool_status_analysis,
     build_dietary_analysis,
     build_health_screening_analysis,
     build_neurodevelopment_analysis,
@@ -31,6 +32,10 @@ from app.services.module_analytics import (
 )
 from app.schemas.dashboard import (
     AgeBucket,
+    AssessmentDomainStatus,
+    AssessmentPooledStatus,
+    AssessmentToolItemStatus,
+    AssessmentToolStatusResponse,
     CategoryCount,
     ConditionIndicator,
     DemographicsResponse,
@@ -613,6 +618,19 @@ class LiveDashboardService:
                 "that requires a study-team-defined portion-size classification, which does not yet exist. "
                 "This is a pending item, not an omission.",
             },
+        )
+
+    async def get_assessment_tool_status(self, force: bool = False) -> AssessmentToolStatusResponse:
+        records, _choice_maps = await self._load(force=force)
+        analysis = build_assessment_tool_status_analysis(records)
+        return AssessmentToolStatusResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            sangian=AssessmentDomainStatus(**analysis["sangian"]),
+            vwm=AssessmentDomainStatus(**analysis["vwm"]),
+            overall=AssessmentDomainStatus(**analysis["overall"]),
+            overall_pooled=AssessmentPooledStatus(**analysis["overall_pooled"]),
+            items=[AssessmentToolItemStatus(**item) for item in analysis["items"]],
         )
 
     async def get_neurodevelopment(self, force: bool = False) -> NeurodevelopmentResponse:

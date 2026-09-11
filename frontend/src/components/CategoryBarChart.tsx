@@ -31,6 +31,12 @@ interface CategoryBarChartProps {
    * callers that omit this prop keep the original single-line tick and
    * bottom margin unchanged. */
   xTickMaxChars?: number;
+  /** Show "count (share%)" above each bar instead of the bare count -
+   * opt-in so every existing caller keeps its current single-number label. */
+  showPercent?: boolean;
+  /** Optional rotated Y-axis title (e.g. "Number of children") - opt-in,
+   * omitted callers keep the plain tick-only axis. */
+  yAxisLabel?: string;
 }
 
 function makeWrappedXTick(maxChars: number) {
@@ -49,7 +55,7 @@ function makeWrappedXTick(maxChars: number) {
   };
 }
 
-export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: CategoryBarChartProps) {
+export default function CategoryBarChart({ data, mode, height, xTickMaxChars, showPercent, yAxisLabel }: CategoryBarChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const total = data.reduce((sum, d) => sum + d.count, 0);
   const maxCount = Math.max(1, ...data.map((d) => d.count));
@@ -80,7 +86,12 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: 
           tick={{ fill: "var(--text-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          width={32}
+          width={yAxisLabel ? 44 : 32}
+          label={
+            yAxisLabel
+              ? { value: yAxisLabel, angle: -90, position: "insideLeft", fill: "var(--text-secondary)", fontSize: 11, fontWeight: 600 }
+              : undefined
+          }
         />
         <Tooltip
           cursor={{ fill: "var(--surface-2)" }}
@@ -112,6 +123,14 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars }: 
             position="top"
             offset={8}
             style={{ fill: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}
+            formatter={
+              showPercent
+                ? (label: unknown) => {
+                    const value = Number(label);
+                    return Number.isFinite(value) ? `${value.toLocaleString()} (${percentOf(value, total)}%)` : "";
+                  }
+                : undefined
+            }
           />
           {data.map((entry, index) => {
             const isActive = activeIndex === index;

@@ -5,7 +5,7 @@ import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import FilterBar from "../components/FilterBar";
-import HorizontalBarChart from "../components/HorizontalBarChart";
+import HorizontalBarChart, { computeHorizontalBarChartHeight } from "../components/HorizontalBarChart";
 import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
@@ -46,9 +46,13 @@ export default function Demographics() {
 
   const udaiData = data.udai_pareek_category_distribution.map((c) => ({ label: c.code, count: c.count }));
   const prasadData = data.bg_prasad_category_distribution.map((c) => ({ label: c.code, count: c.count }));
+  // Shared height so the two side-by-side SES charts line up even if one
+  // has fewer represented categories than the other (a category with zero
+  // respondents isn't included in either distribution).
+  const sesChartHeight = computeHorizontalBarChartHeight([udaiData, prasadData]);
 
   return (
-    <section>
+    <section className="demographics-page">
       <PageHeader
         eyebrow="Study Population"
         title="Demographics & SES Profile"
@@ -64,47 +68,54 @@ export default function Demographics() {
       {populationError && <p className="error-text">Could not load population data: {populationError}</p>}
 
       {children && (
-        <div className="chart-grid">
-          <ChartCard title="Sex distribution">
-            <CategoryBarChart data={sexDistribution(filtered)} mode="categorical" />
-          </ChartCard>
-          <ChartCard title="Age distribution" subtitle="Years, derived from date of birth">
-            <CategoryBarChart data={ageDistribution(filtered)} mode="sequential" />
-          </ChartCard>
-          <ChartCard title="Geographic distribution" subtitle="By village, top 8 shown">
-            <HorizontalBarChart data={villageDistribution(filtered)} mode="sequential" />
-          </ChartCard>
-        </div>
+        <>
+          <div className="chart-grid two-col">
+            <ChartCard title="Sex Distribution" compact>
+              <CategoryBarChart data={sexDistribution(filtered)} mode="categorical" showPercent yAxisLabel="Number of children" />
+            </ChartCard>
+            <ChartCard title="Age Distribution" subtitle="Years, derived from date of birth" compact>
+              <CategoryBarChart data={ageDistribution(filtered)} mode="sequential" showPercent yAxisLabel="Number of children" />
+            </ChartCard>
+          </div>
+
+          <div className="chart-grid">
+            <ChartCard title="Geographic Distribution" subtitle="By village, top 8 shown" compact>
+              <HorizontalBarChart data={villageDistribution(filtered)} mode="sequential" height={340} />
+            </ChartCard>
+          </div>
+        </>
       )}
 
       <SectionHeader
-        title="Socioeconomic status"
+        title="Socioeconomic Status"
         note={`n=${data.ses_profile_count} with SES questionnaire completed - not affected by filters above`}
       />
 
-      <div className="kpi-row" style={{ marginBottom: "var(--space-4)" }}>
+      <div className="kpi-row ses-metric-row">
         {data.per_capita_income_summary && (
           <KpiCard
-            label="Mean per-capita income"
+            label="Mean Per-Capita Income"
             value={`₹${Math.round(data.per_capita_income_summary.mean).toLocaleString()}`}
             sublabel={`n=${data.per_capita_income_summary.count}`}
+            tone="blue"
           />
         )}
         {data.household_size_summary && (
           <KpiCard
-            label="Mean household size"
+            label="Mean Household Size"
             value={data.household_size_summary.mean}
             sublabel={`n=${data.household_size_summary.count}`}
+            tone="aqua"
           />
         )}
       </div>
 
       <div className="chart-grid two-col">
-        <ChartCard title="Udai Pareek SES category" note={data.notes.udai_pareek_category}>
-          <HorizontalBarChart data={udaiData} mode="sequential" />
+        <ChartCard title="Udai Pareek SES Category" compact>
+          <HorizontalBarChart data={udaiData} mode="sequential" height={sesChartHeight} />
         </ChartCard>
-        <ChartCard title="BG Prasad category" note={data.notes.bg_prasad_category}>
-          <HorizontalBarChart data={prasadData} mode="sequential" />
+        <ChartCard title="BG Prasad Category" compact>
+          <HorizontalBarChart data={prasadData} mode="sequential" height={sesChartHeight} />
         </ChartCard>
       </div>
     </section>

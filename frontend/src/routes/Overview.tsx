@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getOverview } from "../api/dashboard";
+import { getAssessmentToolStatus, getOverview } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import { percentOf } from "../components/charts/chartHelpers";
 import ChartCard from "../components/ChartCard";
@@ -16,7 +16,7 @@ import SectionHeader from "../components/SectionHeader";
 import SnapshotMetricCard, { SnapshotCardShell } from "../components/SnapshotMetricCard";
 import StudyDataLoader from "../components/StudyDataLoader";
 import { useRefresh } from "../context/RefreshContext";
-import type { ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
+import type { AssessmentToolStatusResponse, ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
 import { GROUPS } from "./AssessmentsHub";
 
 // The 8 currently-mapped assessment instruments (excludes Registration/
@@ -68,8 +68,71 @@ function topReportedItems(named: ConditionIndicator[], general: ConditionIndicat
     .slice(0, limit);
 }
 
+interface AtsColumn {
+  key: string;
+  label: string;
+  tone: "blue" | "aqua" | "amber" | "violet";
+  valueText: string;
+  percentText: string;
+}
+
+function atsDomainColumn(label: string, tone: AtsColumn["tone"], domain: AssessmentToolStatusResponse["sangian"]): AtsColumn {
+  return {
+    key: label,
+    label,
+    tone,
+    valueText: domain.mean_done !== null ? `${domain.mean_done}/${domain.field_count}` : "No data",
+    percentText: domain.completion_percent !== null ? `${domain.completion_percent}%` : "—",
+  };
+}
+
+function atsItemColumn(label: string, tone: AtsColumn["tone"], item: AssessmentToolStatusResponse["items"][number] | undefined): AtsColumn {
+  if (!item || item.valid_n === 0) return { key: label, label, tone, valueText: "No data", percentText: "—" };
+  return { key: label, label, tone, valueText: `${item.done_count}/${item.valid_n}`, percentText: `${item.completion_percent}%` };
+}
+
+/** Compact "Assessment Tool Status" card - one pooled Overall figure (from
+ * the 9 fields' own Done/valid-response counts, never a fabricated
+ * participant denominator), then SANGIAN/VWM/DCCS/CD as four equal, clearly
+ * SEPARATE columns (never grouped) - administration status only, not the
+ * assessments' own outcome/performance data. */
+function AssessmentToolStatusCard({ status }: { status: AssessmentToolStatusResponse }) {
+  const overall = status.overall_pooled;
+  const overallValueText = overall.valid_n > 0 ? `${overall.done_count}/${overall.valid_n}` : "No data";
+  const overallPercentText = overall.valid_n > 0 ? `${overall.completion_percent}%` : null;
+
+  const columns: AtsColumn[] = [
+    atsDomainColumn("SANGIAN", "blue", status.sangian),
+    atsItemColumn("VWM", "aqua", status.items.find((i) => i.key === "vwm_1")),
+    atsItemColumn("DCCS", "amber", status.items.find((i) => i.key === "dccs_2")),
+    atsItemColumn("CD", "violet", status.items.find((i) => i.key === "cd_3")),
+  ];
+
+  return (
+    <div className="ats-card">
+      <div className="ats-overall">
+        <span className="ats-overall-label">Overall Assessment Tool Status</span>
+        <span className="ats-overall-value">
+          {overallValueText}
+          {overallPercentText && <span className="ats-overall-percent"> ({overallPercentText})</span>}
+        </span>
+      </div>
+      <div className="ats-tests">
+        {columns.map((col) => (
+          <div className={`ats-test-col snapshot-tone-${col.tone}`} key={col.key}>
+            <div className="ats-test-label">{col.label}</div>
+            <div className="ats-test-value">{col.valueText}</div>
+            <div className="ats-test-percent">{col.percentText}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [assessmentToolStatus, setAssessmentToolStatus] = useState<AssessmentToolStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const { version } = useRefresh();
@@ -79,6 +142,11 @@ export default function Overview() {
     getOverview()
       .then(setOverview)
       .catch((err: Error) => setError(err.message));
+    // Secondary section - a failure here must not block or break the rest
+    // of the Overview page (Study Snapshot etc. are unaffected either way).
+    getAssessmentToolStatus()
+      .then(setAssessmentToolStatus)
+      .catch(() => setAssessmentToolStatus(null));
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
@@ -146,6 +214,13 @@ export default function Overview() {
           ]}
         />
       </div>
+
+      {assessmentToolStatus && (
+        <>
+          <SectionHeader title="Assessment Tool Status" note="Administration status only - not outcome data" />
+          <AssessmentToolStatusCard status={assessmentToolStatus} />
+        </>
+      )}
 
       <SectionHeader title="Study profile" note="Who is registered in the study" />
       <div className="chart-grid two-col">

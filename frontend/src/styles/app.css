@@ -49,6 +49,7 @@
   --radius-card-lg: 18px;
   --radius-pill: 999px;
   --radius-control: 8px;
+  --radius-sharp: 3px;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -632,6 +633,44 @@ a, button {
   padding: var(--space-3) var(--space-4);
 }
 
+/* Demographics & SES Profile - the two compact SES metric cards (Mean
+   Per-Capita Income / Mean Household Size) only, same sharper-corner
+   treatment as the other pages' Key Scores rows above. */
+.ses-metric-row .kpi-card {
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Demographics & SES Profile (2026-09-11, visual-only) - every chart/KPI
+   panel on this page gets an even sharper, almost-square corner
+   (--radius-sharp, 3px) than the --radius-control (8px) used elsewhere -
+   borders, shadows, colors, spacing, chart sizes, and data are untouched.
+   Scoped to `.demographics-page` so no other route's `.chart-card`/
+   `.kpi-card` is affected. */
+.demographics-page .chart-card,
+.demographics-page .kpi-card {
+  border-radius: var(--radius-sharp);
+}
+
+/* Assessment Tool Status (2026-09-11) - same sharp/almost-square corner
+   treatment, applied to this page's KPI cards and its detail table card.
+   Done/Not Done cells get a restrained color distinction reusing the
+   existing status tokens (no new colors introduced). */
+.assessment-tool-status-page .kpi-card,
+.assessment-tool-status-page .table-card {
+  border-radius: var(--radius-sharp);
+}
+
+.assessment-tool-done-cell {
+  color: var(--status-good);
+  font-weight: 700;
+}
+
+.assessment-tool-not-done-cell {
+  color: var(--status-warning);
+  font-weight: 600;
+}
+
 /* --- Grids --- */
 .kpi-row {
   display: grid;
@@ -811,6 +850,118 @@ a, button {
 :root[data-theme="dark"] .snapshot-tone-aqua { --tone-accent-soft: rgba(25, 158, 112, 0.28); }
 :root[data-theme="dark"] .snapshot-tone-amber { --tone-accent-soft: rgba(201, 133, 0, 0.32); }
 :root[data-theme="dark"] .snapshot-tone-violet { --tone-accent-soft: rgba(144, 133, 233, 0.3); }
+
+/* --- Overview: Assessment Tool Status card (2026-09-11) - one overall
+   figure on top, four equal, clearly separate test columns below, in a
+   single cohesive container matching Study Snapshot's strip language but
+   with almost-square corners (--radius-sharp) instead of --radius-card. --- */
+.ats-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.ats-overall {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.ats-overall-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ats-overall-value {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ats-overall-percent {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ats-tests {
+  display: flex;
+  align-items: stretch;
+}
+
+.ats-test-col {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.ats-test-col + .ats-test-col {
+  border-left: 1px solid var(--border-hairline);
+}
+
+.ats-test-col::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--tone-accent);
+  opacity: 0.7;
+}
+
+.ats-test-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.ats-test-value {
+  font-size: 1.1rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.ats-test-percent {
+  margin-top: 1px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .ats-tests {
+    flex-wrap: wrap;
+  }
+
+  .ats-test-col {
+    flex: 1 1 50%;
+    border-left: none !important;
+  }
+
+  .ats-test-col:nth-child(odd) {
+    border-right: 1px solid var(--border-hairline);
+  }
+
+  .ats-test-col:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border-hairline);
+  }
+}
 
 .chart-grid {
   display: grid;

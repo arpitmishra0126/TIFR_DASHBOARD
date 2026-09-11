@@ -618,3 +618,104 @@ def test_neurodevelopment_analysis_teacher_shows_zero_not_invented():
     assert result["teacher"]["children_with_any_data"] == 0
     assert result["teacher"]["avg_frequency_summary"]["valid_n"] == 0
     assert result["teacher"]["avg_frequency_summary"]["mean"] is None
+
+
+def test_assessment_tool_status_done_flag_and_item_breakdown():
+    """1=Done, 2=Not Done - blank must be excluded, never counted as either."""
+    assert ma._done_flag({"pkb_1": "1"}, "pkb_1") == 1
+    assert ma._done_flag({"pkb_1": "2"}, "pkb_1") == 0
+    assert ma._done_flag({"pkb_1": ""}, "pkb_1") is None
+    assert ma._done_flag({}, "pkb_1") is None
+
+    records = [{"pkb_1": "1"}, {"pkb_1": "1"}, {"pkb_1": "2"}, {"pkb_1": ""}]
+    item = ma._assessment_tool_item_status(records, "pkb_1", "Padh Ke Batao")
+    assert item == {
+        "key": "pkb_1", "label": "Padh Ke Batao",
+        "done_count": 2, "not_done_count": 1, "valid_n": 3, "completion_percent": ma.percent(2, 3),
+    }
+
+
+def test_assessment_tool_status_analysis_field_mapping_and_denominators():
+    """Locks in the exact 9 REDCap fields for the SANGIAN/VWM domains, the
+    per-participant pooling method (blank fields excluded from both the
+    done-count and that child's own denominator), and every reported
+    denominator - not a re-derivation of the underlying REDCap scale."""
+    records = [
+        # Child A: fully answered - 6/6 SANGIAN done, 2/3 VWM done.
+        {
+            "child_id": "A", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "2",
+        },
+        # Child B: only answered the SANGIAN block (VWM fields blank) -
+        # 3/6 SANGIAN done; must NOT contribute to the VWM domain at all
+        # (answered=0 there), and blank VWM fields must not count as Not
+        # Done in the per-field item breakdown either.
+        {
+            "child_id": "B", "assessment_tool_status_complete": "0",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "2", "cmc_5": "2", "chmc_6": "2",
+        },
+        # Child C: registered but nothing on this instrument answered at
+        # all - must be fully excluded from every domain/item denominator.
+        {"child_id": "C"},
+    ]
+    result = ma.build_assessment_tool_status_analysis(records)
+
+    assert result["instrument"] == "Assessment Tool Status"
+    assert result["completion"]["completed"] == 1
+    assert result["completion"]["total_registered"] == 3
+
+    # --- Per-field item breakdown (9 rows, exact field order) ---
+    keys = [item["key"] for item in result["items"]]
+    assert keys == ["pkb_1", "ank_2", "lkt_3", "hp_4", "cmc_5", "chmc_6", "vwm_1", "dccs_2", "cd_3"]
+    by_key = {item["key"]: item for item in result["items"]}
+    assert by_key["pkb_1"]["done_count"] == 2 and by_key["pkb_1"]["valid_n"] == 2
+    assert by_key["hp_4"]["done_count"] == 1 and by_key["hp_4"]["not_done_count"] == 1 and by_key["hp_4"]["valid_n"] == 2
+    # vwm_1 only answered by A (B/C blank) - valid_n must be 1, not 0 or 3.
+    assert by_key["vwm_1"]["done_count"] == 1 and by_key["vwm_1"]["valid_n"] == 1
+    assert by_key["cd_3"]["done_count"] == 0 and by_key["cd_3"]["not_done_count"] == 1 and by_key["cd_3"]["valid_n"] == 1
+
+    # --- SANGIAN domain: both A (6 done) and B (3 done) answered at least
+    # one SANGIAN field, so valid_n=2 and mean_done=(6+3)/2=4.5. ---
+    sangian = result["sangian"]
+    assert sangian["field_count"] == 6
+    assert sangian["valid_n"] == 2
+    assert sangian["total"] == 3
+    assert sangian["mean_done"] == 4.5
+    assert sangian["completion_percent"] == round(4.5 / 6 * 100, 1)
+
+    # --- VWM domain: only A answered any VWM field - B's blank VWM fields
+    # must NOT count as a 0-done respondent, so valid_n=1, not 2. ---
+    vwm = result["vwm"]
+    assert vwm["field_count"] == 3
+    assert vwm["valid_n"] == 1
+    assert vwm["mean_done"] == 2.0
+    assert vwm["completion_percent"] == round(2 / 3 * 100, 1)
+
+    # --- Overall domain (all 9 fields pooled): A=8 done, B=3 done. ---
+    overall = result["overall"]
+    assert overall["field_count"] == 9
+    assert overall["valid_n"] == 2
+    assert overall["mean_done"] == 5.5
+    assert overall["completion_percent"] == round(5.5 / 9 * 100, 1)
+
+    # --- Overall (field-response pooled, NOT a participant denominator):
+    # sum of done/not_done across all 9 items' own valid_n. Done=11
+    # (2+2+2+1+1+1+1+1+0), Not Done=4 (0+0+0+1+1+1+0+0+1), valid_n=15. ---
+    overall_pooled = result["overall_pooled"]
+    assert overall_pooled["done_count"] == 11
+    assert overall_pooled["not_done_count"] == 4
+    assert overall_pooled["valid_n"] == 15
+    assert overall_pooled["completion_percent"] == ma.percent(11, 15)
+
+
+def test_assessment_tool_status_domain_with_no_respondents_is_none_not_zero():
+    """A domain nobody has answered must report null mean/completion -
+    never a fabricated 0, matching every other coded-score card's
+    no-data convention in this codebase."""
+    records = [{"child_id": "A", "assessment_tool_status_complete": "0"}]
+    result = ma.build_assessment_tool_status_analysis(records)
+    for domain in ("sangian", "vwm", "overall"):
+        assert result[domain]["valid_n"] == 0
+        assert result[domain]["mean_done"] is None
+        assert result[domain]["completion_percent"] is None

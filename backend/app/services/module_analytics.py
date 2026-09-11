@@ -787,3 +787,143 @@ def build_neurodevelopment_analysis(
         "child": _ssrs_instrument_summary(reg, child_freq_fields, child_imp_fields, "ssrs_child_complete", "SSRS Child", total),
         "teacher": _ssrs_instrument_summary(reg, teacher_freq_fields, teacher_imp_fields, "ssrs_teacher_complete", "SSRS Teacher", total),
     }
+
+
+# --- Assessment Tool Status (10th live instrument, confirmed 2026-09-11) ---
+# A simple administration/status tracker: each field is an independent
+# `radio` coded 1=Done/2=Not Done (confirmed identical live choice string
+# on all 9 fields) - NOT the actual SANGIAN/VWM/DCCS/CD Task outcome data,
+# which remain unmapped "Under Development" placeholders elsewhere in the
+# dashboard. English display names per the approved specification (REDCap's
+# own labels are bilingual English/Hindi - only the English name is shown).
+SANGIAN_ASSESSMENT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("pkb_1", "Padh Ke Batao"),
+    ("ank_2", "Angkanit"),
+    ("lkt_3", "Lottery Ka Ticket"),
+    ("hp_4", "Her Pher"),
+    ("cmc_5", "Chalo Mela Chale"),
+    ("chmc_6", "Chor Machaye Shor"),
+)
+
+VWM_ASSESSMENT_FIELDS: tuple[tuple[str, str], ...] = (
+    ("vwm_1", "VWM Mallet Box Assessment"),
+    ("dccs_2", "DCCS Assessment"),
+    ("cd_3", "CD Task Assessment"),
+)
+
+ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD = "assessment_tool_status_complete"
+
+
+def _done_flag(record: dict, field: str) -> int | None:
+    """1 = Done, 0 = Not Done, None = blank/unanswered - blank is NEVER
+    treated as Done or Not Done, only excluded."""
+    value = (record.get(field) or "").strip()
+    if value == "1":
+        return 1
+    if value == "2":
+        return 0
+    return None
+
+
+def _assessment_tool_item_status(records: list[dict], field: str, label: str) -> dict:
+    """One assessment's Done/Not Done/Valid N/Completion % - Valid N is the
+    number of children who actually answered THIS field (Done + Not Done),
+    never inflated by blank responses and never treating blank as Not
+    Done."""
+    done = 0
+    not_done = 0
+    for record in records:
+        flag = _done_flag(record, field)
+        if flag == 1:
+            done += 1
+        elif flag == 0:
+            not_done += 1
+    valid_n = done + not_done
+    return {
+        "key": field,
+        "label": label,
+        "done_count": done,
+        "not_done_count": not_done,
+        "valid_n": valid_n,
+        "completion_percent": percent(done, valid_n),
+    }
+
+
+def _assessment_tool_domain_status(records: list[dict], fields: tuple[tuple[str, str], ...], total_registered: int) -> dict:
+    """Per-participant domain summary: for each child who answered at least
+    one of the domain's fields, count how many of that domain's fields are
+    marked Done (0..len(fields)) - blank fields are excluded from both the
+    count and that child's own denominator, never counted as Done. The
+    domain-level `mean_done` is the mean of these per-child counts across
+    the children who answered at least one field (`valid_n`); a domain with
+    zero respondents reports `mean_done`/`completion_percent` as None,
+    never a fabricated 0."""
+    field_count = len(fields)
+    per_child_done: list[int] = []
+    for record in records:
+        answered = 0
+        done = 0
+        for field, _ in fields:
+            flag = _done_flag(record, field)
+            if flag is not None:
+                answered += 1
+                done += flag
+        if answered > 0:
+            per_child_done.append(done)
+
+    valid_n = len(per_child_done)
+    mean_done = round(mean(per_child_done), 2) if per_child_done else None
+    completion_percent = round(mean_done / field_count * 100, 1) if mean_done is not None else None
+
+    return {
+        "field_count": field_count,
+        "valid_n": valid_n,
+        "missing_n": max(total_registered - valid_n, 0),
+        "total": total_registered,
+        "percent_valid": percent(valid_n, total_registered),
+        "mean_done": mean_done,
+        "completion_percent": completion_percent,
+    }
+
+
+def _pooled_assessment_tool_status(items: list[dict]) -> dict:
+    """Overall status pooled directly from the 9 individual fields' own
+    Done/valid-response counts (sum of done_count / sum of valid_n across
+    all 9 items) - NOT a per-child participant denominator, per the
+    approved specification ("do not force all 9 fields into a fake
+    participant denominator"). Each item's own valid_n already excludes
+    blanks, so this pooled figure does too."""
+    done = sum(item["done_count"] for item in items)
+    not_done = sum(item["not_done_count"] for item in items)
+    valid_n = done + not_done
+    return {
+        "done_count": done,
+        "not_done_count": not_done,
+        "valid_n": valid_n,
+        "completion_percent": percent(done, valid_n),
+    }
+
+
+def build_assessment_tool_status_analysis(records: list[dict]) -> dict:
+    reg = registered_records(records)
+    total = len(reg)
+    completed = complete_count(reg, ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD)
+
+    all_fields = SANGIAN_ASSESSMENT_FIELDS + VWM_ASSESSMENT_FIELDS
+    items = [_assessment_tool_item_status(reg, field, label) for field, label in all_fields]
+
+    return {
+        "instrument": "Assessment Tool Status",
+        "completion": {
+            "instrument": "Assessment Tool Status",
+            "completed": completed,
+            "total_registered": total,
+            "percent": percent(completed, total),
+            "coverage_tier": coverage_tier(completed, total),
+        },
+        "sangian": _assessment_tool_domain_status(reg, SANGIAN_ASSESSMENT_FIELDS, total),
+        "vwm": _assessment_tool_domain_status(reg, VWM_ASSESSMENT_FIELDS, total),
+        "overall": _assessment_tool_domain_status(reg, all_fields, total),
+        "overall_pooled": _pooled_assessment_tool_status(items),
+        "items": items,
+    }

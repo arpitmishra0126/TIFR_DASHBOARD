@@ -374,6 +374,54 @@ class DietaryIntakeResponse(BaseModel):
     notes: dict[str, str]
 
 
+# --- Assessment Tool Status (10th live instrument) - an administration/
+# status tracker (Done/Not Done) for the SANGIAN and VWM-related tools,
+# NOT their actual outcome data. ---
+class AssessmentToolItemStatus(BaseModel):
+    key: str
+    label: str
+    done_count: int
+    not_done_count: int
+    valid_n: int
+    completion_percent: float
+
+
+class AssessmentDomainStatus(BaseModel):
+    """Per-participant domain summary - `mean_done` is the mean count of
+    that domain's fields marked Done per child (0..field_count), among
+    children who answered at least one field (`valid_n`); null when no
+    child has answered any field in the domain, never a fabricated 0."""
+
+    field_count: int
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean_done: float | None
+    completion_percent: float | None
+
+
+class AssessmentPooledStatus(BaseModel):
+    """Overall status pooled directly from the 9 individual fields' own
+    Done/valid-response counts (sum of done_count / sum of valid_n) - a
+    genuine field-level completion rate, not a participant-count ratio."""
+
+    done_count: int
+    not_done_count: int
+    valid_n: int
+    completion_percent: float
+
+
+class AssessmentToolStatusResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    sangian: AssessmentDomainStatus
+    vwm: AssessmentDomainStatus
+    overall: AssessmentDomainStatus
+    overall_pooled: AssessmentPooledStatus
+    items: list[AssessmentToolItemStatus]
+
+
 # --- Assessment Progress pipeline ---
 class ProgressStage(BaseModel):
     key: str

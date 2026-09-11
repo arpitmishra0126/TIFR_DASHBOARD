@@ -3,9 +3,13 @@
 Verified against a live, read-only metadata export (RedCapClient.fetch_metadata())
 against project PID 196, "ICMR Neurodevelopment Study".
 
-PID 196 has 9 instruments: Registration Form, SES questionnaire, Digital-
-Screen Exposure Questionnaire (DSEQ), Child Illness History, PAQ-C, Dietary
-Intake, SSRS Parent, SSRS Child, SSRS Teacher. (The Physical Activity
+PID 196 has 10 instruments (confirmed live 2026-09-11 via the REDCap
+`instrument` API): Registration Form, SES questionnaire, Digital-Screen
+Exposure Questionnaire (DSEQ), Child Illness History, PAQ-C, Dietary
+Intake, SSRS Parent, SSRS Child, SSRS Teacher, and Assessment Tool Status
+(the 10th, added 2026-09-11 - a simple Done/Not-Done administration
+tracker for the SANGIAN/VWM/DCCS/CD Task tools, not their outcome data -
+see ASSESSMENT_TOOL_STATUS_ITEM_FIELDS below). (The Physical Activity
 instrument was renamed live on REDCap from "PAQ-A" [form `paq_a`] to
 "PAQ C" [form `paq_c`] - confirmed 2026-09-10 via the REDCap `instrument`
 API; its completion field changed accordingly from `paq_a_complete` to
@@ -384,6 +388,29 @@ EXPORT_ONLY_FIELDS: tuple[str, ...] = (
     *SSRS_TEACHER_IMP_FIELDS,
 )
 
+# --- Assessment Tool Status (10th live instrument, confirmed 2026-09-11 via
+# the REDCap `instrument` API - `assessment_tool_status`) - a simple
+# administration/status tracker, NOT the actual SANGIAN/VWM/DCCS/CD Task
+# outcome data (those remain unmapped "Under Development" placeholders on
+# the Assessments hub). Each of these 9 fields is an independent `radio`,
+# confirmed live to share the identical `1, a) Done | 2, b) Not Done` choice
+# string. See module_analytics.py's SANGIAN_ASSESSMENT_FIELDS/
+# VWM_ASSESSMENT_FIELDS for the field->display-name mapping used by the
+# dashboard's Assessment Tool Status page.
+ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD = "assessment_tool_status_complete"
+
+ASSESSMENT_TOOL_STATUS_ITEM_FIELDS: tuple[str, ...] = (
+    "pkb_1",
+    "ank_2",
+    "lkt_3",
+    "hp_4",
+    "cmc_5",
+    "chmc_6",
+    "vwm_1",
+    "dccs_2",
+    "cd_3",
+)
+
 # The fixed set of live REDCap field names the application requests and caches.
 LIVE_FIELDS: tuple[str, ...] = (
     "child_id",
@@ -401,5 +428,7 @@ LIVE_FIELDS: tuple[str, ...] = (
     *CORE_BATTERY_COMPLETE_FIELDS,
     SSRS_CHILD_COMPLETE_FIELD,
     SSRS_TEACHER_COMPLETE_FIELD,
+    ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD,
+    *ASSESSMENT_TOOL_STATUS_ITEM_FIELDS,
     *EXPORT_ONLY_FIELDS,
 )
