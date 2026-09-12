@@ -333,6 +333,20 @@ export interface AssessmentPooledStatus {
   completion_percent: number;
 }
 
+export interface AssessmentParticipantStatus {
+  done_count: number;
+  total: number;
+  percent: number;
+}
+
+export interface AssessmentToolParticipantStatus {
+  child_id: string;
+  sangian: boolean;
+  vwm: boolean;
+  dccs: boolean;
+  cd: boolean;
+}
+
 export interface AssessmentToolStatusResponse {
   instrument: string;
   completion: InstrumentCompletion;
@@ -341,6 +355,13 @@ export interface AssessmentToolStatusResponse {
   overall: AssessmentDomainStatus;
   overall_pooled: AssessmentPooledStatus;
   items: AssessmentToolItemStatus[];
+  sangian_participant: AssessmentParticipantStatus;
+  vwm_participant: AssessmentParticipantStatus;
+  dccs_participant: AssessmentParticipantStatus;
+  cd_participant: AssessmentParticipantStatus;
+  overall_participant: AssessmentParticipantStatus;
+  common_participant_ids: string[];
+  participant_statuses: AssessmentToolParticipantStatus[];
 }
 
 export interface ProgressStage {

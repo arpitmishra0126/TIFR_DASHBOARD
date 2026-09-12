@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getAssessmentToolStatus, getOverview } from "../api/dashboard";
@@ -9,14 +9,14 @@ import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
 import FullScreenLoader from "../components/FullScreenLoader";
 import HorizontalBarChart from "../components/HorizontalBarChart";
-import { IconClipboardCheck, IconMonitor, IconUserCheck, IconUsers } from "../components/icons";
+import { IconChevron, IconClipboardCheck, IconMonitor, IconUserCheck, IconUsers } from "../components/icons";
 import InstrumentCoverageCard from "../components/InstrumentCoverageCard";
 import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import SnapshotMetricCard, { SnapshotCardShell } from "../components/SnapshotMetricCard";
 import { useRefresh } from "../context/RefreshContext";
-import type { AssessmentToolStatusResponse, ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
+import type { AssessmentToolParticipantStatus, AssessmentToolStatusResponse, ConditionIndicator, OverviewResponse } from "../types/liveDashboard";
 import { GROUPS } from "./AssessmentsHub";
 
 // The 8 currently-mapped assessment instruments (excludes Registration/
@@ -76,36 +76,174 @@ interface AtsColumn {
   percentText: string;
 }
 
-function atsDomainColumn(label: string, tone: AtsColumn["tone"], domain: AssessmentToolStatusResponse["sangian"]): AtsColumn {
+/** Participant-level column - a child counts as Done only when every field
+ * in that test's group is answered Done; denominator is always the total
+ * registered participant count, never a sub-test or per-field valid_n
+ * count. */
+function atsParticipantColumn(label: string, tone: AtsColumn["tone"], status: AssessmentToolStatusResponse["sangian_participant"]): AtsColumn {
   return {
     key: label,
     label,
     tone,
-    valueText: domain.mean_done !== null ? `${domain.mean_done}/${domain.field_count}` : "No data",
-    percentText: domain.completion_percent !== null ? `${domain.completion_percent}%` : "—",
+    valueText: `${status.done_count}/${status.total}`,
+    percentText: `${status.percent}%`,
   };
 }
 
-function atsItemColumn(label: string, tone: AtsColumn["tone"], item: AssessmentToolStatusResponse["items"][number] | undefined): AtsColumn {
-  if (!item || item.valid_n === 0) return { key: label, label, tone, valueText: "No data", percentText: "—" };
-  return { key: label, label, tone, valueText: `${item.done_count}/${item.valid_n}`, percentText: `${item.completion_percent}%` };
+type AtsToolKey = "sangian" | "vwm" | "dccs" | "cd";
+
+const ATS_TOOL_COLUMNS: { key: AtsToolKey; label: string }[] = [
+  { key: "sangian", label: "SANGIAN" },
+  { key: "vwm", label: "VWM" },
+  { key: "dccs", label: "DCCS" },
+  { key: "cd", label: "CD" },
+];
+
+type AtsCompletionFilter = "all" | "4" | "3" | "2" | "1" | "0";
+
+const ATS_COMPLETION_FILTERS: { value: AtsCompletionFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "4", label: "4/4 Complete" },
+  { value: "3", label: "3/4 Complete" },
+  { value: "2", label: "2/4 Complete" },
+  { value: "1", label: "1/4 Complete" },
+  { value: "0", label: "0/4 Complete" },
+];
+
+/** Count of the four tools marked Done for one participant row - a pure
+ * re-derivation from the row's own booleans (themselves the identical
+ * predicate behind the existing *_participant aggregates), never a second
+ * completion definition. */
+function atsDoneCount(row: AssessmentToolParticipantStatus): number {
+  return ATS_TOOL_COLUMNS.reduce((sum, col) => sum + (row[col.key] ? 1 : 0), 0);
 }
 
-/** Compact "Assessment Tool Status" card - one pooled Overall figure (from
- * the 9 fields' own Done/valid-response counts, never a fabricated
- * participant denominator), then SANGIAN/VWM/DCCS/CD as four equal, clearly
- * SEPARATE columns (never grouped) - administration status only, not the
- * assessments' own outcome/performance data. */
+function atsStatusText(row: AssessmentToolParticipantStatus): string {
+  const doneCount = atsDoneCount(row);
+  if (doneCount === 4) return "4/4 Complete";
+  const pending = ATS_TOOL_COLUMNS.filter((col) => !row[col.key]).map((col) => col.label);
+  return `${doneCount}/4 Complete — Pending: ${pending.join(", ")}`;
+}
+
+/** Compact "Participant Assessment Status" mini-section - collapsed by
+ * default, search + completion-count filter + a Child ID/SANGIAN/VWM/DCCS/
+ * CD/Status table over the whole registered cohort. Every value is read
+ * directly from the existing per-participant done booleans - no new
+ * completion definition, no recalculation. */
+function ParticipantAssessmentStatusPanel({ status }: { status: AssessmentToolStatusResponse }) {
+  const [expanded, setExpanded] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<AtsCompletionFilter>("all");
+  const [commonOnly, setCommonOnly] = useState(false);
+
+  const commonIdSet = useMemo(() => new Set(status.common_participant_ids), [status.common_participant_ids]);
+
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return status.participant_statuses.filter((row) => {
+      if (commonOnly && !commonIdSet.has(row.child_id)) return false;
+      if (q && !row.child_id.toLowerCase().includes(q)) return false;
+      if (filter !== "all" && atsDoneCount(row) !== Number(filter)) return false;
+      return true;
+    });
+  }, [status.participant_statuses, query, filter, commonOnly, commonIdSet]);
+
+  return (
+    <div className="ats-pstatus">
+      <button type="button" className="ats-common-toggle" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+        <IconChevron width={11} height={11} className={`ats-common-toggle-chevron${expanded ? " ats-common-toggle-chevron-open" : ""}`} />
+        <span>Participant Assessment Status</span>
+      </button>
+
+      {expanded && (
+        <div className="ats-pstatus-panel">
+          <div className="ats-pstatus-controls">
+            <input
+              type="text"
+              className="ats-pstatus-search"
+              placeholder="Search Child ID"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search Child ID"
+            />
+            <select
+              className="ats-pstatus-filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as AtsCompletionFilter)}
+              aria-label="Filter by completion status"
+            >
+              {ATS_COMPLETION_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={`ats-pstatus-common-toggle${commonOnly ? " ats-pstatus-common-toggle-active" : ""}`}
+              onClick={() => setCommonOnly((v) => !v)}
+              aria-pressed={commonOnly}
+            >
+              Common Participants · {status.common_participant_ids.length}
+            </button>
+          </div>
+
+          <div className="ats-pstatus-table-wrap">
+            <table className="ats-pstatus-table">
+              <colgroup>
+                <col className="ats-pstatus-id-col" />
+                {ATS_TOOL_COLUMNS.map((col) => (
+                  <col key={col.key} className="ats-pstatus-tool-col" />
+                ))}
+                <col className="ats-pstatus-status-col" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="ats-pstatus-id-col">Child ID</th>
+                  {ATS_TOOL_COLUMNS.map((col) => (
+                    <th key={col.key} className="ats-pstatus-tool-col">
+                      {col.label}
+                    </th>
+                  ))}
+                  <th className="ats-pstatus-status-col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => (
+                  <tr key={row.child_id}>
+                    <td className="ats-pstatus-id-cell">{row.child_id}</td>
+                    {ATS_TOOL_COLUMNS.map((col) => (
+                      <td key={col.key} className={`ats-pstatus-tool-col ${row[col.key] ? "ats-pstatus-done" : "ats-pstatus-not-done"}`}>
+                        <span className="ats-pstatus-mark">{row[col.key] ? "✓" : "—"}</span>
+                      </td>
+                    ))}
+                    <td className="ats-pstatus-status-cell">{atsStatusText(row)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredRows.length === 0 && <p className="ats-pstatus-empty">No participants match this search/filter.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Compact "Assessment Tool Status" card - one participant-level Overall
+ * figure (completed participants / total registered participants), then
+ * SANGIAN/VWM/DCCS/CD as four equal, clearly SEPARATE columns (never
+ * grouped), each also completed participants / total registered
+ * participants - administration status only, not the assessments' own
+ * outcome/performance data. */
 function AssessmentToolStatusCard({ status }: { status: AssessmentToolStatusResponse }) {
-  const overall = status.overall_pooled;
-  const overallValueText = overall.valid_n > 0 ? `${overall.done_count}/${overall.valid_n}` : "No data";
-  const overallPercentText = overall.valid_n > 0 ? `${overall.completion_percent}%` : null;
+  const overall = status.overall_participant;
 
   const columns: AtsColumn[] = [
-    atsDomainColumn("SANGIAN", "blue", status.sangian),
-    atsItemColumn("VWM", "aqua", status.items.find((i) => i.key === "vwm_1")),
-    atsItemColumn("DCCS", "amber", status.items.find((i) => i.key === "dccs_2")),
-    atsItemColumn("CD", "violet", status.items.find((i) => i.key === "cd_3")),
+    atsParticipantColumn("SANGIAN", "blue", status.sangian_participant),
+    atsParticipantColumn("VWM", "aqua", status.vwm_participant),
+    atsParticipantColumn("DCCS", "amber", status.dccs_participant),
+    atsParticipantColumn("CD", "violet", status.cd_participant),
   ];
 
   return (
@@ -113,8 +251,8 @@ function AssessmentToolStatusCard({ status }: { status: AssessmentToolStatusResp
       <div className="ats-overall">
         <span className="ats-overall-label">Overall Assessment Tool Status</span>
         <span className="ats-overall-value">
-          {overallValueText}
-          {overallPercentText && <span className="ats-overall-percent"> ({overallPercentText})</span>}
+          {overall.done_count}/{overall.total}
+          <span className="ats-overall-percent"> ({overall.percent}%)</span>
         </span>
       </div>
       <div className="ats-tests">
@@ -126,6 +264,8 @@ function AssessmentToolStatusCard({ status }: { status: AssessmentToolStatusResp
           </div>
         ))}
       </div>
+
+      <ParticipantAssessmentStatusPanel status={status} />
     </div>
   );
 }
@@ -151,6 +291,8 @@ export default function Overview() {
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
   if (!overview) return <FullScreenLoader message="Loading ICMR Neurodevelopment Study Dashboard..." />;
+
+  const sesCoverage = overview.all_instrument_coverage.find((i) => i.key === "ses") ?? null;
 
   const partialCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "Partial");
   const noDataCoverage = overview.all_instrument_coverage.filter((i) => i.coverage_tier === "No Data");
@@ -193,16 +335,24 @@ export default function Overview() {
           tone="blue"
         />
         <SnapshotMetricCard
-          label="Core REDCap Instruments Completed"
-          value={overview.core_assessment_count.toLocaleString()}
-          support={`${overview.core_assessment_count}/${overview.total_registered} (${overview.core_assessment_percent}%)`}
+          label="SES Completed"
+          value={(sesCoverage?.completed_count ?? 0).toLocaleString()}
+          support={
+            sesCoverage
+              ? `${sesCoverage.completed_count}/${overview.total_registered} (${sesCoverage.percent_of_registered}%)`
+              : "Data unavailable"
+          }
           icon={IconClipboardCheck}
           tone="aqua"
         />
         <SnapshotMetricCard
-          label="DSEQ / Screen Time"
-          value={overview.dseq_completion.completed.toLocaleString()}
-          support={`${overview.dseq_completion.completed}/${overview.dseq_completion.total_registered} (${overview.dseq_completion.percent}%)`}
+          label="Assessment Tool Status"
+          value={(assessmentToolStatus?.completion.completed ?? 0).toLocaleString()}
+          support={
+            assessmentToolStatus
+              ? `${assessmentToolStatus.completion.completed}/${assessmentToolStatus.completion.total_registered} (${assessmentToolStatus.completion.percent}%)`
+              : "Data unavailable"
+          }
           icon={IconMonitor}
           tone="amber"
         />

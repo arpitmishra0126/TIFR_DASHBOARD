@@ -3,20 +3,23 @@
 Verified against a live, read-only metadata export (RedCapClient.fetch_metadata())
 against project PID 196, "ICMR Neurodevelopment Study".
 
-PID 196 has 10 instruments (confirmed live 2026-09-11 via the REDCap
+PID 196 has 11 instruments (confirmed live 2026-09-12 via the REDCap
 `instrument` API): Registration Form, SES questionnaire, Digital-Screen
 Exposure Questionnaire (DSEQ), Child Illness History, PAQ-C, Dietary
-Intake, SSRS Parent, SSRS Child, SSRS Teacher, and Assessment Tool Status
+Intake, SSRS Parent, SSRS Child, SSRS Teacher, Assessment Tool Status
 (the 10th, added 2026-09-11 - a simple Done/Not-Done administration
 tracker for the SANGIAN/VWM/DCCS/CD Task tools, not their outcome data -
-see ASSESSMENT_TOOL_STATUS_ITEM_FIELDS below). (The Physical Activity
-instrument was renamed live on REDCap from "PAQ-A" [form `paq_a`] to
-"PAQ C" [form `paq_c`] - confirmed 2026-09-10 via the REDCap `instrument`
-API; its completion field changed accordingly from `paq_a_complete` to
-`paq_c_complete`, which is why `paq_a_complete` started being rejected by
-REDCap's record-export `fields` parameter. The underlying score fields
-`paq_item1_score`/`paq_item8_score`/`paq_total_score` were NOT renamed and
-are unchanged.)
+see ASSESSMENT_TOOL_STATUS_ITEM_FIELDS below), and Anthropometry
+Assessment Form (the 11th, added 2026-09-12 - see ANTHROPOMETRY_COMPLETE_FIELD
+below; Registry-only, same precedent as Assessment Tool Status - completion
+status only, individual measurement fields are not mapped anywhere).
+(The Physical Activity instrument was renamed live on REDCap from "PAQ-A"
+[form `paq_a`] to "PAQ C" [form `paq_c`] - confirmed 2026-09-10 via the
+REDCap `instrument` API; its completion field changed accordingly from
+`paq_a_complete` to `paq_c_complete`, which is why `paq_a_complete` started
+being rejected by REDCap's record-export `fields` parameter. The
+underlying score fields `paq_item1_score`/`paq_item8_score`/`paq_total_score`
+were NOT renamed and are unchanged.)
 
 Resolution rule applied below: a live field is mapped to an approved V1
 metric ONLY when it measures the same underlying construct, not merely a
@@ -411,8 +414,19 @@ ASSESSMENT_TOOL_STATUS_ITEM_FIELDS: tuple[str, ...] = (
     "cd_3",
 )
 
-# Registry-only extension of ALL_INSTRUMENTS (2026-09-11) - adds Assessment
-# Tool Status to the Registry participant x instrument status matrix
+# --- Anthropometry Assessment Form (11th live instrument, confirmed
+# 2026-09-12 via the REDCap `instrument` API - `anthropometry_assessment_form`,
+# label "Anthropometry Assessment Form"). Same REDCap auto-derived
+# `<form_name>_complete` convention as every other instrument (confirmed
+# live: currently 0/212 complete, brand new with no data yet). Individual
+# measurement fields are not mapped/used anywhere - only the instrument's
+# own completion field, per instruction not to infer completion from
+# measurement fields when a proper completion field exists.
+ANTHROPOMETRY_COMPLETE_FIELD = "anthropometry_assessment_form_complete"
+
+# Registry-only extension of ALL_INSTRUMENTS (2026-09-11, Assessment Tool
+# Status; 2026-09-12, Anthropometry Assessment Form) - adds these to the
+# Registry participant x instrument status matrix
 # (`RegistryChild.instrument_status`) and its "Missing Instrument" filter.
 # Deliberately a SEPARATE tuple, not an addition to ALL_INSTRUMENTS itself -
 # ALL_INSTRUMENTS also feeds Overview's `all_instrument_coverage` (the
@@ -421,6 +435,7 @@ ASSESSMENT_TOOL_STATUS_ITEM_FIELDS: tuple[str, ...] = (
 # count/denominators stay exactly as they were.
 REGISTRY_INSTRUMENT_ENTRIES: tuple[tuple[str, str, str], ...] = ALL_INSTRUMENTS + (
     ("assessment_tool_status", ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD, "Assessment Tool Status"),
+    ("anthropometry", ANTHROPOMETRY_COMPLETE_FIELD, "Anthropometry Assessment Form"),
 )
 
 # The fixed set of live REDCap field names the application requests and caches.
@@ -442,5 +457,6 @@ LIVE_FIELDS: tuple[str, ...] = (
     SSRS_TEACHER_COMPLETE_FIELD,
     ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD,
     *ASSESSMENT_TOOL_STATUS_ITEM_FIELDS,
+    ANTHROPOMETRY_COMPLETE_FIELD,
     *EXPORT_ONLY_FIELDS,
 )

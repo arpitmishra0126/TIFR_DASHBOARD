@@ -28,6 +28,7 @@ const INSTRUMENT_COLUMNS: { key: string; short: string; label: string }[] = [
   { key: "ssrs_child", short: "SSRS-C", label: "SSRS Child" },
   { key: "ssrs_teacher", short: "SSRS-T", label: "SSRS Teacher" },
   { key: "assessment_tool_status", short: "ATS", label: "Assessment Tool Status" },
+  { key: "anthropometry", short: "Anthro", label: "Anthropometry Assessment Form" },
 ];
 
 // The Participant Detail panel's generic "Assessment Status" tile grid
@@ -479,7 +480,6 @@ export default function Registry() {
                   <th>Child ID</th>
                   <th>Sex</th>
                   <th>Age</th>
-                  <th>Village</th>
                   {INSTRUMENT_COLUMNS.map((col) => (
                     <th
                       key={col.key}
@@ -498,7 +498,6 @@ export default function Registry() {
                     <td className="registry-child-id">{child.redcap_child_id}</td>
                     <td>{child.sex ?? "-"}</td>
                     <td>{child.age_years ?? "-"}</td>
-                    <td>{child.village ?? "-"}</td>
                     {INSTRUMENT_COLUMNS.map((col) => (
                       <td key={col.key} className={highlightedInstrument?.key === col.key ? "registry-instrument-col-highlighted" : undefined}>
                         <InstrumentDot complete={child.instrument_status[col.key] ?? false} />

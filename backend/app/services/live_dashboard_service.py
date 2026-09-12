@@ -36,8 +36,10 @@ from app.services.module_analytics import (
 from app.schemas.dashboard import (
     AgeBucket,
     AssessmentDomainStatus,
+    AssessmentParticipantStatus,
     AssessmentPooledStatus,
     AssessmentToolItemStatus,
+    AssessmentToolParticipantStatus,
     AssessmentToolStatusResponse,
     CategoryCount,
     ConditionIndicator,
@@ -665,6 +667,13 @@ class LiveDashboardService:
             overall=AssessmentDomainStatus(**analysis["overall"]),
             overall_pooled=AssessmentPooledStatus(**analysis["overall_pooled"]),
             items=[AssessmentToolItemStatus(**item) for item in analysis["items"]],
+            sangian_participant=AssessmentParticipantStatus(**analysis["sangian_participant"]),
+            vwm_participant=AssessmentParticipantStatus(**analysis["vwm_participant"]),
+            dccs_participant=AssessmentParticipantStatus(**analysis["dccs_participant"]),
+            cd_participant=AssessmentParticipantStatus(**analysis["cd_participant"]),
+            overall_participant=AssessmentParticipantStatus(**analysis["overall_participant"]),
+            common_participant_ids=analysis["common_participant_ids"],
+            participant_statuses=[AssessmentToolParticipantStatus(**p) for p in analysis["participant_statuses"]],
         )
 
     async def get_neurodevelopment(self, force: bool = False) -> NeurodevelopmentResponse:

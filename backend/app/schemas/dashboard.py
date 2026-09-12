@@ -423,6 +423,36 @@ class AssessmentPooledStatus(BaseModel):
     completion_percent: float
 
 
+class AssessmentParticipantStatus(BaseModel):
+    """Genuine participant-level status - a child counts as Done only when
+    every field in the group (all 6 SANGIAN sub-tests, or the single VWM/
+    DCCS/CD field) is answered Done. `total` is always total_registered
+    participants, never a sub-test count or a per-field valid_n - this is
+    the "completed participants / total registered participants" figure,
+    distinct from `sangian`/`vwm`/`overall` (mean-done-per-respondent) and
+    `overall_pooled`/`items` (field-response-pooled), which remain
+    unchanged for their existing consumers."""
+
+    done_count: int
+    total: int
+    percent: float
+
+
+class AssessmentToolParticipantStatus(BaseModel):
+    """One registered child's Done/Not-Done boolean for each of SANGIAN/
+    VWM/DCCS/CD - the identical per-participant "done" predicate behind
+    `sangian_participant`/`vwm_participant`/`dccs_participant`/
+    `cd_participant` above, exposed per-child. Powers Overview's
+    "Participant Assessment Status" search/filter/table only - not a
+    second completion definition."""
+
+    child_id: str
+    sangian: bool
+    vwm: bool
+    dccs: bool
+    cd: bool
+
+
 class AssessmentToolStatusResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
@@ -431,6 +461,19 @@ class AssessmentToolStatusResponse(BaseModel):
     overall: AssessmentDomainStatus
     overall_pooled: AssessmentPooledStatus
     items: list[AssessmentToolItemStatus]
+    sangian_participant: AssessmentParticipantStatus
+    vwm_participant: AssessmentParticipantStatus
+    dccs_participant: AssessmentParticipantStatus
+    cd_participant: AssessmentParticipantStatus
+    overall_participant: AssessmentParticipantStatus
+    # Child IDs Done on all four of SANGIAN/VWM/DCCS/CD (their intersection)
+    # - additive, does not feed or alter any of the fields above. Powers
+    # Overview's "View common participants" expandable panel only.
+    common_participant_ids: list[str] = []
+    # Per-child Done/Not-Done booleans for the four tests - additive, same
+    # underlying predicate as the fields above. Powers Overview's
+    # "Participant Assessment Status" search/filter/table only.
+    participant_statuses: list[AssessmentToolParticipantStatus] = []
 
 
 # --- Assessment Progress pipeline ---

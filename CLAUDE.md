@@ -115,8 +115,8 @@ belonged to the wrong project and must never be reintroduced.
 
 ## CURRENT REDCAP INSTRUMENTS
 
-The correct project contains these 10 instruments (confirmed live
-2026-09-11 via the REDCap `instrument` API):
+The correct project contains these 11 instruments (confirmed live
+2026-09-12 via the REDCap `instrument` API):
 
 1. Registration
 2. SES
@@ -128,6 +128,7 @@ The correct project contains these 10 instruments (confirmed live
 8. SSRS Child
 9. SSRS Teacher
 10. Assessment Tool Status (added 2026-09-11 - see below)
+11. Anthropometry Assessment Form (added 2026-09-12 - see below)
 
 The project is classic/non-longitudinal.
 
@@ -283,6 +284,182 @@ shows a "done sub-tests / 6" figure.
   correctly shows "No data" throughout this new section (screenshot
   confirmed layout/labels/dividers/corners render correctly even in the
   fully-empty state).
+
+**Overview Snapshot corrected + Assessment Tool Status participant-level
+denominator fix (2026-09-12, supersedes the "Core REDCap Instruments
+Completed"/"DSEQ / Screen Time" Snapshot cards and the `overall_pooled`/
+per-item-`valid_n`-based Overview ATS section columns above):** a senior
+correction found the Overview ATS section mixed denominators inconsistently
+(e.g. "Overall 179/198", "VWM 22/22", "DCCS 21/22", "CD 4/22" - each
+denominator was a different in-flight respondent/field-response count, not
+the registered population), and that the Snapshot row's "Core REDCap
+Instruments Completed"/"DSEQ / Screen Time" cards duplicated the Assessment
+Coverage grid below. Fixed with a new backend participant-level aggregate,
+not a frontend relabel:
+- **New backend fields** on `AssessmentToolStatusResponse`:
+  `sangian_participant`/`vwm_participant`/`dccs_participant`/
+  `cd_participant`/`overall_participant` (`AssessmentParticipantStatus`
+  schema: `done_count`/`total`/`percent`). Computed by a new
+  `_assessment_tool_participant_status(records, fields, total_registered)`
+  in `module_analytics.py` - a child counts as Done only when **every**
+  field in that test's group is answered Done (1) (SANGIAN = all 6 fields;
+  VWM/DCCS/CD = their own single field; Overall = all 9 fields) - the same
+  "done" definition Registry's own `_ats_group_status` already uses for the
+  participant detail panel, just aggregated across the whole registered
+  population here instead of per-child. `total` is always
+  `total_registered`, never a sub-test count (SANGIAN's 6 fields are never
+  turned into a participant denominator) or a per-field `valid_n`. This is
+  purely additive - `sangian`/`vwm`/`overall` (mean-done-per-respondent),
+  `overall_pooled` (field-response-pooled), and `items` (per-field) are
+  byte-for-byte unchanged and still power the dedicated
+  `/assessment-tool-status` page and Registry exactly as before.
+- **Overview ATS section** (`AssessmentToolStatusCard` in `Overview.tsx`):
+  "Overall Assessment Tool Status" and the SANGIAN/VWM/DCCS/CD columns now
+  all read from `*_participant` (`atsParticipantColumn()` replaces the old
+  `atsDomainColumn()`/`atsItemColumn()` split) - every figure is now
+  literally "completed participants / total registered participants"
+  (live-verified: SANGIAN 48/212, VWM 49/212, DCCS 47/212, CD 8/212,
+  Overall 8/212 - Overall correctly lower than any single test since it
+  requires all 9 fields Done for the same child).
+- **Overview Study Snapshot**: the "Core REDCap Instruments Completed" and
+  "DSEQ / Screen Time" cards were replaced with **"SES Completed"** (from
+  the existing `overview.all_instrument_coverage` "ses" entry -
+  `screening_rural_complete`, already denominated by `total_registered`,
+  live-verified 58/212) and **"Assessment Tool Status"** (from
+  `assessmentToolStatus.completion` - the existing REDCap
+  `assessment_tool_status_complete` instrument-level flag, already
+  denominated by `total_registered`, live-verified 49/212) - both show
+  "Data unavailable" rather than a fabricated value if the secondary ATS
+  fetch fails, consistent with this page's existing failure-isolation
+  pattern. `core_assessment_count`/`dseq_completion` themselves are
+  unchanged in `OverviewResponse` (other consumers - Assessment Progress
+  funnel, the Current Data Signals DSEQ subtitle - still use them
+  unaffected) - only which Snapshot cards render changed. The Registered/
+  SSRS Snapshot cards and every other Overview section are unchanged.
+- **Assessments hub rename**: `AssessmentsHub.tsx`'s `GROUPS` "registration"
+  entry's `name` changed from "Baseline / Participant Information" to
+  **"Total Registered Cases"**, `purpose` (subtitle) to "All registered
+  study participants" - it still renders via the existing
+  `InstrumentCoverageCard`/`all_instrument_coverage` "registration" entry
+  (`registration_form_complete`), so it already shows the live, dynamic
+  "212/212 (100%)" with no backend change needed; this card is Assessments-
+  hub-only (Overview's own instrument grid explicitly excludes the
+  "registration" key, unaffected).
+- The dedicated `/assessment-tool-status` page's own 3 KPI cards (SANGIAN/
+  VWM/Overall, `mean_done`/`field_count` format) were **not** touched -
+  they're a different, previously-approved mean-per-respondent metric, and
+  the "22/22"-style figures the correction referenced come from Overview's
+  4-column section (fixed above), not this page.
+Tests: `test_assessment_tool_status_participant_level_denominators_are_total_registered`
+(new, `test_module_analytics.py`) + a `*_participant` shape/zero-value
+assertion added to the existing `/assessment-tool-status` endpoint test.
+Backend: **151/151** tests pass. Frontend `tsc --noEmit` and `npm run
+build` both succeed. Live-verified against a local backend hitting live
+REDCap (212 registered): SES 58/212 (27.36%), Assessment Tool Status
+instrument completion 49/212 (23.1%), participant-level SANGIAN 48/212,
+VWM 49/212, DCCS 47/212, CD 8/212, Overall 8/212, Total Registered Cases
+212/212 (100%) - all read directly from the live API responses.
+
+**"View common participants" panel added to the Overview ATS section
+(2026-09-12, same day - additive UI/data only, every calculation above is
+byte-for-byte unchanged):** a collapsed-by-default expandable bar was added
+directly below the SANGIAN | VWM | DCCS | CD row inside `AssessmentToolStatusCard`
+(`Overview.tsx`) - "▾ View common participants" (a chevron that rotates
+90°->0° via a new `ats-common-toggle-chevron-open` class on click); clicking
+again collapses it. When expanded it shows "Common participants: X" plus a
+plain Child-ID-only grid list (no other participant field is exposed) of the
+children Done on **all four** of SANGIAN ∩ VWM ∩ DCCS ∩ CD - or an explicit
+"No participant is Done on SANGIAN, VWM, DCCS, and CD all at once." empty
+state, never a fabricated list.
+- **Backend**: a new read-only helper, `_assessment_tool_done_child_ids(records,
+  fields)` in `module_analytics.py`, added **alongside** (not a refactor of)
+  the existing `_assessment_tool_participant_status()` - it applies the
+  identical "Done on every field in the group" predicate that function
+  already uses, just returning the child-ID set instead of a count, so the
+  four existing `*_participant` done-counts/percents are untouched. A new
+  `AssessmentToolStatusResponse.common_participant_ids: list[str]` field
+  (default `[]`) is the sorted intersection of the four groups' done-ID
+  sets, computed once in `build_assessment_tool_status_analysis()` and
+  passed through unchanged by `LiveDashboardService.get_assessment_tool_status()`.
+  This does not touch `sangian`/`vwm`/`overall`/`overall_pooled`/`items`/
+  any `*_participant` field, the completion calculation, or any REDCap
+  mapping.
+- **Frontend**: `AssessmentParticipantStatus`-adjacent addition to
+  `liveDashboard.ts` (`common_participant_ids: string[]` on
+  `AssessmentToolStatusResponse`); `Overview.tsx`'s `AssessmentToolStatusCard`
+  gained local `useState` toggle state and the new panel markup only - the
+  Overall/SANGIAN/VWM/DCCS/CD columns above it are unchanged. New CSS in
+  `app.css`: `.ats-common-toggle` (subtle full-width bar, `--surface-2`
+  background, top hairline border, matching the card's existing typography
+  scale), `.ats-common-toggle-chevron`/`-open` (rotation transition),
+  `.ats-common-panel`/`-count`/`-empty`/`-list` (a compact wrapping grid of
+  bordered Child-ID chips, `max-height: 220px` with scroll for a long list).
+Tests: `test_assessment_tool_status_common_participant_ids_is_intersection_of_the_four_tests`
+(new, `test_module_analytics.py` - asserts the intersection excludes a
+child Done on only 3-of-4 groups and confirms the four `*_participant`
+done-counts are unaffected) + a `common_participant_ids == []` assertion
+added to the existing `/assessment-tool-status` endpoint test. Backend:
+**152/152** tests pass. Frontend `tsc --noEmit` and `npm run build` both
+succeed. Live-verified against a local backend hitting live REDCap: the
+four `*_participant` counts (SANGIAN 48, VWM 49, DCCS 47, CD 8) and
+`overall_participant` (8) are numerically identical to before this change;
+`common_participant_ids` returned 8 real child IDs (e.g. `06IND077G`,
+`06IND163B`, ...) - coincidentally equal to CD's count on the current live
+data (CD's done-set of 8 happens to be fully contained within the other
+three groups' done-sets today), not a hardcoded or derived-from-displayed-
+counts value.
+
+**"View common participants" refined into a "Participant Assessment
+Status" mini-section (2026-09-12, same day, supersedes the simple Child-ID-
+pill-list panel above - every SANGIAN/VWM/DCCS/CD/Overall calculation
+remains byte-for-byte unchanged):** the plain ID list was replaced with a
+collapsed-by-default expandable mini-section, still triggered by the same
+chevron bar (now labelled "Participant Assessment Status" instead of "View
+common participants") directly below the SANGIAN | VWM | DCCS | CD row.
+Expanded, it shows: (1) the unchanged "Common participants: X" summary
+(still `common_participant_ids.length`); (2) a compact "Search Child ID"
+text input, filtering across the **whole registered cohort**, not just the
+common set; (3) a completion-count filter (All / 4/4 / 3/4 / 2/4 / 1/4 /
+0/4 Complete); (4) a Child ID | SANGIAN | VWM | DCCS | CD | Status table
+(✓/— per tool, Status = "4/4 Complete" or "N/4 Complete — Pending: <tools>")
+- a scrollable, sticky-header table (`max-height: 260px`) instead of a
+pill grid, matching the dashboard's existing table/near-square-corner
+language.
+- **Backend (additive only)**: a new `_assessment_tool_participant_statuses()`
+  in `module_analytics.py` returns one row per registered child -
+  `{child_id, sangian, vwm, dccs, cd}` booleans - using the **identical**
+  "every field in the group is Done" predicate as the existing
+  `_assessment_tool_participant_status()`/`_assessment_tool_done_child_ids()`
+  helpers (kept as a separate read-only view, not a refactor of either).
+  New `AssessmentToolParticipantStatus` schema +
+  `AssessmentToolStatusResponse.participant_statuses: list[...] = []`
+  (default empty, additive); `LiveDashboardService.get_assessment_tool_status()`
+  passes it through unchanged. No existing field
+  (`sangian`/`vwm`/`overall`/`overall_pooled`/`items`/any `*_participant`/
+  `common_participant_ids`) was touched.
+- **Frontend**: new `AssessmentToolParticipantStatus` type in
+  `liveDashboard.ts`; `Overview.tsx`'s old inline common-participants toggle
+  state was extracted into a new `ParticipantAssessmentStatusPanel`
+  component (search/filter local state, `useMemo`-filtered rows, a pure
+  `atsDoneCount()`/`atsStatusText()` re-derivation of the Status column from
+  the four booleans - never a second completion definition) rendered inside
+  `AssessmentToolStatusCard` in place of the old panel. New CSS replaces the
+  old `.ats-common-panel*` pill-list rules with `.ats-pstatus-*` (search
+  input, select, sticky-header scrollable table, responsive stacked
+  controls below 560px) - the toggle bar itself (`.ats-common-toggle*`)
+  is reused unchanged.
+Tests: `test_assessment_tool_status_participant_statuses_row_per_child_matches_aggregates`
+(new, `test_module_analytics.py` - re-derives all four `*_participant`
+done-counts and `common_participant_ids` from the per-child rows and
+asserts they match exactly) + a `participant_statuses` shape assertion
+added to the existing `/assessment-tool-status` endpoint test. Backend:
+**153/153** tests pass. Frontend `tsc --noEmit` and `npm run build` both
+succeed. Live-verified against a local backend hitting live REDCap: all
+four `*_participant` counts (SANGIAN 48, VWM 49, DCCS 47, CD 8),
+`overall_participant` (8), and `common_participant_ids` (8 IDs) are
+unchanged from before this refinement; re-deriving each of those four
+counts and the common-ID set from the new 212-row `participant_statuses`
+list reproduces them exactly (verified programmatically, not just visually).
 
 ---
 
@@ -1669,6 +1846,68 @@ screenshots of both the table and the participant detail panel; the CSV
 export's header correctly gained the trailing "Assessment Tool Status
 Status" column against a live fetch.
 
+**Village column removed from the main table + Anthropometry Assessment
+Form added (2026-09-12):** two final Registry changes, both scoped exactly
+as requested.
+- **Village column removed from the participant table only**: the `<th>
+  Village</th>`/`<td>{child.village}</td>` pair was removed from
+  `Registry.tsx`'s main table (`table.registry-data-table`'s `nth-child(4)`
+  left-align CSS rule, which targeted that column, was removed with it -
+  Child ID/Sex stay left-aligned via `nth-child(1)`/`(2)`, Age stays
+  centered as before). Village is otherwise **fully unchanged**: the
+  Village filter dropdown (`villageOptions`/`distinctVillages`), the
+  backend `village`/`village_name` filter param, the Participant Detail
+  slide-over's village line, `RegistryChild.village`, and both Excel/CSV
+  exports' Village column are all untouched - this was a display-column
+  removal on one table only.
+- **Anthropometry Assessment Form - 11th live instrument (see "CURRENT
+  REDCAP INSTRUMENTS" above)**: confirmed live 2026-09-12 via the REDCap
+  `instrument` API (form `anthropometry_assessment_form`) - brand new,
+  0/212 completions, same auto-derived `<form_name>_complete` convention as
+  every other instrument (`ANTHROPOMETRY_COMPLETE_FIELD =
+  "anthropometry_assessment_form_complete"`, confirmed live). Per
+  instruction, only this completion field is used - no individual
+  measurement field was mapped or inferred from.
+  - **Backend**: added to `REGISTRY_INSTRUMENT_ENTRIES` (`live_field_map.py`)
+    as `("anthropometry", ANTHROPOMETRY_COMPLETE_FIELD, "Anthropometry
+    Assessment Form")` - same "separate tuple, not `ALL_INSTRUMENTS`"
+    precedent as Assessment Tool Status, so Overview's
+    `all_instrument_coverage`/Data Collection & Quality Status stats remain
+    completely unaffected (live-verified: still exactly the original 9
+    keys). Added the completion field to `LIVE_FIELDS`. Also added to
+    `export_service.py`'s `ASSESSMENT_INSTRUMENTS` (now 10 entries) as the
+    10th non-registration instrument, so the Excel/CSV export's
+    per-instrument Complete/Not Complete columns and DATA COVERAGE tiers
+    stay consistent with the Registry matrix, same precedent as ATS's own
+    addition - all generic, no hardcoded column counts.
+  - **Frontend**: `Registry.tsx`'s `INSTRUMENT_COLUMNS` gained `{ key:
+    "anthropometry", short: "Anthro", label: "Anthropometry Assessment
+    Form" }` as the **final** entry (after `assessment_tool_status`, before
+    the Stage column, which is rendered separately) - the same generic
+    column loop renders it automatically in the table (`InstrumentDot`
+    ✓/–), the Quick Query "Missing Assessment"/"Incomplete Assessments"
+    instrument pickers, and (unlike Assessment Tool Status, which is
+    excluded via `DETAIL_GRID_INSTRUMENT_COLUMNS`) the Participant Detail
+    panel's generic "Assessment Status" tile grid too, since Anthro is a
+    simple single Complete/Not-Complete instrument like SES/DSEQ, not a
+    four-sub-test breakdown - its "N/8 completed" count on that panel is
+    now "N/9" automatically (computed from the array length, not
+    hardcoded).
+  Final Registry column order: Child ID | Sex | Age | SES | DSEQ | CHH |
+  PAQ-C | Diet | SSRS-P | SSRS-C | SSRS-T | ATS | Anthro | Stage.
+Tests: `test_assessment_instruments_cover_all_ten_non_registration_instruments`
+(renamed/updated from "...nine...") and `test_csv_header_matches_approved_field_set`
+(new trailing "Anthropometry Assessment Form Status" column) in
+`test_export_service.py`; an `anthropometry` assertion added to the
+existing `test_registry_instrument_status_and_progression_stage` in
+`test_live_dashboard_service.py`. Backend: **153/153 tests pass**. Frontend
+`tsc --noEmit` and `npm run build` both succeed. Live-verified against a
+local backend hitting live REDCap: `instrument_status["anthropometry"]` is
+`False` for every child (0/212 live completions, correctly not fabricated)
+and dynamically present on every registry record; `all_instrument_coverage`
+still returns exactly its original 9 keys, confirming Overview is
+untouched.
+
 ### Assessment Progress
 
 Focus on:
@@ -2374,7 +2613,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **149/149 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-11 Registry Assessment Tool Status integration tests). Frontend `npm run build` succeeds.
+Backend test count: **153/153 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-12 Village-column-removal + Anthropometry Assessment Form Registry addition). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

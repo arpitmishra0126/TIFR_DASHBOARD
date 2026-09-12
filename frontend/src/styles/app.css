@@ -963,6 +963,249 @@ a, button {
   }
 }
 
+/* --- "Participant Assessment Status" expandable mini-section
+   (2026-09-12) - a subtle, compact affordance below the SANGIAN/VWM/DCCS/CD
+   row, collapsed by default. Purely additive to .ats-card - does not
+   affect the overall/test columns above it. --- */
+.ats-common-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-top: 1px solid var(--border-hairline);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ats-common-toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface-2-strong, var(--surface-2));
+}
+
+.ats-common-toggle-chevron {
+  flex: none;
+  transform: rotate(90deg);
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+}
+
+.ats-common-toggle-chevron-open {
+  transform: rotate(-90deg);
+}
+
+.ats-pstatus-panel {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border-hairline);
+  background: var(--surface-2);
+}
+
+.ats-pstatus-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ats-pstatus-search,
+.ats-pstatus-filter,
+.ats-pstatus-common-toggle {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 5px var(--space-2);
+}
+
+.ats-pstatus-search {
+  flex: 1 1 58%;
+  min-width: 140px;
+}
+
+.ats-pstatus-search:focus,
+.ats-pstatus-filter:focus,
+.ats-pstatus-common-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--tone-accent));
+  outline-offset: 1px;
+}
+
+.ats-pstatus-filter {
+  flex: 1 1 15%;
+  min-width: 112px;
+  cursor: pointer;
+}
+
+.ats-pstatus-common-toggle {
+  flex: 1 1 22%;
+  min-width: 150px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.ats-pstatus-common-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--tone-accent, var(--series-1));
+}
+
+.ats-pstatus-common-toggle-active {
+  background: var(--tone-accent, var(--series-1));
+  border-color: var(--tone-accent, var(--series-1));
+  color: var(--surface-1);
+}
+
+.ats-pstatus-common-toggle-active:hover {
+  color: var(--surface-1);
+}
+
+.ats-pstatus-table-wrap {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.ats-pstatus-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.ats-pstatus-table thead th,
+.ats-pstatus-table tbody td {
+  vertical-align: middle;
+}
+
+.ats-pstatus-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.68rem;
+  text-align: left;
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
+  white-space: nowrap;
+}
+
+/* SANGIAN/VWM/DCCS/CD headers must resolve to the exact same text-align as
+   their body cells (.ats-pstatus-tool-col below) - this selector is more
+   specific than the generic "thead th" rule above so it always wins,
+   instead of relying on class-order/specificity coincidence. Child ID and
+   Status headers are unaffected and stay left-aligned. */
+.ats-pstatus-table thead th.ats-pstatus-tool-col {
+  text-align: center;
+}
+
+.ats-pstatus-table tbody td {
+  padding: 5px var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.ats-pstatus-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ats-pstatus-id-col {
+  width: 17%;
+}
+
+.ats-pstatus-id-cell {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ats-pstatus-tool-col {
+  width: 10%;
+  text-align: center;
+}
+
+.ats-pstatus-table tbody td.ats-pstatus-done,
+.ats-pstatus-table tbody td.ats-pstatus-not-done {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.ats-pstatus-done {
+  color: var(--status-good);
+  font-weight: 700;
+}
+
+.ats-pstatus-not-done {
+  color: var(--text-muted);
+}
+
+.ats-pstatus-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.ats-pstatus-status-col,
+.ats-pstatus-status-cell {
+  width: 43%;
+}
+
+/* Pin the STATUS header and STATUS value cells to the exact same left
+   padding explicitly, so the header text's left edge is guaranteed to
+   match the value text's left edge regardless of any other cascading
+   padding rule - both stay left-aligned, only this one property is
+   pinned. */
+.ats-pstatus-table thead th.ats-pstatus-status-col {
+  text-align: left;
+  padding-left: var(--space-2);
+}
+
+.ats-pstatus-table tbody td.ats-pstatus-status-cell {
+  padding-left: var(--space-2);
+}
+
+.ats-pstatus-status-cell {
+  white-space: normal;
+  min-width: 160px;
+}
+
+.ats-pstatus-empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .ats-pstatus-controls {
+    flex-direction: column;
+  }
+
+  .ats-pstatus-search,
+  .ats-pstatus-filter,
+  .ats-pstatus-common-toggle {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}
+
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -2660,9 +2903,7 @@ table.registry-data-table td {
 table.registry-data-table th:nth-child(1),
 table.registry-data-table td:nth-child(1),
 table.registry-data-table th:nth-child(2),
-table.registry-data-table td:nth-child(2),
-table.registry-data-table th:nth-child(4),
-table.registry-data-table td:nth-child(4) {
+table.registry-data-table td:nth-child(2) {
   text-align: left;
 }
 

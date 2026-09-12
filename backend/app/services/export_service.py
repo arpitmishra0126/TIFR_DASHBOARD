@@ -29,6 +29,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from app.ingestion.choice_maps import ChoiceMap
 from app.ingestion.live_field_map import (
+    ANTHROPOMETRY_COMPLETE_FIELD,
     ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD,
     CORE_BATTERY_COMPLETE_FIELDS,
     CORE_BATTERY_INSTRUMENTS,
@@ -60,17 +61,19 @@ from app.services.module_analytics import numeric_values as _numeric_values
 from app.services.module_analytics import resolve_value as _resolve_value
 from app.services.module_analytics import yes_count as _yes_count
 
-# All 9 non-registration instruments in PID 196, in newsletter order.
+# All 10 non-registration instruments in PID 196, in newsletter order.
 # Assessment Tool Status (added 2026-09-11, the 10th live instrument
-# overall) is included here so the export's per-instrument Complete/Not
-# Complete columns (Sheet 1 Group J, Sheet 2, the CSV) and DATA COVERAGE
-# tiers stay consistent with the Registry instrument-status matrix - it is
-# an administration/status tracker only, not outcome data.
+# overall) and Anthropometry Assessment Form (added 2026-09-12, the 11th)
+# are included here so the export's per-instrument Complete/Not Complete
+# columns (Sheet 1 Group J, Sheet 2, the CSV) and DATA COVERAGE tiers stay
+# consistent with the Registry instrument-status matrix - both are
+# administration/status trackers only, not outcome/measurement data.
 ASSESSMENT_INSTRUMENTS: tuple[tuple[str, str, str], ...] = (
     *CORE_BATTERY_INSTRUMENTS,
     ("ssrs_child", SSRS_CHILD_COMPLETE_FIELD, "SSRS Child"),
     ("ssrs_teacher", SSRS_TEACHER_COMPLETE_FIELD, "SSRS Teacher"),
     ("assessment_tool_status", ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD, "Assessment Tool Status"),
+    ("anthropometry", ANTHROPOMETRY_COMPLETE_FIELD, "Anthropometry Assessment Form"),
 )
 
 _HEADER_FILL = PatternFill(start_color="FF1F3864", end_color="FF1F3864", fill_type="solid")

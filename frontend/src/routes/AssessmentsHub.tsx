@@ -44,7 +44,7 @@ export const GROUPS: InstrumentGroup[] = [
   {
     title: "Core / Baseline",
     available: [
-      { key: "registration", name: "Baseline / Participant Information", purpose: "Registry & demographic identifiers", route: "/registry", icon: IconUsers },
+      { key: "registration", name: "Total Registered Cases", purpose: "All registered study participants", route: "/registry", icon: IconUsers },
       { key: "ses", name: "SES", purpose: "Udai Pareek & BG Prasad socioeconomic status", route: "/demographics", icon: IconClipboardCheck },
     ],
   },

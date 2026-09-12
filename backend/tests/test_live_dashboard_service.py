@@ -82,6 +82,13 @@ async def test_registry_instrument_status_and_progression_stage(service: LiveDas
     assert "assessment_tool_status" in by_id["REC001"].instrument_status
     assert by_id["REC001"].instrument_status["assessment_tool_status"] is False
 
+    # Anthropometry Assessment Form (2026-09-12, the 11th instrument) is
+    # included the same way - the shared fixture has no data for it either,
+    # so it's False for all children, computed dynamically from its own
+    # completion field like every other instrument.
+    assert "anthropometry" in by_id["REC001"].instrument_status
+    assert by_id["REC001"].instrument_status["anthropometry"] is False
+
 
 def test_ats_group_status_done_not_done_and_not_answered():
     """"done" only when every field in the group is answered Done (1);

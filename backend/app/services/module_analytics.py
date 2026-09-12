@@ -904,6 +904,64 @@ def _pooled_assessment_tool_status(items: list[dict]) -> dict:
     }
 
 
+def _assessment_tool_participant_status(records: list[dict], fields: tuple[str, ...], total_registered: int) -> dict:
+    """Genuine participant-level status: a child counts as Done only when
+    every field in the group is answered Done (1) - matching the Registry's
+    own per-child status definition (`_ats_group_status` in
+    live_dashboard_service.py). Denominator is always `total_registered`
+    participants, never a sub-test count or a per-field valid_n - this is
+    the "completed participants / total registered participants" figure the
+    Overview snapshot and Assessment Tool Status section require, distinct
+    from the mean-done-per-respondent (`sangian`/`vwm`/`overall`) and
+    field-response-pooled (`overall_pooled`/`items`) figures above, which
+    are unchanged for their existing consumers (the dedicated
+    /assessment-tool-status page and Registry)."""
+    done_count = sum(1 for record in records if all(_done_flag(record, f) == 1 for f in fields))
+    return {
+        "done_count": done_count,
+        "total": total_registered,
+        "percent": percent(done_count, total_registered),
+    }
+
+
+def _assessment_tool_done_child_ids(records: list[dict], fields: tuple[str, ...]) -> set[str]:
+    """Child IDs of participants Done on every field in the group - the
+    identical per-participant "done" predicate already used by
+    `_assessment_tool_participant_status` above, kept as a separate
+    read-only helper (not a refactor of that function) so its existing
+    done-count/percent calculations stay byte-for-byte unchanged. Used only
+    to compute the SANGIAN ∩ VWM ∩ DCCS ∩ CD common-participants list for
+    the Overview "View common participants" panel - never substitutes for
+    any existing count."""
+    return {child_id(record) for record in records if all(_done_flag(record, f) == 1 for f in fields)}
+
+
+def _assessment_tool_participant_statuses(
+    records: list[dict],
+    sangian_fields: tuple[str, ...],
+    vwm_field: str,
+    dccs_field: str,
+    cd_field: str,
+) -> list[dict]:
+    """One row per registered child - a Done/Not-Done boolean for each of
+    SANGIAN/VWM/DCCS/CD, using the identical "every field in the group is
+    Done" predicate as `_assessment_tool_participant_status`/
+    `_assessment_tool_done_child_ids` above (a separate read-only view, not
+    a refactor or a second completion definition). Powers Overview's
+    "Participant Assessment Status" search/filter/table only - never feeds
+    back into any existing count/percent."""
+    return [
+        {
+            "child_id": child_id(record),
+            "sangian": all(_done_flag(record, f) == 1 for f in sangian_fields),
+            "vwm": _done_flag(record, vwm_field) == 1,
+            "dccs": _done_flag(record, dccs_field) == 1,
+            "cd": _done_flag(record, cd_field) == 1,
+        }
+        for record in records
+    ]
+
+
 def build_assessment_tool_status_analysis(records: list[dict]) -> dict:
     reg = registered_records(records)
     total = len(reg)
@@ -911,6 +969,21 @@ def build_assessment_tool_status_analysis(records: list[dict]) -> dict:
 
     all_fields = SANGIAN_ASSESSMENT_FIELDS + VWM_ASSESSMENT_FIELDS
     items = [_assessment_tool_item_status(reg, field, label) for field, label in all_fields]
+
+    sangian_field_names = tuple(field for field, _ in SANGIAN_ASSESSMENT_FIELDS)
+    vwm_field, dccs_field, cd_field = (field for field, _ in VWM_ASSESSMENT_FIELDS)
+    all_field_names = tuple(field for field, _ in all_fields)
+
+    # SANGIAN / VWM / DCCS / CD common-participants list (2026-09-12) - the
+    # same "done on every field in the group" IDs behind the four
+    # `*_participant` counts above, intersected. Additive only - does not
+    # feed or alter any existing count/percent.
+    common_participant_ids = sorted(
+        _assessment_tool_done_child_ids(reg, sangian_field_names)
+        & _assessment_tool_done_child_ids(reg, (vwm_field,))
+        & _assessment_tool_done_child_ids(reg, (dccs_field,))
+        & _assessment_tool_done_child_ids(reg, (cd_field,))
+    )
 
     return {
         "instrument": "Assessment Tool Status",
@@ -926,4 +999,13 @@ def build_assessment_tool_status_analysis(records: list[dict]) -> dict:
         "overall": _assessment_tool_domain_status(reg, all_fields, total),
         "overall_pooled": _pooled_assessment_tool_status(items),
         "items": items,
+        "sangian_participant": _assessment_tool_participant_status(reg, sangian_field_names, total),
+        "vwm_participant": _assessment_tool_participant_status(reg, (vwm_field,), total),
+        "dccs_participant": _assessment_tool_participant_status(reg, (dccs_field,), total),
+        "cd_participant": _assessment_tool_participant_status(reg, (cd_field,), total),
+        "overall_participant": _assessment_tool_participant_status(reg, all_field_names, total),
+        "common_participant_ids": common_participant_ids,
+        "participant_statuses": _assessment_tool_participant_statuses(
+            reg, sangian_field_names, vwm_field, dccs_field, cd_field
+        ),
     }

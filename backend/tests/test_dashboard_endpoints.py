@@ -161,6 +161,15 @@ def test_assessment_tool_status_endpoint_shape_and_denominators():
     assert "overall_pooled" in body
     assert body["overall_pooled"]["valid_n"] == 0
     assert body["overall_pooled"]["completion_percent"] == 0.0
+    # Participant-level fields (completed participants / total registered
+    # participants) - also correctly zero, never fabricated, on this fixture.
+    for key in ("sangian_participant", "vwm_participant", "dccs_participant", "cd_participant", "overall_participant"):
+        assert key in body
+        assert body[key]["done_count"] == 0
+        assert body[key]["total"] == 6
+    assert body["common_participant_ids"] == []
+    assert len(body["participant_statuses"]) == 6
+    assert all(r["sangian"] is False and r["vwm"] is False and r["dccs"] is False and r["cd"] is False for r in body["participant_statuses"])
 
 
 def test_neurodevelopment_endpoint_shows_teacher_with_no_acquired_data():

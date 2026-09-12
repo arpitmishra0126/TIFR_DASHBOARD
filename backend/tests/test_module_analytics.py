@@ -719,3 +719,100 @@ def test_assessment_tool_status_domain_with_no_respondents_is_none_not_zero():
         assert result[domain]["valid_n"] == 0
         assert result[domain]["mean_done"] is None
         assert result[domain]["completion_percent"] is None
+
+
+def test_assessment_tool_status_participant_level_denominators_are_total_registered():
+    """The *_participant fields are genuine participant counts - a child
+    counts as Done only when every field in that test's group is answered
+    Done - and every denominator is total_registered, never a sub-test
+    count or a per-field valid_n (the "completed participants / total
+    registered participants" figure required by Overview and the
+    Assessment Tool Status section, distinct from the mean-done-per-
+    respondent `sangian`/`vwm`/`overall` fields and the field-response-
+    pooled `overall_pooled`/`items` fields, which are unchanged)."""
+    records = [
+        # Child A: all 6 SANGIAN done, VWM/DCCS done, CD explicitly Not Done.
+        {
+            "child_id": "A", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "2",
+        },
+        # Child B: partial SANGIAN (not all 6 done), VWM/DCCS/CD blank.
+        {
+            "child_id": "B", "assessment_tool_status_complete": "0",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "2", "cmc_5": "2", "chmc_6": "2",
+        },
+        # Child C: nothing answered at all.
+        {"child_id": "C"},
+    ]
+    result = ma.build_assessment_tool_status_analysis(records)
+
+    assert result["sangian_participant"] == {"done_count": 1, "total": 3, "percent": ma.percent(1, 3)}
+    assert result["vwm_participant"] == {"done_count": 1, "total": 3, "percent": ma.percent(1, 3)}
+    assert result["dccs_participant"] == {"done_count": 1, "total": 3, "percent": ma.percent(1, 3)}
+    assert result["cd_participant"] == {"done_count": 0, "total": 3, "percent": ma.percent(0, 3)}
+    # Overall participant: all 9 fields must be Done - A fails on cd_3.
+    assert result["overall_participant"] == {"done_count": 0, "total": 3, "percent": ma.percent(0, 3)}
+
+
+def test_assessment_tool_status_common_participant_ids_is_intersection_of_the_four_tests():
+    """`common_participant_ids` is SANGIAN ∩ VWM ∩ DCCS ∩ CD Done
+    participants - additive, must not alter any existing *_participant
+    count/percent above."""
+    records = [
+        # D: Done on all four - the only child that should appear.
+        {
+            "child_id": "D", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "1",
+        },
+        # E: Done on SANGIAN/VWM/DCCS but Not Done on CD - excluded.
+        {
+            "child_id": "E", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "2",
+        },
+        # F: nothing answered - excluded.
+        {"child_id": "F"},
+    ]
+    result = ma.build_assessment_tool_status_analysis(records)
+    assert result["common_participant_ids"] == ["D"]
+    # The four participant counts themselves are unaffected by this field.
+    assert result["sangian_participant"]["done_count"] == 2
+    assert result["vwm_participant"]["done_count"] == 2
+    assert result["dccs_participant"]["done_count"] == 2
+    assert result["cd_participant"]["done_count"] == 1
+
+
+def test_assessment_tool_status_participant_statuses_row_per_child_matches_aggregates():
+    """`participant_statuses` is a per-child Done/Not-Done view using the
+    exact same predicate as the aggregate *_participant/common_participant_ids
+    fields - re-deriving the aggregates from these per-child rows must match
+    them exactly, proving this is not a second completion definition."""
+    records = [
+        {
+            "child_id": "D", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "1",
+        },
+        {
+            "child_id": "E", "assessment_tool_status_complete": "2",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+            "vwm_1": "1", "dccs_2": "1", "cd_3": "2",
+        },
+        {"child_id": "F"},
+    ]
+    result = ma.build_assessment_tool_status_analysis(records)
+    rows = result["participant_statuses"]
+    assert [r["child_id"] for r in rows] == ["D", "E", "F"]
+    assert rows[0] == {"child_id": "D", "sangian": True, "vwm": True, "dccs": True, "cd": True}
+    assert rows[1] == {"child_id": "E", "sangian": True, "vwm": True, "dccs": True, "cd": False}
+    assert rows[2] == {"child_id": "F", "sangian": False, "vwm": False, "dccs": False, "cd": False}
+
+    # Re-derive each aggregate from these rows and confirm it matches the
+    # existing aggregate fields exactly.
+    assert sum(r["sangian"] for r in rows) == result["sangian_participant"]["done_count"]
+    assert sum(r["vwm"] for r in rows) == result["vwm_participant"]["done_count"]
+    assert sum(r["dccs"] for r in rows) == result["dccs_participant"]["done_count"]
+    assert sum(r["cd"] for r in rows) == result["cd_participant"]["done_count"]
+    assert [r["child_id"] for r in rows if r["sangian"] and r["vwm"] and r["dccs"] and r["cd"]] == result["common_participant_ids"]
