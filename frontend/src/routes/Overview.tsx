@@ -9,7 +9,7 @@ import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
 import FullScreenLoader from "../components/FullScreenLoader";
 import HorizontalBarChart from "../components/HorizontalBarChart";
-import { IconChevron, IconClipboardCheck, IconMonitor, IconUserCheck, IconUsers } from "../components/icons";
+import { IconChevron, IconClipboardCheck, IconUserCheck, IconUsers } from "../components/icons";
 import InstrumentCoverageCard from "../components/InstrumentCoverageCard";
 import PageHeader from "../components/PageHeader";
 import ProportionBar from "../components/ProportionBar";
@@ -344,17 +344,6 @@ export default function Overview() {
           }
           icon={IconClipboardCheck}
           tone="aqua"
-        />
-        <SnapshotMetricCard
-          label="Assessment Tool Status"
-          value={(assessmentToolStatus?.completion.completed ?? 0).toLocaleString()}
-          support={
-            assessmentToolStatus
-              ? `${assessmentToolStatus.completion.completed}/${assessmentToolStatus.completion.total_registered} (${assessmentToolStatus.completion.percent}%)`
-              : "Data unavailable"
-          }
-          icon={IconMonitor}
-          tone="amber"
         />
         <SsrsSummaryCard
           rows={[

@@ -751,16 +751,12 @@ a, button {
   }
 
   .snapshot-strip-item {
-    flex: 1 1 50%;
+    flex: 1 1 100%;
     border-left: none !important;
   }
 
-  .snapshot-strip-item:nth-child(odd) {
-    border-right: 1px solid var(--border-hairline);
-  }
-
-  .snapshot-strip-item:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--border-hairline);
+  .snapshot-strip-item + .snapshot-strip-item {
+    border-top: 1px solid var(--border-hairline);
   }
 }
 
