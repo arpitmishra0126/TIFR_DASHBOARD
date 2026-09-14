@@ -78,8 +78,19 @@ cp .env.example .env # then set REDCAP_API_URL / REDCAP_API_TOKEN
 uvicorn app.main:app --reload
 ```
 
-API docs: http://localhost:8000/docs
-Health check: http://localhost:8000/api/v1/health
+On Windows (PowerShell), this is equivalently:
+
+```powershell
+cd D:\TIFR_DASHBOARD\backend
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --reload --port 8001
+```
+
+The ICMR backend runs on port **8001** (not the default 8000) to avoid
+conflicting with the SNCU backend, which uses port 8000.
+
+API docs: http://localhost:8001/docs
+Health check: http://localhost:8001/api/v1/health
 
 ## Backend - tests
 
@@ -99,6 +110,19 @@ cd frontend
 npm install
 cp .env.example .env # points at the local backend by default
 npm run dev
+```
+
+On Windows (PowerShell):
+
+```powershell
+cd D:\TIFR_DASHBOARD\frontend
+npm run dev
+```
+
+`frontend/.env` must point at the ICMR backend's port 8001:
+
+```env
+VITE_API_BASE_URL=http://localhost:8001/api/v1
 ```
 
 App: http://localhost:5173

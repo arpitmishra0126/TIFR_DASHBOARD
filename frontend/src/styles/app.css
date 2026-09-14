@@ -2970,6 +2970,7 @@ th.registry-instrument-col-highlighted {
   box-shadow: var(--shadow-card-hover);
   padding: var(--space-4) var(--space-5);
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -3061,7 +3062,11 @@ th.registry-instrument-col-highlighted {
 
 .registry-detail-instrument-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* auto-fit + minmax lets the grid collapse to one column on narrow panel
+     widths and expand to two (never more, since the panel itself is capped
+     at 380px) on wider ones - responds to the panel's own available width,
+     not a viewport breakpoint. */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: var(--space-2);
   margin-top: var(--space-3);
   align-content: start;
@@ -3075,6 +3080,14 @@ th.registry-instrument-col-highlighted {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-control);
   background: var(--surface-2);
+  /* Grid items default to min-width: auto, which resolves to their
+     content's min-content size - for a tile holding a long nowrap label
+     (e.g. "Anthropometry Assessment Form") that min-content width exceeds
+     the 1fr track, forcing that tile (and the whole grid) wider than the
+     panel and pushing the second column past the visible boundary. min-
+     width: 0 lets the tile shrink to its track, which in turn lets the
+     name's own overflow/ellipsis rule below actually take effect. */
+  min-width: 0;
 }
 
 .registry-detail-instrument-tile-complete {
