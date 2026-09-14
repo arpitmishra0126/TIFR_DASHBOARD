@@ -304,6 +304,32 @@ CHH_EXPORT_FIELDS: tuple[str, ...] = (
     "chh_assessor_decision",
 )
 
+# Additional Child Health History fields (2026-09-14) - confirmed live via
+# the `child_illness_history` form's own metadata, needed for the full
+# Child Health History Dashboard Variable Logic specification's Sections A,
+# B, D, F, G, H, I (symptom/developmental/functional checklists, school-
+# days-missed, head-injury-treatment, hospitalisation count, allergy type,
+# performance-affecting conditions) - none of these were previously fetched
+# at all, so those sections had zero real data available even though the
+# fields exist and are populated live. Checkbox fields are requested by
+# their REDCap base name (`chh_symptoms_current`, not `chh_symptoms_
+# current___1`) - REDCap's record export automatically returns every
+# `<field>___<code>` sub-field once the base name is included in `fields[]`
+# (confirmed live). `chh_seizures_age_onset`/`chh_seizures_recent_date` are
+# free-text fields (not a coded value+unit pair), so the spec's proposed
+# "seizure_age_months" derived variable cannot be computed from them without
+# guessing at free-text parsing - deliberately NOT added/used here.
+CHH_DASHBOARD_FIELDS: tuple[str, ...] = (
+    "chh_symptoms_current", # Q2 checkbox - current symptoms
+    "chh_missed_school_days", # Q6a integer - school days missed
+    "chh_head_injury_treatment", # Q12a radio - treated head injury
+    "chh_dev_concern", # Q17 checkbox - developmental concern domains
+    "chh_hospitalised_times", # Q19a integer - hospitalisation count
+    "chh_allergy_type", # Q22a checkbox - allergy type
+    "chh_function_limit", # Q23 checkbox - functional limitations
+    "chh_health_affects_today_spec", # Q26a checkbox - performance-affecting conditions
+)
+
 PAQA_EXPORT_FIELDS: tuple[str, ...] = (
     "paq_item1_score",
     "paq_item8_score",
@@ -381,6 +407,7 @@ EXPORT_ONLY_FIELDS: tuple[str, ...] = (
     *SES_EXPORT_FIELDS,
     *DSEQ_EXPORT_FIELDS,
     *CHH_EXPORT_FIELDS,
+    *CHH_DASHBOARD_FIELDS,
     *PAQA_EXPORT_FIELDS,
     *DIETARY_EXPORT_FIELDS,
     *SSRS_PARENT_FREQ_FIELDS,

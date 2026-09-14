@@ -137,6 +137,107 @@ def test_health_screening_analysis_counts_and_completion():
     assert general["Currently ill"]["yes_count"] == 0
 
 
+def _chh_checkbox_fields(base: str, codes: tuple[str, ...], checked: tuple[str, ...] = ()) -> dict:
+    """Simulates REDCap's real checkbox export behaviour: every ___code
+    sub-field is always "0"/"1" (never blank) for EVERY registered child,
+    regardless of whether that child ever reached this instrument - this
+    is the actual live quirk that build_health_screening_analysis's CHH
+    section must account for by gating checkbox questions on instrument
+    completion rather than "any non-blank sub-field"."""
+    return {f"{base}___{c}": ("1" if c in checked else "0") for c in codes}
+
+
+def test_chh_composite_indicator_yes_no_and_unknown_rule():
+    """Composite-variable rule: yes if ANY component is Yes; no only if
+    EVERY component is No; otherwise unknown/missing - never classifies an
+    incomplete/Don't-know record as healthy."""
+    records = [
+        {"a": "1", "b": "0"},  # yes (one component Yes)
+        {"a": "0", "b": "0"},  # no (all components No)
+        {"a": "0", "b": "9"},  # unknown (Don't-know component, no Yes)
+        {"a": "", "b": ""},    # unknown (fully missing)
+    ]
+    result = ma._chh_composite_indicator(records, ("a", "b"), "Test composite", total=4)
+    assert result == {
+        "label": "Test composite",
+        "yes_count": 1,
+        "no_count": 1,
+        "unknown_or_missing_count": 2,
+        "valid_n": 2,
+        "total": 4,
+        "percent_yes": ma.percent(1, 2),
+    }
+
+
+def test_chh_checkbox_domain_status_prevalence_and_distribution():
+    codes = ("1", "2", "9")
+    none_code = "9"
+    options = (("1", "Fever"), ("2", "Cough"))
+    records = [
+        # Two symptoms selected.
+        {**_chh_checkbox_fields("sym", codes, checked=("1", "2"))},
+        # Only "None" selected.
+        {**_chh_checkbox_fields("sym", codes, checked=("9",))},
+        # One symptom selected.
+        {**_chh_checkbox_fields("sym", codes, checked=("1",))},
+    ]
+    result = ma._chh_checkbox_domain_status(records, "sym", options, none_code, "Any symptom", asked_n=3)
+    assert result["indicator"]["yes_count"] == 2  # two children selected >=1 real symptom
+    assert result["indicator"]["no_count"] == 1  # one child selected only None
+    assert result["indicator"]["valid_n"] == 3
+    assert result["per_child_counts"] == [2, 0, 1]
+    fever = next(p for p in result["prevalence"] if p["label"] == "Fever")
+    assert fever == {"label": "Fever", "count": 2, "total": 3, "percent": ma.percent(2, 3)}
+
+
+def test_chh_three_way_breakdown_keeps_not_applicable_distinct():
+    records = [{"f": "0"}, {"f": "1"}, {"f": "2"}, {"f": "2"}, {"f": ""}]
+    result = ma._chh_three_way_breakdown(records, "f", (("0", "No"), ("1", "Yes"), ("2", "Not applicable")), total=5)
+    assert result == {"counts": {"No": 1, "Yes": 1, "Not applicable": 2}, "valid_n": 4, "total": 5}
+
+
+def test_chh_alert_category_precedence():
+    # Health concern (not well) but no assessor decision recorded -> grey.
+    assert ma._chh_alert_category({"chh_fit_for_assessment": "0", "chh_health_affects_today": "0", "chh_assessor_decision": ""}) == "missing_decision"
+    # Assessor rescheduled -> red, regardless of concern flags.
+    assert ma._chh_alert_category({"chh_fit_for_assessment": "1", "chh_health_affects_today": "0", "chh_assessor_decision": "3"}) == "deferred"
+    # Concern present, assessment proceeds -> amber.
+    assert ma._chh_alert_category({"chh_fit_for_assessment": "1", "chh_health_affects_today": "1", "chh_assessor_decision": "2"}) == "concern"
+    # No concern, well, decision proceed -> green.
+    assert ma._chh_alert_category({"chh_fit_for_assessment": "1", "chh_health_affects_today": "0", "chh_assessor_decision": "1"}) == "none"
+    # Both readiness fields blank -> unclassifiable, not fabricated.
+    assert ma._chh_alert_category({"chh_fit_for_assessment": "", "chh_health_affects_today": "", "chh_assessor_decision": ""}) == "unclassified"
+
+
+def test_build_health_screening_analysis_chh_checkbox_denominator_uses_instrument_completion():
+    """Regression test for the live REDCap quirk (2026-09-14): checkbox
+    ___code sub-fields default to "0" for every registered child, not just
+    those who completed the CHH instrument - so the Section A/F/H checkbox
+    questions' "answered the parent question" denominator must be gated on
+    child_illness_history_complete, not on "any non-blank sub-field" (which
+    would incorrectly include every registered child, not just the 1 who
+    actually completed the instrument below)."""
+    codes = tuple(str(i) for i in range(1, 11))
+    records = [
+        {
+            "child_id": "A", "child_illness_history_complete": "2",
+            **_chh_checkbox_fields("chh_symptoms_current", codes, checked=("1",)),
+        },
+        # Never touched the instrument - REDCap still exports "0" for every
+        # checkbox sub-field here, exactly like a real genuine "None"
+        # answer would look.
+        {
+            "child_id": "B", "child_illness_history_complete": "0",
+            **_chh_checkbox_fields("chh_symptoms_current", codes),
+        },
+    ]
+    result = ma.build_health_screening_analysis(records, {})
+    symptom = result["chh"]["current_health"]["any_current_symptom"]
+    assert symptom["valid_n"] == 1  # only child A (the actual CHH completer), not both
+    assert symptom["yes_count"] == 1
+    assert symptom["asked_n"] == 1
+
+
 def test_ordered_category_counts_preserves_choice_code_order_and_zero_categories():
     choice_maps = {"q10": {"1": "Less than 30 minutes", "2": "30 minutes-1 hour", "3": "1-2 hours"}}
     records = [{"q10": "2"}, {"q10": "2"}, {"q10": "1"}]

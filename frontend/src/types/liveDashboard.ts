@@ -140,12 +140,165 @@ export interface ScoreSummary {
   maximum: number | null;
 }
 
+// --- Child Health History Dashboard Variable Logic (2026-09-14) ---
+export interface ChhCompositeIndicator {
+  label: string;
+  yes_count: number;
+  no_count: number;
+  unknown_or_missing_count: number;
+  valid_n: number;
+  total: number;
+  percent_yes: number;
+}
+
+export interface ChhPrevalenceItem {
+  label: string;
+  count: number;
+  total: number;
+  percent: number;
+}
+
+export interface ChhNumericSummary {
+  valid_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  median: number | null;
+  minimum: number | null;
+  maximum: number | null;
+}
+
+export interface ChhThreeWayBreakdown {
+  counts: Record<string, number>;
+  valid_n: number;
+  total: number;
+}
+
+export interface ChhCurrentHealthSection {
+  currently_ill: ConditionIndicator;
+  any_current_symptom: ConditionIndicator;
+  symptom_count_distribution: CategoryCount[];
+  symptom_prevalence: ChhPrevalenceItem[];
+  activity_or_school_affected: ConditionIndicator;
+}
+
+export interface ChhRecentIllnessSection {
+  consultation_required: ConditionIndicator;
+  illness_frequency_distribution: CategoryCount[];
+  recurrent_illness: ChhPrevalenceItem;
+  missed_school: ChhThreeWayBreakdown;
+  school_days_missed_summary: ChhNumericSummary;
+}
+
+export interface ChhChronicIllnessSection {
+  diagnosed_condition: ConditionIndicator;
+  any_listed_condition: ChhCompositeIndicator;
+  condition_count_distribution: CategoryCount[];
+  condition_prevalence: ConditionIndicator[];
+  unknown_chronic_history_count: number;
+}
+
+export interface ChhNeurologicalSection {
+  seizure_history: ConditionIndicator;
+  fainting_history: ConditionIndicator;
+  cns_infection_history: ConditionIndicator;
+  head_injury_history: ConditionIndicator;
+  treated_head_injury: ChhPrevalenceItem;
+  any_neurological_history: ChhCompositeIndicator;
+  concern_count_distribution: CategoryCount[];
+}
+
+export interface ChhSensorySection {
+  vision_difficulty: ConditionIndicator;
+  uses_glasses: ConditionIndicator;
+  hearing_difficulty: ConditionIndicator;
+  recurrent_ear_infection: ConditionIndicator;
+  any_sensory_concern: ChhCompositeIndicator;
+  any_vision_indicator: ChhCompositeIndicator;
+}
+
+export interface ChhDevelopmentalSection {
+  any_developmental_concern: ConditionIndicator;
+  domain_count_distribution: CategoryCount[];
+  domain_prevalence: ChhPrevalenceItem[];
+  diagnosed_condition: ConditionIndicator;
+  concern_without_diagnosis: ChhPrevalenceItem;
+}
+
+export interface ChhHospitalisationSection {
+  ever_hospitalised: ConditionIndicator;
+  hospitalisation_count_summary: ChhNumericSummary;
+  recurrent_hospitalisation: ChhPrevalenceItem;
+  surgery_or_procedure: ConditionIndicator;
+  regular_medication: ConditionIndicator;
+  known_allergy: ConditionIndicator;
+  allergy_type_prevalence: ChhPrevalenceItem[];
+  major_treatment_history: ChhCompositeIndicator;
+}
+
+export interface ChhFunctionalSection {
+  any_functional_limitation: ConditionIndicator;
+  functions_affected_distribution: CategoryCount[];
+  function_prevalence: ChhPrevalenceItem[];
+  overall_health_distribution: CategoryCount[];
+  suboptimal_health: ChhPrevalenceItem;
+  poor_health: ChhPrevalenceItem;
+}
+
+export interface ChhAssessmentDaySection {
+  well_for_assessment: ChhThreeWayBreakdown;
+  condition_affecting_performance: ConditionIndicator;
+  performance_condition_prevalence: ChhPrevalenceItem[];
+  any_assessment_day_concern_count: number;
+  any_assessment_day_concern_total: number;
+  any_assessment_day_concern_percent: number;
+  assessment_decision_distribution: CategoryCount[];
+}
+
+export interface ChhAlertSummary {
+  no_concern_count: number;
+  assessment_concern_count: number;
+  assessment_deferred_count: number;
+  missing_decision_count: number;
+  total: number;
+  participants_flagged_for_review: number;
+}
+
+export interface ChhDataQuality {
+  completed_forms: number;
+  partially_completed_forms: number;
+  not_started_forms: number;
+  total_registered: number;
+  checkbox_none_conflicts: Record<string, number>;
+  yes_missing_specification: Record<string, number>;
+  branched_field_when_parent_no: Record<string, number>;
+  dont_know_or_unknown_by_section: Record<string, number>;
+  negative_numeric_entries: Record<string, number>;
+  health_concern_decision_missing: number;
+  duplicate_child_id_records: number;
+}
+
+export interface ChildHealthHistorySections {
+  current_health: ChhCurrentHealthSection;
+  recent_illness: ChhRecentIllnessSection;
+  chronic_illness: ChhChronicIllnessSection;
+  neurological: ChhNeurologicalSection;
+  sensory: ChhSensorySection;
+  developmental: ChhDevelopmentalSection;
+  hospitalisation: ChhHospitalisationSection;
+  functional_health: ChhFunctionalSection;
+  assessment_day: ChhAssessmentDaySection;
+  alerts: ChhAlertSummary;
+  data_quality: ChhDataQuality;
+}
+
 export interface HealthScreeningResponse {
   instrument: string;
   completion: InstrumentCompletion;
   named_conditions: ConditionIndicator[];
   general_flags: ConditionIndicator[];
   notes: Record<string, string>;
+  chh: ChildHealthHistorySections;
 }
 
 export interface ScoredItemSummary {

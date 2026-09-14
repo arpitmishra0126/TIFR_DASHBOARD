@@ -42,6 +42,7 @@ from app.schemas.dashboard import (
     AssessmentToolParticipantStatus,
     AssessmentToolStatusResponse,
     CategoryCount,
+    ChildHealthHistorySections,
     ConditionIndicator,
     DemographicsResponse,
     DeviceMinutes,
@@ -548,6 +549,7 @@ class LiveDashboardService:
                 "History fields not in this list (e.g. health rating, fit-for-assessment) are exported in the "
                 "Active Cases Excel sheet but not part of the approved dashboard analysis.",
             },
+            chh=ChildHealthHistorySections(**analysis["chh"]),
         )
 
     async def get_physical_activity(self, force: bool = False) -> PhysicalActivityResponse:

@@ -173,12 +173,189 @@ class ConditionIndicator(BaseModel):
     percent_yes: float
 
 
+# --- Child Health History Dashboard Variable Logic (2026-09-14) - additive
+# section under HealthScreeningResponse.chh. named_conditions/general_flags/
+# completion above are unchanged and still used by Overview. ---
+class ChhCompositeIndicator(BaseModel):
+    """Composite-variable rule (spec Section 1): 1 (yes) if ANY component
+    equals Yes; 0 (no) only if EVERY component equals No; otherwise
+    unknown/missing - never classifies an incomplete/Don't-know record as
+    healthy."""
+
+    label: str
+    yes_count: int
+    no_count: int
+    unknown_or_missing_count: int
+    valid_n: int
+    total: int
+    percent_yes: float
+
+
+class ChhPrevalenceItem(BaseModel):
+    """One item's own count/percent - denominator (`total`) is documented
+    per section: either "participants who answered the parent question" or
+    a conditional subgroup (e.g. children with allergy_hx = Yes)."""
+
+    label: str
+    count: int
+    total: int
+    percent: float
+
+
+class ChhNumericSummary(BaseModel):
+    valid_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    median: float | None
+    minimum: float | None
+    maximum: float | None
+
+
+class ChhThreeWayBreakdown(BaseModel):
+    """A field with a genuine third substantive response category (e.g.
+    Q6's Not applicable, Q25's Unsure) - every code keeps its own label,
+    never folded into No or Don't-know."""
+
+    counts: dict[str, int]
+    valid_n: int
+    total: int
+
+
+class ChhCurrentHealthSection(BaseModel):
+    currently_ill: ConditionIndicator
+    any_current_symptom: ConditionIndicator
+    symptom_count_distribution: list[CategoryCount]
+    symptom_prevalence: list[ChhPrevalenceItem]
+    activity_or_school_affected: ConditionIndicator
+
+
+class ChhRecentIllnessSection(BaseModel):
+    consultation_required: ConditionIndicator
+    illness_frequency_distribution: list[CategoryCount]
+    recurrent_illness: ChhPrevalenceItem
+    missed_school: ChhThreeWayBreakdown
+    school_days_missed_summary: ChhNumericSummary
+
+
+class ChhChronicIllnessSection(BaseModel):
+    diagnosed_condition: ConditionIndicator
+    any_listed_condition: ChhCompositeIndicator
+    condition_count_distribution: list[CategoryCount]
+    condition_prevalence: list[ConditionIndicator]
+    unknown_chronic_history_count: int
+
+
+class ChhNeurologicalSection(BaseModel):
+    seizure_history: ConditionIndicator
+    fainting_history: ConditionIndicator
+    cns_infection_history: ConditionIndicator
+    head_injury_history: ConditionIndicator
+    treated_head_injury: ChhPrevalenceItem
+    any_neurological_history: ChhCompositeIndicator
+    concern_count_distribution: list[CategoryCount]
+
+
+class ChhSensorySection(BaseModel):
+    vision_difficulty: ConditionIndicator
+    uses_glasses: ConditionIndicator
+    hearing_difficulty: ConditionIndicator
+    recurrent_ear_infection: ConditionIndicator
+    any_sensory_concern: ChhCompositeIndicator
+    any_vision_indicator: ChhCompositeIndicator
+
+
+class ChhDevelopmentalSection(BaseModel):
+    any_developmental_concern: ConditionIndicator
+    domain_count_distribution: list[CategoryCount]
+    domain_prevalence: list[ChhPrevalenceItem]
+    diagnosed_condition: ConditionIndicator
+    concern_without_diagnosis: ChhPrevalenceItem
+
+
+class ChhHospitalisationSection(BaseModel):
+    ever_hospitalised: ConditionIndicator
+    hospitalisation_count_summary: ChhNumericSummary
+    recurrent_hospitalisation: ChhPrevalenceItem
+    surgery_or_procedure: ConditionIndicator
+    regular_medication: ConditionIndicator
+    known_allergy: ConditionIndicator
+    allergy_type_prevalence: list[ChhPrevalenceItem]
+    major_treatment_history: ChhCompositeIndicator
+
+
+class ChhFunctionalSection(BaseModel):
+    any_functional_limitation: ConditionIndicator
+    functions_affected_distribution: list[CategoryCount]
+    function_prevalence: list[ChhPrevalenceItem]
+    overall_health_distribution: list[CategoryCount]
+    suboptimal_health: ChhPrevalenceItem
+    poor_health: ChhPrevalenceItem
+
+
+class ChhAssessmentDaySection(BaseModel):
+    well_for_assessment: ChhThreeWayBreakdown
+    condition_affecting_performance: ConditionIndicator
+    performance_condition_prevalence: list[ChhPrevalenceItem]
+    any_assessment_day_concern_count: int
+    any_assessment_day_concern_total: int
+    any_assessment_day_concern_percent: float
+    assessment_decision_distribution: list[CategoryCount]
+
+
+class ChhAlertSummary(BaseModel):
+    """Cohort-level counts for the 4 assessment-day alert categories (spec
+    Section 12 - green/amber/red/grey). "Assessment deferred" (red) covers
+    only the live REDCap form's actual "Reschedule assessment" option - the
+    spec's proposed 4th assessor-decision category ("Stop assessment and
+    refer for medical review") does not exist on the live form and is never
+    counted, per the instruction not to finalize Q27 categories.
+    `participants_flagged_for_review` is the separate, broader Section 11
+    participant-level review trigger."""
+
+    no_concern_count: int
+    assessment_concern_count: int
+    assessment_deferred_count: int
+    missing_decision_count: int
+    total: int
+    participants_flagged_for_review: int
+
+
+class ChhDataQuality(BaseModel):
+    completed_forms: int
+    partially_completed_forms: int
+    not_started_forms: int
+    total_registered: int
+    checkbox_none_conflicts: dict[str, int]
+    yes_missing_specification: dict[str, int]
+    branched_field_when_parent_no: dict[str, int]
+    dont_know_or_unknown_by_section: dict[str, int]
+    negative_numeric_entries: dict[str, int]
+    health_concern_decision_missing: int
+    duplicate_child_id_records: int
+
+
+class ChildHealthHistorySections(BaseModel):
+    current_health: ChhCurrentHealthSection
+    recent_illness: ChhRecentIllnessSection
+    chronic_illness: ChhChronicIllnessSection
+    neurological: ChhNeurologicalSection
+    sensory: ChhSensorySection
+    developmental: ChhDevelopmentalSection
+    hospitalisation: ChhHospitalisationSection
+    functional_health: ChhFunctionalSection
+    assessment_day: ChhAssessmentDaySection
+    alerts: ChhAlertSummary
+    data_quality: ChhDataQuality
+
+
 class HealthScreeningResponse(BaseModel):
     instrument: str
     completion: InstrumentCompletion
     named_conditions: list[ConditionIndicator]
     general_flags: list[ConditionIndicator]
     notes: dict[str, str]
+    chh: ChildHealthHistorySections
 
 
 class ScoredItemSummary(BaseModel):

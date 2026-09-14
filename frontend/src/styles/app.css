@@ -32,6 +32,7 @@
   --status-warning: #b8790c;
   --status-warning-bg: #fbebc7;
   --status-critical: #d03b3b;
+  --status-critical-bg: #f9dcdc;
   --status-neutral: #8b90a0;
   --status-neutral-bg: #e6e9f1;
 
@@ -596,6 +597,74 @@ a, button {
   margin-bottom: var(--space-5);
   font-size: 0.82rem;
   color: var(--text-secondary);
+}
+
+/* --- Child Health History "Overview" alert strip (2026-09-14) - one row
+   of 4 compact stat cells matching the spec's green/amber/red/grey
+   assessment-day alert categories. Page-scoped (Child Health History
+   only); reuses the existing --status-good/-warning/-critical/-neutral
+   tokens, no new color system. --- */
+.chh-alert-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.chh-alert-stat {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-hairline);
+  background: var(--surface-1);
+}
+
+.chh-alert-stat-value {
+  font-size: 1.5rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.chh-alert-stat-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.chh-alert-stat-percent {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.chh-alert-stat-good {
+  background: var(--status-good-bg);
+  border-color: rgba(12, 163, 12, 0.18);
+}
+.chh-alert-stat-good .chh-alert-stat-value {
+  color: var(--status-good);
+}
+
+.chh-alert-stat-warning {
+  background: var(--status-warning-bg);
+  border-color: rgba(184, 121, 12, 0.2);
+}
+.chh-alert-stat-warning .chh-alert-stat-value {
+  color: var(--status-warning);
+}
+
+.chh-alert-stat-critical {
+  background: var(--status-critical-bg);
+  border-color: rgba(208, 59, 59, 0.22);
+}
+.chh-alert-stat-critical .chh-alert-stat-value {
+  color: var(--status-critical);
+}
+
+.chh-alert-stat-neutral {
+  background: var(--status-neutral-bg);
+  border-color: var(--border-hairline);
 }
 
 /* Dietary Intake only - tightens the gap between the Instrument Completion
@@ -1872,6 +1941,15 @@ a, button {
   background: var(--status-warning);
 }
 
+.status-badge.critical {
+  background: var(--status-critical-bg);
+  color: var(--status-critical);
+  border-color: rgba(208, 59, 59, 0.22);
+}
+.status-badge.critical .status-badge-dot {
+  background: var(--status-critical);
+}
+
 /* --- Filter bar --- */
 .filter-bar {
   display: flex;
@@ -2628,6 +2706,7 @@ table.data-table tbody tr:hover {
   --status-warning: #fab219;
   --status-warning-bg: rgba(250, 178, 25, 0.2);
   --status-critical: #e66767;
+  --status-critical-bg: rgba(230, 103, 103, 0.2);
   --status-neutral: #a9b2c6;
   --status-neutral-bg: rgba(255, 255, 255, 0.1);
 
@@ -2652,6 +2731,10 @@ table.data-table tbody tr:hover {
 
 :root[data-theme="dark"] .status-badge.warning {
   border-color: rgba(250, 178, 25, 0.32);
+}
+
+:root[data-theme="dark"] .status-badge.critical {
+  border-color: rgba(230, 103, 103, 0.34);
 }
 
 :root[data-theme="dark"] .filter-bar select:focus,

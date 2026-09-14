@@ -2422,6 +2422,214 @@ completion.
 
 ---
 
+## CHILD HEALTH HISTORY DASHBOARD - IMPLEMENTED 2026-09-14
+
+Implements the "Child Health History Dashboard Variable Logic" specification
+document (supplied by the user, not a repo file) against the live
+`child_illness_history` REDCap form - field-by-field confirmed via live
+metadata before implementing (`chh_intro` + 60 real fields; every
+Q-number in the spec maps 1:1 to a real `chh_*` field, confirmed live
+2026-09-14). Scope: **additive only** - `backend/app/services
+/module_analytics.py`'s existing `build_health_screening_analysis()`
+(`named_conditions`/`general_flags`/`completion`, used by Overview's
+`chh_named_conditions`/`chh_general_flags`/`chh_completion`) is
+byte-for-byte unchanged; the whole specification is computed under one new
+key, `chh`, wired onto the existing `HealthScreeningResponse`/`/health-
+screening` page (still titled "Child Illness History" info-badge-wise, page
+title updated to "Child Health History"). No new route/endpoint/schema
+top-level - reuses the existing Overview card, link, and detail-page
+pattern.
+
+**Overview's Child Health History metric card**: already exactly matched
+this task's "completion only, numerator/denominator/percent, no health
+score, clickable" requirement with **no changes needed** - the Assessment
+Coverage grid's `InstrumentCoverageCard` for the `child_illness_history` key
+(`Overview.tsx`) is a full-card `<Link>` to `/health-screening` showing only
+`completed_count/total_registered (percent)` from the existing
+`all_instrument_coverage`, no score. Left untouched, per "do not change
+unrelated modules."
+
+**New live fields fetched** (`CHH_DASHBOARD_FIELDS` in `live_field_map.py`,
+added to `LIVE_FIELDS`) - none previously fetched at all:
+`chh_symptoms_current` (Q2 checkbox), `chh_missed_school_days` (Q6a
+integer), `chh_head_injury_treatment` (Q12a radio), `chh_dev_concern` (Q17
+checkbox), `chh_hospitalised_times` (Q19a integer), `chh_allergy_type`
+(Q22a checkbox), `chh_function_limit` (Q23 checkbox),
+`chh_health_affects_today_spec` (Q26a checkbox). Checkbox fields are
+requested by their REDCap base name - the API auto-returns every
+`<field>___<code>` sub-field once the base name is in `fields[]`.
+
+**Critical live-data finding (REDCap checkbox quirk, fixed before shipping):**
+REDCap exports every checkbox `___code` sub-field as `"0"` for **every**
+registered child, not just those who reached/completed the instrument -
+confirmed live (`chh_symptoms_current___1 = "0"` even for a child whose
+`child_illness_history_complete = "0"`, never started). This is unlike
+radio fields (which stay genuinely blank `""` for a non-completer,
+confirmed live too - e.g. `chh_illness_current` blank for non-completers).
+So "any non-blank checkbox sub-field" cannot be used to detect "answered
+the parent question" the way it works for radio fields - it would silently
+inflate every checkbox denominator to all 212 registered children instead
+of the real ~47 completers. Fixed: the three checkbox-driven sections
+(current symptoms Q2, developmental concern Q17, functional limitation
+Q23) are computed over a `chh_complete_reg` subset (`child_illness_history
+_complete == "2"`) instead of the full registered cohort - locked in by
+`test_build_health_screening_analysis_chh_checkbox_denominator_uses_
+instrument_completion` in `test_module_analytics.py`. Live-verified
+before/after: `any_current_symptom.valid_n` was `212` (wrong) before the
+fix, `47` (== completed) after.
+
+**Sections implemented** (module_analytics.py `_build_chh_sections()`,
+schemas in `dashboard.py` under `ChildHealthHistorySections`, all additive
+new Pydantic models prefixed `Chh*`):
+- **A Current Health Status**: `currently_ill`/`activity_or_school_affected`
+  (`ConditionIndicator`, reusing the existing helper), `any_current_symptom`
+  + symptom count distribution (0/1/2/3+) + 9-item symptom prevalence, via
+  new `_chh_checkbox_domain_status()` (generic Q2/Q17/Q23 checkbox-domain
+  helper: an "any substantive option selected" indicator, per-child
+  selected-option count, and each option's own prevalence - denominator is
+  always "children who completed the instrument", never a per-field
+  "answered" heuristic, per the quirk above).
+- **B Recent History of Illness**: `consultation_required`, ordered illness-
+  frequency distribution (reuses `ordered_category_counts`), `recurrent
+  _illness` (freq=3, via new `_chh_flag_prevalence()`), `missed_school` as a
+  genuine 3-way No/Yes/Not-applicable breakdown (new
+  `_chh_three_way_breakdown()` - Not applicable never folded into No),
+  `school_days_missed_summary` (mean/median/min/max, new
+  `_chh_numeric_summary_median()`, only among `missed_school=Yes`).
+- **C Major or Chronic Illness**: `diagnosed_condition`, `any_listed
+  _condition` (composite over the existing 11 `CHH_NAMED_CONDITIONS`
+  fields, new `_chh_composite_indicator()`/`_chh_composite_any_yes()`
+  implementing the spec's exact composite rule - yes if any component
+  Yes, no only if every component No, otherwise `unknown_or_missing`,
+  never classifying an incomplete/Don't-know record as healthy),
+  `condition_count_distribution` (0/1/2+), `condition_prevalence` (reuses
+  the existing `CHH_NAMED_CONDITIONS`/`named_conditions` computation - not
+  duplicated), `unknown_chronic_history_count` (= the composite's own
+  `unknown_or_missing_count`, exactly the spec's definition).
+- **D Neurological History**: seizure/fainting/CNS-infection/head-injury
+  indicators, `treated_head_injury` (conditional on head-injury=Yes),
+  `any_neurological_history` composite, concern-count distribution.
+  **Not implemented**: `seizure_age_months` - the spec assumes a coded
+  `seizure_age_value`/`seizure_age_unit` pair; the live fields
+  (`chh_seizures_age_onset`/`chh_seizures_recent_date`) are free text, not
+  a coded value+unit pair, so this cannot be derived without guessing at
+  free-text parsing.
+- **E Vision and Hearing**: vision/glasses/hearing/ear-infection
+  indicators, `any_sensory_concern` and `any_vision_indicator` composites.
+- **F Developmental and Learning History**: `any_developmental_concern` +
+  domain count distribution + 8-domain prevalence (same checkbox-domain
+  helper as Q2/Q23), `diagnosed_condition`, `concern_without_diagnosis`
+  (any_dev_concern=Yes AND diagnosis=No, among children who answered Q17).
+- **G Hospitalisation, Treatment and Allergy**: `ever_hospitalised` +
+  `hospitalisation_count_summary` (mean/median, conditional on Yes) +
+  `recurrent_hospitalisation` (count>=2 - not gated behind approval, unlike
+  Section B's "High school absence", which the spec explicitly marks
+  "Proposed... use only after study-team approval" and is **not**
+  implemented), `surgery_or_procedure`, `regular_medication`,
+  `known_allergy` + `allergy_type_prevalence` (conditional on allergy=Yes,
+  new `_chh_conditional_checkbox_prevalence()` - a genuinely different,
+  smaller conditional denominator than the Q2/Q17/Q23 "parent-question"
+  rule, per the spec's own wording for this item), `major_treatment
+  _history` composite (hospitalised/surgery/medicine).
+- **H Functional Health Status**: `any_functional_limitation` + functions-
+  affected distribution + 8-function prevalence (checkbox-domain helper),
+  ordered overall-health distribution (Very good..Very poor),
+  `suboptimal_health` (Fair/Poor/Very poor) and `poor_health` (Poor/Very
+  poor) via `_chh_flag_prevalence()`.
+- **I Assessment-Day Health Status**: `well_for_assessment` as a genuine
+  3-way Yes/No/Unsure breakdown (not Yes/No/Don't-know), `condition
+  _affecting_performance`, `performance_condition_prevalence` (conditional
+  on that field=Yes), `any_assessment_day_concern` (exact spec formula:
+  concern if not-well/unsure OR condition-affects-performance; none only if
+  well AND no condition), `assessment_decision_distribution` - reads
+  **only** the live form's own 3 real REDCap choices (Proceed / Proceed +
+  concern / Reschedule) via the existing `ordered_category_counts()`;
+  **the spec's proposed 4th category ("Stop assessment and refer for
+  medical review") is never shown - it does not exist on the live form,
+  and Q27 categories are explicitly not finalized here, per instruction.**
+- **Alerts** (spec Section 12, assessment-day-scoped only): 4-category
+  cohort counts - No concern (green) / Assessment concern (amber) /
+  Assessment deferred (red, = live decision code 3 "Reschedule" only) /
+  Missing decision (grey, concern recorded but `chh_assessor_decision`
+  blank) - new `_chh_alert_category()`, exact precedence: missing-decision
+  checked before deferred before concern before none, so a rescheduled
+  record with a recorded decision is never miscounted as "missing." Also
+  carries the separate, broader Section 11 `participants_flagged_for
+  _review` count (current illness, any neuro history, any functional
+  limitation, not-well/unsure, performance concern, or rescheduled - new
+  `_chh_participant_flagged()`), independent of the 4-category alert.
+- **Data Quality** (spec Section 13): completed/partially-completed
+  (REDCap code `"1"`, Unverified)/not-started form counts; checkbox
+  None-selected-with-another-option conflicts (Q2/Q17/Q23); Yes-without-
+  required-specification counts for every pair explicitly named in the
+  spec's own per-section "Validation:" sentences (Q1/Q3/Q4/Q7/Q8k/Q11/
+  Q18/Q20/Q19+reason/Q21 name+reason/Q22 type+allergen/Q2a/Q17a); branched-
+  field-completed-despite-No counts (Q1/Q3/Q4/Q7); Don't-know/unknown
+  counts grouped by section (summed from the section's own already-computed
+  indicators/composites); negative numeric entries (school days missed,
+  hospitalisation count); health-concern-with-missing-decision (= the
+  alert summary's own count); duplicate child-ID records (dataset-wide
+  `len(records) - len(registered_records(records))`, not CHH-specific).
+  This is the well-defined, directly-computable subset of Section 13's
+  checklist - it does not attempt to validate every single Yes/
+  specification field pair on the form exhaustively.
+
+**Frontend** (`frontend/src/routes/HealthScreening.tsx`, route
+`/health-screening` unchanged): page title changed to "Child Health
+History"; the existing named-conditions/general-flags composition charts
+are kept exactly as before (untouched), with all 9 new sections added
+around/below them in the spec's own "Recommended Dashboard Sequence"
+(Section 15) - Overview (alert strip + participants-flagged/completed-forms
+KPIs) → Current Health Status → Recent History of Illness → Major/Chronic
+Illness → Neurological History → Vision and Hearing → Developmental History
+→ Hospitalisation/Treatment/Allergy → Functional Health → Assessment
+Readiness → Data Quality. New reusable local components (this page only):
+`IndicatorKpi`/`CompositeKpi`/`PrevalenceKpi` (KPI-card wrappers for the
+three new indicator shapes, each showing "No data" rather than a fabricated
+0 when `valid_n`/`total` is 0), `PrevalenceList`/`ThreeWayList` (reuse the
+existing `.response-list`/`ProportionBar` pattern already used by Overview's
+health-signal list - not a new chart type), `NumericSummaryCard`,
+`AlertStrip` (new `.chh-alert-strip`/`.chh-alert-stat-*` CSS, reusing the
+existing `--status-good/-warning/-critical/-neutral` tokens), `DataQuality
+Row` (a `DetailDisclosure`-wrapped table per check category). New shared
+addition: `StatusBadge` gained a 4th tone, `"critical"` (new `.status-
+badge.critical` CSS + `--status-critical-bg` token, light+dark theme,
+mirroring the existing `.good`/`.warning` pattern) - every other
+`StatusBadge` caller is unaffected (still only passes good/neutral/warning).
+
+**Not implemented, by explicit instruction or genuine field-mapping gap**
+(documented in code comments in `module_analytics.py` and here, not
+silently omitted): Q27's 4th proposed assessor-decision category (requires
+study-team approval, and doesn't exist on the live form); "High school
+absence" (>=3 days missed - spec explicitly gates this behind study-team
+approval); `seizure_age_months` (spec assumes a coded value+unit pair that
+doesn't exist on the live form - the real fields are free text).
+
+Tests: 5 new in `test_module_analytics.py`
+(`test_chh_composite_indicator_yes_no_and_unknown_rule`,
+`test_chh_checkbox_domain_status_prevalence_and_distribution`,
+`test_chh_three_way_breakdown_keeps_not_applicable_distinct`,
+`test_chh_alert_category_precedence`,
+`test_build_health_screening_analysis_chh_checkbox_denominator_uses_
+instrument_completion` - this one is the regression test for the REDCap
+checkbox-default-`"0"` quirk above) + a `chh` section-presence assertion
+added to the existing `/dashboard/health` endpoint test. Backend:
+**158/158 tests pass**. Frontend `tsc --noEmit` and `npm run build` both
+succeed. Live-verified against a local backend hitting live REDCap (212
+registered, 47/212 CHH complete): every new section returns real,
+non-fabricated numbers with correct denominators after the checkbox-quirk
+fix (e.g. `any_developmental_concern` 11/47 = 23.4%, matching
+`domain_prevalence`'s per-domain counts out of the same 47; `alerts` 47
+no-concern/0 elsewhere, `participants_flagged_for_review` 3/212); no
+exceptions on a real 0-completion-style field (e.g. `allergy_type
+_prevalence` correctly shows `0/0` "No data" state, not a crash, since 0
+children currently have `chh_allergy=Yes` live). No browser-automation
+tool was available this session, so pixel-level visual QA (chart rendering,
+theme, mobile layout) was **not** performed - verify visually before
+treating this as demo-ready.
+
+---
+
 ## FRONTEND ERROR ISOLATION (2026-08-26)
 
 **Bug fixed:** all 4 assessment-module routes (`/health-screening`, `/physical-activity`, `/screen-time`, `/neurodevelopment`) white-screened. **Root cause:** those pages destructure/`.map()` the new analytics response shape with no defensive checks (e.g. `data.named_conditions.map(...)`); if the API ever returns something else - the immediate trigger was a stale local backend process still serving the old pre-refactor `UnavailableModule` shape (`available`/`reason`/`unavailable_fields`) on port 8000 - the resulting `TypeError` had no React error boundary anywhere in the tree, so it unmounted the entire app (sidebar and all), not just the broken route.
@@ -2613,7 +2821,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **153/153 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-12 Village-column-removal + Anthropometry Assessment Form Registry addition). Frontend `npm run build` succeeds.
+Backend test count: **158/158 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-14 Child Health History Dashboard implementation). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

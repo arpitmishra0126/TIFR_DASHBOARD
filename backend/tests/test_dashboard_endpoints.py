@@ -97,6 +97,15 @@ def test_health_endpoint_returns_real_named_conditions_and_completion():
     assert conditions["Asthma"]["yes_count"] == 1
     flags = {c["label"]: c for c in body["general_flags"]}
     assert flags["Currently ill"]["yes_count"] == 0
+    # Child Health History Dashboard Variable Logic sections (2026-09-14) -
+    # additive under "chh", shape-only check here (calculation correctness
+    # is covered by the dedicated module_analytics tests).
+    chh = body["chh"]
+    for section in (
+        "current_health", "recent_illness", "chronic_illness", "neurological", "sensory",
+        "developmental", "hospitalisation", "functional_health", "assessment_day", "alerts", "data_quality",
+    ):
+        assert section in chh
 
 
 def test_physical_activity_endpoint_returns_real_score_summaries():

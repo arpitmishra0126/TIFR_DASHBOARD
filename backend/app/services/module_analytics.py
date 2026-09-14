@@ -368,7 +368,680 @@ def build_health_screening_analysis(records: list[dict], choice_maps: dict[str, 
         "general_flags": [
             build_condition_indicator(reg, field, label, choice_maps, completed) for field, label in CHH_GENERAL_FLAGS
         ],
+        "chh": _build_chh_sections(records, reg, choice_maps, completed, total),
     }
+
+
+# =====================================================================
+# Child Health History Dashboard Variable Logic (implemented 2026-09-14
+# per the "Child Health History Dashboard Variable Logic" specification
+# document, cross-checked field-by-field against the live
+# `child_illness_history` REDCap form's own metadata - see
+# CHH_DASHBOARD_FIELDS in live_field_map.py for the fields this added to
+# the fetch pipeline). Reuses the existing named_conditions/general_flags/
+# completion fields above unchanged - this is purely additive under the
+# new "chh" key.
+#
+# NOT implemented, by explicit instruction / genuine field-mapping gap:
+# - Q27 assessor-decision: only the live form's own 3 real options
+#   (Proceed / Proceed+concern / Reschedule) are ever shown - the spec's
+#   proposed 4th category ("Stop assessment and refer for medical review")
+#   does not exist in the live form and is never finalized/invented here.
+# - "High school absence" (>=3 days missed) - the spec explicitly flags
+#   this as "Proposed... use only after study-team approval"; not built.
+# - "seizure_age_months" - the spec assumes a coded value+unit pair
+#   (seizure_age_value/seizure_age_unit); the live form's actual fields
+#   (chh_seizures_age_onset/chh_seizures_recent_date) are free text, not a
+#   coded value+unit pair, so this cannot be derived without guessing at
+#   free-text parsing - not built.
+# =====================================================================
+
+CHH_SYMPTOM_FIELD = "chh_symptoms_current"
+CHH_SYMPTOM_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Fever"),
+    ("2", "Cough/Cold"),
+    ("3", "Breathing difficulty/Wheezing"),
+    ("4", "Vomiting"),
+    ("5", "Diarrhoea"),
+    ("6", "Body pain/Headache"),
+    ("7", "Weakness/Fatigue"),
+    ("8", "Skin infection/Rash"),
+    ("9", "Other"),
+)
+CHH_SYMPTOM_NONE_CODE = "10"
+
+CHH_DEV_CONCERN_FIELD = "chh_dev_concern"
+CHH_DEV_CONCERN_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Walking/Motor development"),
+    ("2", "Speech or language"),
+    ("3", "Learning"),
+    ("4", "Memory"),
+    ("5", "Attention/Concentration"),
+    ("6", "Behaviour"),
+    ("7", "Social interaction"),
+    ("8", "Other developmental concern"),
+)
+CHH_DEV_CONCERN_NONE_CODE = "9"
+
+CHH_FUNCTION_LIMIT_FIELD = "chh_function_limit"
+CHH_FUNCTION_LIMIT_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Attend school"),
+    ("2", "Learn/Study"),
+    ("3", "Play or participate in physical activities"),
+    ("4", "Walk or move independently"),
+    ("5", "See"),
+    ("6", "Hear"),
+    ("7", "Communicate"),
+    ("8", "Perform usual daily activities"),
+)
+CHH_FUNCTION_LIMIT_NONE_CODE = "9"
+
+CHH_ALLERGY_TYPE_FIELD = "chh_allergy_type"
+CHH_ALLERGY_TYPE_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Medicine"),
+    ("2", "Food"),
+    ("3", "Environmental"),
+    ("4", "Other"),
+)
+
+CHH_PERFORMANCE_CONDITION_FIELD = "chh_health_affects_today_spec"
+CHH_PERFORMANCE_CONDITION_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("1", "Fever"),
+    ("2", "Significant pain/discomfort"),
+    ("3", "Weakness/Fatigue"),
+    ("4", "Excessive sleepiness"),
+    ("5", "Cough/Cold or respiratory symptoms"),
+    ("6", "Vision difficulty"),
+    ("7", "Hearing difficulty"),
+    ("8", "Medication that may affect attention/alertness"),
+    ("9", "Other"),
+)
+
+CHH_NEUROLOGICAL_FIELDS: tuple[str, ...] = ("chh_seizures", "chh_loc_fainting", "chh_cns_infection", "chh_head_injury")
+
+
+def _chh_checkbox_value(record: dict, base_field: str, code: str) -> str:
+    return (record.get(f"{base_field}___{code}") or "").strip()
+
+
+def _chh_checkbox_answered(record: dict, base_field: str, all_codes: tuple[str, ...]) -> bool:
+    return any(_chh_checkbox_value(record, base_field, c) != "" for c in all_codes)
+
+
+def _chh_checkbox_domain_status(
+    records: list[dict],
+    base_field: str,
+    options: tuple[tuple[str, str], ...],
+    none_code: str,
+    label: str,
+    asked_n: int,
+) -> dict:
+    """One multi-select ("checkbox") question as: an "any substantive
+    option selected" indicator (same shape as ConditionIndicator - Yes = at
+    least one option other than None is checked, No = only None is
+    checked; a participant who never answered any option in this question
+    is excluded from both, per "Calculate item prevalence among
+    participants who completed the parent question"), the per-participant
+    count-of-selected-options list (None never counted), and each option's
+    own prevalence (selected / participants who answered the parent
+    question - never the full registered/completed cohort)."""
+    option_codes = tuple(code for code, _ in options)
+    all_codes = option_codes + (none_code,)
+
+    any_yes = 0
+    none_only = 0
+    option_counts = {code: 0 for code in option_codes}
+    per_child_counts: list[int] = []
+
+    for record in records:
+        if not _chh_checkbox_answered(record, base_field, all_codes):
+            continue
+        selected = [code for code in option_codes if _chh_checkbox_value(record, base_field, code) == "1"]
+        for code in selected:
+            option_counts[code] += 1
+        per_child_counts.append(len(selected))
+        if selected:
+            any_yes += 1
+        else:
+            none_only += 1
+
+    valid_n = any_yes + none_only
+    indicator = {
+        "label": label,
+        "yes_count": any_yes,
+        "no_count": none_only,
+        "dont_know_count": 0,
+        "valid_n": valid_n,
+        "asked_n": asked_n,
+        "missing_count": max(asked_n - valid_n, 0),
+        "percent_yes": percent(any_yes, valid_n),
+    }
+    prevalence = [
+        {"label": opt_label, "count": option_counts[code], "total": valid_n, "percent": percent(option_counts[code], valid_n)}
+        for code, opt_label in options
+    ]
+    return {"indicator": indicator, "per_child_counts": per_child_counts, "prevalence": prevalence, "valid_n": valid_n}
+
+
+def _chh_conditional_checkbox_prevalence(
+    records: list[dict], subset_field: str, subset_value: str, base_field: str, options: tuple[tuple[str, str], ...],
+) -> tuple[list[dict], int]:
+    """Each checkbox option's prevalence among the subset of records where
+    `subset_field` equals `subset_value` (e.g. allergy type among children
+    with allergy_hx = Yes) - a genuinely different, smaller conditional
+    denominator than the "answered the parent question" rule, per the
+    spec's own wording for these two items."""
+    subset = [r for r in records if (r.get(subset_field) or "").strip() == subset_value]
+    denom = len(subset)
+    prevalence = [
+        {
+            "label": label,
+            "count": (cnt := sum(1 for r in subset if _chh_checkbox_value(r, base_field, code) == "1")),
+            "total": denom,
+            "percent": percent(cnt, denom),
+        }
+        for code, label in options
+    ]
+    return prevalence, denom
+
+
+def _chh_composite_any_yes(record: dict, fields: tuple[str, ...]) -> str:
+    """Composite-variable rule (spec Section 1): "yes" if ANY component
+    equals Yes; "no" only if EVERY component equals No; otherwise "unknown"
+    (a Don't-know or missing component that isn't offset by a Yes) - never
+    classifies an incomplete/Don't-know record as healthy."""
+    values = [(record.get(f) or "").strip() for f in fields]
+    if any(v == "1" for v in values):
+        return "yes"
+    if values and all(v == "0" for v in values):
+        return "no"
+    return "unknown"
+
+
+def _chh_composite_indicator(records: list[dict], fields: tuple[str, ...], label: str, total: int) -> dict:
+    yes = no = unknown = 0
+    for record in records:
+        outcome = _chh_composite_any_yes(record, fields)
+        if outcome == "yes":
+            yes += 1
+        elif outcome == "no":
+            no += 1
+        else:
+            unknown += 1
+    valid_n = yes + no
+    return {
+        "label": label,
+        "yes_count": yes,
+        "no_count": no,
+        "unknown_or_missing_count": unknown,
+        "valid_n": valid_n,
+        "total": total,
+        "percent_yes": percent(yes, valid_n),
+    }
+
+
+def _chh_flag_prevalence(records: list[dict], field: str, match_values: tuple[str, ...], label: str) -> dict:
+    """count of records whose raw `field` value is in `match_values`, over
+    the count of records with ANY non-blank value for `field` (the valid-
+    respondent denominator for this specific question)."""
+    valid = [r for r in records if (r.get(field) or "").strip() != ""]
+    cnt = sum(1 for r in valid if (r.get(field) or "").strip() in match_values)
+    return {"label": label, "count": cnt, "total": len(valid), "percent": percent(cnt, len(valid))}
+
+
+def _chh_numeric_values_where(records: list[dict], subset_field: str, subset_value: str, value_field: str) -> list[float]:
+    return [
+        v for r in records
+        if (r.get(subset_field) or "").strip() == subset_value and (v := parse_float(r.get(value_field))) is not None
+    ]
+
+
+def _chh_numeric_summary_median(values: list[float], total: int) -> dict:
+    valid_n = len(values)
+    return {
+        "valid_n": valid_n,
+        "total": total,
+        "percent_valid": percent(valid_n, total),
+        "mean": round(mean(values), 2) if values else None,
+        "median": round(median(values), 2) if values else None,
+        "minimum": min(values) if values else None,
+        "maximum": max(values) if values else None,
+    }
+
+
+def _chh_three_way_breakdown(records: list[dict], field: str, code_labels: tuple[tuple[str, str], ...], total: int) -> dict:
+    """A field whose response codes don't fit the simple Yes/No/Don't-know
+    pattern (e.g. Q6's 0=No/1=Yes/2=Not applicable, or Q25's 1=Yes/0=No/
+    9=Unsure) - every code is counted under its own real label, never
+    folded into another bucket or combined with No, per the common-rule
+    "Not applicable" and "Missing" handling."""
+    counts = {label: 0 for _, label in code_labels}
+    for record in records:
+        raw = (record.get(field) or "").strip()
+        for code, label in code_labels:
+            if raw == code:
+                counts[label] += 1
+                break
+    valid_n = sum(counts.values())
+    return {"counts": counts, "valid_n": valid_n, "total": total}
+
+
+def _chh_count_distribution(per_child_counts: list[int], edges: list[float], labels: list[str]) -> list[dict]:
+    return [{"code": label, "count": cnt} for label, cnt in bucket_counts([float(c) for c in per_child_counts], edges, labels)]
+
+
+def _chh_negative_numeric_count(records: list[dict], field: str) -> int:
+    return sum(1 for r in records if (v := parse_float(r.get(field))) is not None and v < 0)
+
+
+def _build_chh_sections(all_records: list[dict], reg: list[dict], choice_maps: dict[str, ChoiceMap], completed: int, total: int) -> dict:
+    # REDCap checkbox fields (unlike radio fields) export every option's
+    # ___code sub-field as "0" for EVERY registered child, not just those
+    # who reached/completed this instrument - confirmed live 2026-09-14
+    # (chh_symptoms_current___1 = "0" even for children whose
+    # child_illness_history_complete is "0"/never started). So "has any
+    # non-blank checkbox sub-field" cannot be used to detect "answered the
+    # parent question" the way it can for radio fields - instead, checkbox
+    # questions are scoped to children who completed the CHH instrument
+    # (the same asked_n population as every other question here).
+    chh_complete_reg = [r for r in reg if parse_complete_flag(r.get("child_illness_history_complete"))]
+
+    # --- Section A: Current Health Status ---
+    currently_ill = build_condition_indicator(reg, "chh_illness_current", "Currently ill", choice_maps, completed)
+    symptom_domain = _chh_checkbox_domain_status(
+        chh_complete_reg, CHH_SYMPTOM_FIELD, CHH_SYMPTOM_OPTIONS, CHH_SYMPTOM_NONE_CODE, "Any current symptom", completed
+    )
+    symptom_domain["indicator"]["label"] = "Any current symptom"
+    activity_school_affected = build_condition_indicator(reg, "chh_unwell_7days", "Activity/school affected (7 days)", choice_maps, completed)
+
+    current_health = {
+        "currently_ill": currently_ill,
+        "any_current_symptom": symptom_domain["indicator"],
+        "symptom_count_distribution": _chh_count_distribution(symptom_domain["per_child_counts"], [1, 2, 3], ["0", "1", "2", "3+"]),
+        "symptom_prevalence": symptom_domain["prevalence"],
+        "activity_or_school_affected": activity_school_affected,
+    }
+
+    # --- Section B: Recent History of Illness ---
+    consultation_required = build_condition_indicator(reg, "chh_illness_3mo", "Consultation required (3 months)", choice_maps, completed)
+    illness_frequency_distribution = [
+        {"code": label, "count": cnt} for label, cnt in ordered_category_counts(reg, "chh_illness_3mo_freq", choice_maps)
+    ]
+    recurrent_illness = _chh_flag_prevalence(reg, "chh_illness_3mo_freq", ("3",), "Recurrent illness (3+ times in 3 months)")
+    missed_school = _chh_three_way_breakdown(
+        reg, "chh_missed_school_3mo", (("0", "No"), ("1", "Yes"), ("2", "Not applicable")), completed
+    )
+    school_days_values = _chh_numeric_values_where(reg, "chh_missed_school_3mo", "1", "chh_missed_school_days")
+    school_days_missed_summary = _chh_numeric_summary_median(school_days_values, missed_school["counts"]["Yes"])
+
+    recent_illness = {
+        "consultation_required": consultation_required,
+        "illness_frequency_distribution": illness_frequency_distribution,
+        "recurrent_illness": recurrent_illness,
+        "missed_school": missed_school,
+        "school_days_missed_summary": school_days_missed_summary,
+    }
+
+    # --- Section C: Major or Chronic Illness ---
+    diagnosed_condition = build_condition_indicator(reg, "chh_chronic_condition", "Professionally diagnosed condition", choice_maps, completed)
+    condition_prevalence = [
+        build_condition_indicator(reg, field, label, choice_maps, completed) for field, label in CHH_NAMED_CONDITIONS
+    ]
+    q8_fields = tuple(field for field, _ in CHH_NAMED_CONDITIONS)
+    any_listed_condition = _chh_composite_indicator(reg, q8_fields, "Any listed chronic condition", total)
+    condition_counts_per_child = _count_yes_per_child_answered(reg, q8_fields)
+    condition_count_distribution = _chh_count_distribution(condition_counts_per_child, [1, 2], ["0", "1", "2+"])
+
+    chronic_illness = {
+        "diagnosed_condition": diagnosed_condition,
+        "any_listed_condition": any_listed_condition,
+        "condition_count_distribution": condition_count_distribution,
+        "condition_prevalence": condition_prevalence,
+        "unknown_chronic_history_count": any_listed_condition["unknown_or_missing_count"],
+    }
+
+    # --- Section D: Neurological History ---
+    seizure_history = build_condition_indicator(reg, "chh_seizures", "Seizure history", choice_maps, completed)
+    fainting_history = build_condition_indicator(reg, "chh_loc_fainting", "Fainting history", choice_maps, completed)
+    cns_infection_history = build_condition_indicator(reg, "chh_cns_infection", "CNS infection history", choice_maps, completed)
+    head_injury_history = build_condition_indicator(reg, "chh_head_injury", "Significant head injury", choice_maps, completed)
+    treated_head_injury = _chh_flag_prevalence(
+        [r for r in reg if (r.get("chh_head_injury") or "").strip() == "1"],
+        "chh_head_injury_treatment", ("1",), "Treated head injury (among those with head injury)",
+    )
+    any_neurological_history = _chh_composite_indicator(reg, CHH_NEUROLOGICAL_FIELDS, "Any neurological history", total)
+    neuro_counts_per_child = _count_yes_per_child_answered(reg, CHH_NEUROLOGICAL_FIELDS)
+    concern_count_distribution = _chh_count_distribution(neuro_counts_per_child, [1, 2, 3], ["0", "1", "2", "3+"])
+
+    neurological = {
+        "seizure_history": seizure_history,
+        "fainting_history": fainting_history,
+        "cns_infection_history": cns_infection_history,
+        "head_injury_history": head_injury_history,
+        "treated_head_injury": treated_head_injury,
+        "any_neurological_history": any_neurological_history,
+        "concern_count_distribution": concern_count_distribution,
+    }
+
+    # --- Section E: Vision and Hearing ---
+    vision_difficulty = build_condition_indicator(reg, "chh_vision_difficulty", "Vision difficulty", choice_maps, completed)
+    uses_glasses = build_condition_indicator(reg, "chh_uses_glasses", "Uses spectacles/glasses", choice_maps, completed)
+    hearing_difficulty = build_condition_indicator(reg, "chh_hearing_difficulty", "Hearing difficulty", choice_maps, completed)
+    recurrent_ear_infection = build_condition_indicator(reg, "chh_ear_infection", "Recurrent ear infection", choice_maps, completed)
+    any_sensory_concern = _chh_composite_indicator(reg, ("chh_vision_difficulty", "chh_hearing_difficulty"), "Any sensory concern", total)
+    any_vision_indicator = _chh_composite_indicator(reg, ("chh_vision_difficulty", "chh_uses_glasses"), "Any vision indicator", total)
+
+    sensory = {
+        "vision_difficulty": vision_difficulty,
+        "uses_glasses": uses_glasses,
+        "hearing_difficulty": hearing_difficulty,
+        "recurrent_ear_infection": recurrent_ear_infection,
+        "any_sensory_concern": any_sensory_concern,
+        "any_vision_indicator": any_vision_indicator,
+    }
+
+    # --- Section F: Developmental and Learning History ---
+    dev_domain = _chh_checkbox_domain_status(
+        chh_complete_reg, CHH_DEV_CONCERN_FIELD, CHH_DEV_CONCERN_OPTIONS, CHH_DEV_CONCERN_NONE_CODE, "Any developmental concern", completed
+    )
+    diagnosed_dev_condition = build_condition_indicator(reg, "chh_dev_diagnosis", "Diagnosed developmental condition", choice_maps, completed)
+    concern_without_diagnosis_count = 0
+    for r in chh_complete_reg:
+        selected = any(_chh_checkbox_value(r, CHH_DEV_CONCERN_FIELD, c) == "1" for c, _ in CHH_DEV_CONCERN_OPTIONS)
+        if selected and (r.get("chh_dev_diagnosis") or "").strip() == "0":
+            concern_without_diagnosis_count += 1
+    concern_without_diagnosis = {
+        "label": "Concern without diagnosis",
+        "count": concern_without_diagnosis_count,
+        "total": dev_domain["valid_n"],
+        "percent": percent(concern_without_diagnosis_count, dev_domain["valid_n"]),
+    }
+
+    developmental = {
+        "any_developmental_concern": dev_domain["indicator"],
+        "domain_count_distribution": _chh_count_distribution(dev_domain["per_child_counts"], [1, 2, 3], ["0", "1", "2", "3+"]),
+        "domain_prevalence": dev_domain["prevalence"],
+        "diagnosed_condition": diagnosed_dev_condition,
+        "concern_without_diagnosis": concern_without_diagnosis,
+    }
+
+    # --- Section G: Hospitalisation, Treatment and Allergy ---
+    ever_hospitalised = build_condition_indicator(reg, "chh_hospitalised", "Ever hospitalised", choice_maps, completed)
+    hospital_count_values = _chh_numeric_values_where(reg, "chh_hospitalised", "1", "chh_hospitalised_times")
+    hospitalised_yes_n = sum(1 for r in reg if (r.get("chh_hospitalised") or "").strip() == "1")
+    hospitalisation_count_summary = _chh_numeric_summary_median(hospital_count_values, hospitalised_yes_n)
+    recurrent_hospitalisation_count = sum(1 for v in hospital_count_values if v >= 2)
+    recurrent_hospitalisation = {
+        "label": "Recurrent hospitalisation (2+ times)",
+        "count": recurrent_hospitalisation_count,
+        "total": len(hospital_count_values),
+        "percent": percent(recurrent_hospitalisation_count, len(hospital_count_values)),
+    }
+    surgery_or_procedure = build_condition_indicator(reg, "chh_surgery", "Surgery or major procedure", choice_maps, completed)
+    regular_medication = build_condition_indicator(reg, "chh_medicine_current", "Regular medication", choice_maps, completed)
+    known_allergy = build_condition_indicator(reg, "chh_allergy", "Known allergy", choice_maps, completed)
+    allergy_type_prevalence, _allergy_denom = _chh_conditional_checkbox_prevalence(
+        reg, "chh_allergy", "1", CHH_ALLERGY_TYPE_FIELD, CHH_ALLERGY_TYPE_OPTIONS
+    )
+    major_treatment_history = _chh_composite_indicator(
+        reg, ("chh_hospitalised", "chh_surgery", "chh_medicine_current"), "Major treatment history", total
+    )
+
+    hospitalisation = {
+        "ever_hospitalised": ever_hospitalised,
+        "hospitalisation_count_summary": hospitalisation_count_summary,
+        "recurrent_hospitalisation": recurrent_hospitalisation,
+        "surgery_or_procedure": surgery_or_procedure,
+        "regular_medication": regular_medication,
+        "known_allergy": known_allergy,
+        "allergy_type_prevalence": allergy_type_prevalence,
+        "major_treatment_history": major_treatment_history,
+    }
+
+    # --- Section H: Functional Health Status ---
+    function_domain = _chh_checkbox_domain_status(
+        chh_complete_reg, CHH_FUNCTION_LIMIT_FIELD, CHH_FUNCTION_LIMIT_OPTIONS, CHH_FUNCTION_LIMIT_NONE_CODE, "Any functional limitation", completed
+    )
+    overall_health_distribution = [
+        {"code": label, "count": cnt} for label, cnt in ordered_category_counts(reg, "chh_health_rating", choice_maps)
+    ]
+    suboptimal_health = _chh_flag_prevalence(reg, "chh_health_rating", ("3", "4", "5"), "Suboptimal health (Fair/Poor/Very poor)")
+    poor_health = _chh_flag_prevalence(reg, "chh_health_rating", ("4", "5"), "Poor health (Poor/Very poor)")
+
+    functional_health = {
+        "any_functional_limitation": function_domain["indicator"],
+        "functions_affected_distribution": _chh_count_distribution(function_domain["per_child_counts"], [1, 2, 3], ["0", "1", "2", "3+"]),
+        "function_prevalence": function_domain["prevalence"],
+        "overall_health_distribution": overall_health_distribution,
+        "suboptimal_health": suboptimal_health,
+        "poor_health": poor_health,
+    }
+
+    # --- Section I: Assessment-Day Health Status ---
+    well_for_assessment = _chh_three_way_breakdown(reg, "chh_fit_for_assessment", (("1", "Yes"), ("0", "No"), ("9", "Unsure")), completed)
+    condition_affecting_performance = build_condition_indicator(
+        reg, "chh_health_affects_today", "Condition affecting performance", choice_maps, completed
+    )
+    performance_condition_prevalence, _perf_denom = _chh_conditional_checkbox_prevalence(
+        reg, "chh_health_affects_today", "1", CHH_PERFORMANCE_CONDITION_FIELD, CHH_PERFORMANCE_CONDITION_OPTIONS
+    )
+    concern_flags = [_chh_assess_health_flag(r) for r in reg]
+    any_assessment_day_concern_count = sum(1 for f in concern_flags if f == "concern")
+    assessment_day_classifiable = sum(1 for f in concern_flags if f in ("concern", "none"))
+    assessment_decision_distribution = [
+        {"code": label, "count": cnt} for label, cnt in ordered_category_counts(reg, "chh_assessor_decision", choice_maps)
+    ]
+
+    assessment_day = {
+        "well_for_assessment": well_for_assessment,
+        "condition_affecting_performance": condition_affecting_performance,
+        "performance_condition_prevalence": performance_condition_prevalence,
+        "any_assessment_day_concern_count": any_assessment_day_concern_count,
+        "any_assessment_day_concern_total": assessment_day_classifiable,
+        "any_assessment_day_concern_percent": percent(any_assessment_day_concern_count, assessment_day_classifiable),
+        "assessment_decision_distribution": assessment_decision_distribution,
+    }
+
+    # --- Section 12: Dashboard Alert Logic (assessment-day scope only) ---
+    alert_categories = [_chh_alert_category(r) for r in reg]
+    alert_total = sum(1 for c in alert_categories if c != "unclassified")
+    alerts = {
+        "no_concern_count": sum(1 for c in alert_categories if c == "none"),
+        "assessment_concern_count": sum(1 for c in alert_categories if c == "concern"),
+        "assessment_deferred_count": sum(1 for c in alert_categories if c == "deferred"),
+        "missing_decision_count": sum(1 for c in alert_categories if c == "missing_decision"),
+        "total": alert_total,
+        # Broader participant-level review flag (spec Section 11) - current
+        # illness, any neurological history, any functional limitation, not
+        # well/unsure for assessment, a condition may affect performance, or
+        # the assessor rescheduled - independent of the 4-category
+        # assessment-day-only alert above.
+        "participants_flagged_for_review": sum(1 for r in reg if _chh_participant_flagged(r)),
+    }
+
+    # --- Section 13: Data Quality Indicators ---
+    partially_completed = sum(1 for r in all_records if (r.get("child_illness_history_complete") or "").strip() == "1")
+    checkbox_none_conflicts = {
+        "Current symptoms (Q2)": _chh_none_conflict_count(reg, CHH_SYMPTOM_FIELD, CHH_SYMPTOM_OPTIONS, CHH_SYMPTOM_NONE_CODE),
+        "Developmental concern (Q17)": _chh_none_conflict_count(reg, CHH_DEV_CONCERN_FIELD, CHH_DEV_CONCERN_OPTIONS, CHH_DEV_CONCERN_NONE_CODE),
+        "Functional limitation (Q23)": _chh_none_conflict_count(reg, CHH_FUNCTION_LIMIT_FIELD, CHH_FUNCTION_LIMIT_OPTIONS, CHH_FUNCTION_LIMIT_NONE_CODE),
+    }
+    yes_missing_spec_pairs: tuple[tuple[str, str, str], ...] = (
+        ("chh_illness_current", "chh_illness_current_spec", "Current illness (Q1) missing specification"),
+        ("chh_unwell_7days", "chh_unwell_7days_spec", "Unwell in past 7 days (Q3) missing specification"),
+        ("chh_illness_3mo", "chh_illness_3mo_spec", "Illness requiring consultation (Q4) missing specification"),
+        ("chh_chronic_condition", "chh_chronic_condition_spec", "Diagnosed chronic condition (Q7) missing specification"),
+        ("chh_q8_other", "chh_q8_other_spec", "Other chronic condition (Q8k) missing specification"),
+        ("chh_cns_infection", "chh_cns_infection_spec", "CNS infection (Q11) missing specification"),
+        ("chh_dev_diagnosis", "chh_dev_diagnosis_spec", "Developmental diagnosis (Q18) missing specification"),
+        ("chh_surgery", "chh_surgery_spec", "Surgery/procedure (Q20) missing specification"),
+    )
+    yes_missing_specification = {label: _yes_missing_spec_count(reg, yf, sf) for yf, sf, label in yes_missing_spec_pairs}
+    yes_missing_specification["Hospitalisation (Q19) missing count or reason"] = sum(
+        1 for r in reg
+        if (r.get("chh_hospitalised") or "").strip() == "1"
+        and ((r.get("chh_hospitalised_times") or "").strip() == "" or (r.get("chh_hospitalised_reason") or "").strip() == "")
+    )
+    yes_missing_specification["Regular medicine (Q21) missing name or reason"] = sum(
+        1 for r in reg
+        if (r.get("chh_medicine_current") or "").strip() == "1"
+        and ((r.get("chh_medicine_name") or "").strip() == "" or (r.get("chh_medicine_reason") or "").strip() == "")
+    )
+    yes_missing_specification["Allergy (Q22) missing type or allergen"] = sum(
+        1 for r in reg
+        if (r.get("chh_allergy") or "").strip() == "1"
+        and (
+            not any(_chh_checkbox_value(r, CHH_ALLERGY_TYPE_FIELD, c) == "1" for c, _ in CHH_ALLERGY_TYPE_OPTIONS)
+            or (r.get("chh_allergy_spec") or "").strip() == ""
+        )
+    )
+    yes_missing_specification["Other current symptom (Q2a) missing specification"] = sum(
+        1 for r in reg if _chh_checkbox_value(r, CHH_SYMPTOM_FIELD, "9") == "1" and (r.get("chh_symptoms_other_spec") or "").strip() == ""
+    )
+    yes_missing_specification["Other developmental concern (Q17a) missing specification"] = sum(
+        1 for r in reg
+        if _chh_checkbox_value(r, CHH_DEV_CONCERN_FIELD, "8") == "1" and (r.get("chh_dev_concern_other_spec") or "").strip() == ""
+    )
+
+    branched_when_no_pairs: tuple[tuple[str, str, str], ...] = (
+        ("chh_illness_current", "chh_illness_current_spec", "Current illness specified despite No (Q1)"),
+        ("chh_unwell_7days", "chh_unwell_7days_spec", "7-day illness specified despite No (Q3)"),
+        ("chh_illness_3mo", "chh_illness_3mo_spec", "Consultation illness specified despite No (Q4)"),
+        ("chh_chronic_condition", "chh_chronic_condition_spec", "Chronic condition specified despite No (Q7)"),
+    )
+    branched_field_when_parent_no = {label: _branched_when_no_count(reg, pf, sf) for pf, sf, label in branched_when_no_pairs}
+
+    dont_know_or_unknown_by_section = {
+        "Major or Chronic Illness": diagnosed_condition["dont_know_count"] + sum(c["dont_know_count"] for c in condition_prevalence),
+        "Neurological History": (
+            seizure_history["dont_know_count"] + fainting_history["dont_know_count"]
+            + cns_infection_history["dont_know_count"] + head_injury_history["dont_know_count"]
+        ),
+        "Vision and Hearing": vision_difficulty["dont_know_count"] + hearing_difficulty["dont_know_count"] + recurrent_ear_infection["dont_know_count"],
+        "Developmental and Learning History": diagnosed_dev_condition["dont_know_count"],
+        "Hospitalisation, Treatment and Allergy": known_allergy["dont_know_count"],
+    }
+
+    negative_numeric_entries = {
+        "School days missed (Q6a)": _chh_negative_numeric_count(reg, "chh_missed_school_days"),
+        "Hospitalisation count (Q19a)": _chh_negative_numeric_count(reg, "chh_hospitalised_times"),
+    }
+
+    duplicate_child_id_records = max(len(all_records) - len(reg), 0)
+
+    data_quality = {
+        "completed_forms": completed,
+        "partially_completed_forms": partially_completed,
+        "not_started_forms": max(total - completed - partially_completed, 0),
+        "total_registered": total,
+        "checkbox_none_conflicts": checkbox_none_conflicts,
+        "yes_missing_specification": yes_missing_specification,
+        "branched_field_when_parent_no": branched_field_when_parent_no,
+        "dont_know_or_unknown_by_section": dont_know_or_unknown_by_section,
+        "negative_numeric_entries": negative_numeric_entries,
+        "health_concern_decision_missing": alerts["missing_decision_count"],
+        "duplicate_child_id_records": duplicate_child_id_records,
+    }
+
+    return {
+        "current_health": current_health,
+        "recent_illness": recent_illness,
+        "chronic_illness": chronic_illness,
+        "neurological": neurological,
+        "sensory": sensory,
+        "developmental": developmental,
+        "hospitalisation": hospitalisation,
+        "functional_health": functional_health,
+        "assessment_day": assessment_day,
+        "alerts": alerts,
+        "data_quality": data_quality,
+    }
+
+
+def _count_yes_per_child_answered(records: list[dict], fields: tuple[str, ...]) -> list[int]:
+    """Per-child count of how many of `fields` are exactly Yes ("1") -
+    counted only for children who answered at least one of `fields` (a
+    child with every field blank is excluded entirely, never counted as
+    0)."""
+    counts: list[int] = []
+    for r in records:
+        values = [(r.get(f) or "").strip() for f in fields]
+        if all(v == "" for v in values):
+            continue
+        counts.append(sum(1 for v in values if v == "1"))
+    return counts
+
+
+def _chh_assess_health_flag(record: dict) -> str:
+    """Assessment-day flag (spec Section 10 exact wording): "concern" if
+    well_for_assess is 0/9 or cond_affect_perf is 1; "none" only when
+    well_for_assess is 1 and cond_affect_perf is 0; otherwise
+    unclassifiable (both fields blank)."""
+    well = (record.get("chh_fit_for_assessment") or "").strip()
+    cond = (record.get("chh_health_affects_today") or "").strip()
+    if well in ("0", "9") or cond == "1":
+        return "concern"
+    if well == "1" and cond == "0":
+        return "none"
+    return "unclassified"
+
+
+def _chh_alert_category(record: dict) -> str:
+    """Spec Section 12's 4-category assessment-day alert, scoped exactly to
+    well_for_assess/cond_affect_perf/assessor_decision. "Assessment
+    deferred" only ever reflects the live form's real "Reschedule
+    assessment" option (code 3) - the spec's proposed "stopped/referred"
+    category does not exist on the live form and is never counted here."""
+    well = (record.get("chh_fit_for_assessment") or "").strip()
+    cond = (record.get("chh_health_affects_today") or "").strip()
+    decision = (record.get("chh_assessor_decision") or "").strip()
+    concern = well in ("0", "9") or cond == "1"
+    if concern and decision == "":
+        return "missing_decision"
+    if decision == "3":
+        return "deferred"
+    if concern:
+        return "concern"
+    if well == "1" and cond == "0":
+        return "none"
+    return "unclassified"
+
+
+def _chh_participant_flagged(record: dict) -> bool:
+    """Broader participant-level review flag (spec Section 11) - current
+    illness Yes, any neurological history Yes, any functional limitation
+    present, not well/unsure for assessment, a condition may affect
+    performance, or the assessor rescheduled."""
+    if (record.get("chh_illness_current") or "").strip() == "1":
+        return True
+    if any((record.get(f) or "").strip() == "1" for f in CHH_NEUROLOGICAL_FIELDS):
+        return True
+    if any(_chh_checkbox_value(record, CHH_FUNCTION_LIMIT_FIELD, c) == "1" for c, _ in CHH_FUNCTION_LIMIT_OPTIONS):
+        return True
+    well = (record.get("chh_fit_for_assessment") or "").strip()
+    if well in ("0", "9"):
+        return True
+    if (record.get("chh_health_affects_today") or "").strip() == "1":
+        return True
+    if (record.get("chh_assessor_decision") or "").strip() == "3":
+        return True
+    return False
+
+
+def _chh_none_conflict_count(records: list[dict], base_field: str, options: tuple[tuple[str, str], ...], none_code: str) -> int:
+    return sum(
+        1 for r in records
+        if _chh_checkbox_value(r, base_field, none_code) == "1"
+        and any(_chh_checkbox_value(r, base_field, code) == "1" for code, _ in options)
+    )
+
+
+def _yes_missing_spec_count(records: list[dict], yes_field: str, spec_field: str) -> int:
+    return sum(1 for r in records if (r.get(yes_field) or "").strip() == "1" and (r.get(spec_field) or "").strip() == "")
+
+
+def _branched_when_no_count(records: list[dict], parent_field: str, spec_field: str) -> int:
+    return sum(1 for r in records if (r.get(parent_field) or "").strip() == "0" and (r.get(spec_field) or "").strip() != "")
 
 
 # --- PAQ-C item-level fields (approved 2026-09-10 scoring specification) ---

@@ -1,16 +1,27 @@
 import { useEffect, useState } from "react";
 
 import { getHealthScreening } from "../api/dashboard";
-import ChartCard from "../components/ChartCard";
+import CategoryBarChart from "../components/CategoryBarChart";
+import { percentOf } from "../components/charts/chartHelpers";
 import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
+import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DetailDisclosure from "../components/DetailDisclosure";
 import FullScreenLoader from "../components/FullScreenLoader";
+import KpiCard from "../components/KpiCard";
 import PageHeader from "../components/PageHeader";
+import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import { useRefresh } from "../context/RefreshContext";
-import type { ConditionIndicator, HealthScreeningResponse } from "../types/liveDashboard";
+import type {
+  ChhCompositeIndicator,
+  ChhNumericSummary,
+  ChhPrevalenceItem,
+  ChhThreeWayBreakdown,
+  ConditionIndicator,
+  HealthScreeningResponse,
+} from "../types/liveDashboard";
 
 const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
   High: "good",
@@ -71,6 +82,152 @@ function DetailTable({ rows }: { rows: ConditionIndicator[] }) {
   );
 }
 
+/** A single Yes/No item with no separate Don't-know bucket to compose
+ * against (checkbox-derived "any option selected" flags, and plain 0/1
+ * fields) - one KPI card, its own valid_n/asked_n context in the
+ * sublabel. */
+function IndicatorKpi({ indicator, tone = "neutral" }: { indicator: ConditionIndicator; tone?: "blue" | "violet" | "aqua" | "amber" | "neutral" }) {
+  const value = indicator.valid_n > 0 ? `${indicator.yes_count}/${indicator.valid_n}` : "No data";
+  const sublabel =
+    indicator.valid_n > 0
+      ? `${indicator.percent_yes}% · asked ${indicator.asked_n}${indicator.dont_know_count > 0 ? ` · ${indicator.dont_know_count} don't know` : ""}`
+      : `0/${indicator.asked_n} completed the instrument`;
+  return <KpiCard label={indicator.label} value={value} sublabel={sublabel} tone={tone} />;
+}
+
+/** Composite-variable KPI (spec Section 1) - Yes if any component is Yes,
+ * No only if every component is No, otherwise unknown/missing - the
+ * "unknown or missing" count is always shown, never silently folded into
+ * No. */
+function CompositeKpi({ indicator, tone = "neutral" }: { indicator: ChhCompositeIndicator; tone?: "blue" | "violet" | "aqua" | "amber" | "neutral" }) {
+  const value = indicator.valid_n > 0 ? `${indicator.yes_count}/${indicator.valid_n}` : "No data";
+  const sublabel =
+    indicator.valid_n > 0
+      ? `${indicator.percent_yes}% of ${indicator.valid_n} classifiable · ${indicator.unknown_or_missing_count} unknown/missing`
+      : `${indicator.unknown_or_missing_count} unknown/missing of ${indicator.total} registered`;
+  return <KpiCard label={indicator.label} value={value} sublabel={sublabel} tone={tone} />;
+}
+
+/** A single count/total/percent item with an independently-scoped
+ * denominator (not the full registered cohort) - a compact KPI, the
+ * denominator always spelled out in the sublabel so it's never mistaken
+ * for the whole cohort. */
+function PrevalenceKpi({ item, tone = "neutral" }: { item: ChhPrevalenceItem; tone?: "blue" | "violet" | "aqua" | "amber" | "neutral" }) {
+  const value = item.total > 0 ? `${item.count}/${item.total}` : "No data";
+  const sublabel = item.total > 0 ? `${item.percent}%` : "No respondents in this denominator";
+  return <KpiCard label={item.label} value={value} sublabel={sublabel} tone={tone} />;
+}
+
+/** A list of prevalence items each with their own denominator - reused for
+ * symptom/domain/function/allergy-type/performance-condition prevalence,
+ * matching the "Overview" health-signal list pattern already used
+ * elsewhere on the dashboard. */
+function PrevalenceList({ items }: { items: ChhPrevalenceItem[] }) {
+  if (items.length === 0 || items.every((i) => i.total === 0)) {
+    return (
+      <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+        No respondents in this denominator yet.
+      </p>
+    );
+  }
+  return (
+    <div className="response-list">
+      {items.map((item) => (
+        <div className="response-item" key={item.label}>
+          <div className="response-item-header">
+            <span className="response-item-label">{item.label}</span>
+            <span className="response-item-value">
+              {item.count} ({item.percent}%)
+            </span>
+          </div>
+          <ProportionBar value={item.count} total={item.total} color="var(--series-1)" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A field with a genuine third response category (Not applicable /
+ * Unsure) - every code keeps its own label and its own bar, never folded
+ * into No or Don't-know. */
+function ThreeWayList({ breakdown }: { breakdown: ChhThreeWayBreakdown }) {
+  if (breakdown.valid_n === 0) {
+    return (
+      <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
+        No responses recorded yet.
+      </p>
+    );
+  }
+  return (
+    <div className="response-list">
+      {Object.entries(breakdown.counts).map(([label, count]) => (
+        <div className="response-item" key={label}>
+          <div className="response-item-header">
+            <span className="response-item-label">{label}</span>
+            <span className="response-item-value">
+              {count} ({percentOf(count, breakdown.valid_n)}%)
+            </span>
+          </div>
+          <ProportionBar value={count} total={breakdown.valid_n} color="var(--series-1)" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NumericSummaryCard({ label, summary, unit = "" }: { label: string; summary: ChhNumericSummary; unit?: string }) {
+  const value = summary.mean !== null ? `${summary.mean}${unit}` : "No data";
+  const sublabel =
+    summary.mean !== null
+      ? `median ${summary.median}${unit} · range ${summary.minimum}-${summary.maximum}${unit} · n=${summary.valid_n}/${summary.total} (${summary.percent_valid}%)`
+      : `n=0/${summary.total}`;
+  return <KpiCard label={label} value={value} sublabel={sublabel} />;
+}
+
+function AlertStrip({ alerts }: { alerts: HealthScreeningResponse["chh"]["alerts"] }) {
+  const stats: { key: string; label: string; count: number; tone: "good" | "warning" | "critical" | "neutral" }[] = [
+    { key: "none", label: "No Concern", count: alerts.no_concern_count, tone: "good" },
+    { key: "concern", label: "Assessment Concern", count: alerts.assessment_concern_count, tone: "warning" },
+    { key: "deferred", label: "Assessment Deferred", count: alerts.assessment_deferred_count, tone: "critical" },
+    { key: "missing", label: "Missing Decision", count: alerts.missing_decision_count, tone: "neutral" },
+  ];
+  return (
+    <div className="chh-alert-strip">
+      {stats.map((s) => (
+        <div className={`chh-alert-stat chh-alert-stat-${s.tone}`} key={s.key}>
+          <div className="chh-alert-stat-value">{s.count}</div>
+          <div className="chh-alert-stat-label">{s.label}</div>
+          <div className="chh-alert-stat-percent">{alerts.total > 0 ? `${percentOf(s.count, alerts.total)}% of ${alerts.total}` : "No data"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DataQualityRow({ label, entries }: { label: string; entries: Record<string, number> }) {
+  const total = Object.values(entries).reduce((sum, v) => sum + v, 0);
+  return (
+    <DetailDisclosure summary={`${label} (${total} flagged)`}>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Check</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(entries).map(([key, count]) => (
+            <tr key={key}>
+              <td>{key}</td>
+              <td>{count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </DetailDisclosure>
+  );
+}
+
 export default function HealthScreening() {
   const [data, setData] = useState<HealthScreeningResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,22 +242,38 @@ export default function HealthScreening() {
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
-  if (!data) return <FullScreenLoader message="Loading Child Illness History..." />;
+  if (!data) return <FullScreenLoader message="Loading Child Health History..." />;
 
-  const { completion } = data;
+  const { completion, chh } = data;
 
   return (
     <section>
       <PageHeader
         eyebrow="Study Assessment"
-        title="Child Illness History"
-        subtitle="Child Illness History - live REDCap instrument."
+        title="Child Health History"
+        subtitle="Screening and illness-history instrument - individual indicators and domain-level burden are shown; no single combined clinical health score is calculated."
       />
 
       <div className="module-status-line">
         <StatusBadge
           label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
+        />
+      </div>
+
+      <SectionHeader title="Overview" note="Assessment-day alert distribution and instrument data quality, at a glance" />
+      <AlertStrip alerts={chh.alerts} />
+      <div className="kpi-row">
+        <KpiCard
+          label="Participants Flagged for Review"
+          value={completion.total_registered > 0 ? `${chh.alerts.participants_flagged_for_review}/${completion.total_registered}` : "No data"}
+          sublabel="Current illness, neurological history, functional limitation, assessment readiness, performance concern, or rescheduled"
+          tone="amber"
+        />
+        <KpiCard
+          label="Completed Forms"
+          value={`${chh.data_quality.completed_forms}/${chh.data_quality.total_registered}`}
+          sublabel={`${chh.data_quality.partially_completed_forms} partially completed · ${chh.data_quality.not_started_forms} not started`}
         />
       </div>
 
@@ -130,6 +303,208 @@ export default function HealthScreening() {
       <DetailDisclosure summary="Show exact values (Yes / No / Don't know / Valid N)">
         <DetailTable rows={data.general_flags} />
       </DetailDisclosure>
+
+      {/* --- Section A: Current Health Status --- */}
+      <SectionHeader title="Current Health Status" note="Section A - today's symptoms and activity impact" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.current_health.currently_ill} tone="blue" />
+        <IndicatorKpi indicator={chh.current_health.any_current_symptom} tone="amber" />
+        <IndicatorKpi indicator={chh.current_health.activity_or_school_affected} tone="violet" />
+      </div>
+      <ChartCard title="Number of Current Symptoms" subtitle="Among children who answered the symptom checklist">
+        <CategoryBarChart
+          data={chh.current_health.symptom_count_distribution.map((c) => ({ label: c.code, count: c.count }))}
+          mode="sequential"
+          height={170}
+        />
+      </ChartCard>
+      <ChartCard title="Symptom Prevalence" subtitle="Selected ÷ children who answered the symptom checklist">
+        <PrevalenceList items={chh.current_health.symptom_prevalence} />
+      </ChartCard>
+
+      {/* --- Section B: Recent History of Illness --- */}
+      <SectionHeader title="Recent History of Illness" note="Section B - past 3 months" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.recent_illness.consultation_required} tone="blue" />
+        <PrevalenceKpi item={chh.recent_illness.recurrent_illness} tone="amber" />
+        <NumericSummaryCard label="School Days Missed" summary={chh.recent_illness.school_days_missed_summary} unit=" days" />
+      </div>
+      <div className="chart-grid two-col">
+        <ChartCard title="Illness Frequency (3 months)" subtitle="Ordered by category">
+          <CategoryBarChart
+            data={chh.recent_illness.illness_frequency_distribution.map((c) => ({ label: c.code, count: c.count }))}
+            mode="sequential"
+            height={190}
+          />
+        </ChartCard>
+        <ChartCard title="Missed School Due to Illness" subtitle="No / Yes / Not applicable, kept distinct">
+          <ThreeWayList breakdown={chh.recent_illness.missed_school} />
+        </ChartCard>
+      </div>
+
+      {/* --- Section C: Major or Chronic Illness --- */}
+      <SectionHeader title="Major or Chronic Illness" note="Section C - condition prevalence shown above; composite indicators below" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.chronic_illness.diagnosed_condition} tone="blue" />
+        <CompositeKpi indicator={chh.chronic_illness.any_listed_condition} tone="amber" />
+        <KpiCard
+          label="Unknown Chronic History"
+          value={`${chh.chronic_illness.unknown_chronic_history_count}/${completion.total_registered}`}
+          sublabel="No condition marked Yes, but one or more responses are Don't know or missing"
+          tone="neutral"
+        />
+      </div>
+      <ChartCard title="Number of Chronic Conditions" subtitle="Among children who answered at least one condition">
+        <CategoryBarChart
+          data={chh.chronic_illness.condition_count_distribution.map((c) => ({ label: c.code, count: c.count }))}
+          mode="sequential"
+          height={170}
+        />
+      </ChartCard>
+
+      {/* --- Section D: Neurological History --- */}
+      <SectionHeader title="Neurological History" note="Section D" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.neurological.seizure_history} tone="blue" />
+        <IndicatorKpi indicator={chh.neurological.fainting_history} tone="violet" />
+        <IndicatorKpi indicator={chh.neurological.cns_infection_history} tone="amber" />
+        <IndicatorKpi indicator={chh.neurological.head_injury_history} tone="aqua" />
+      </div>
+      <div className="kpi-row">
+        <PrevalenceKpi item={chh.neurological.treated_head_injury} tone="neutral" />
+        <CompositeKpi indicator={chh.neurological.any_neurological_history} tone="amber" />
+      </div>
+      <ChartCard title="Neurological Concern Count" subtitle="Number of neurological-history items marked Yes, per child">
+        <CategoryBarChart
+          data={chh.neurological.concern_count_distribution.map((c) => ({ label: c.code, count: c.count }))}
+          mode="sequential"
+          height={170}
+        />
+      </ChartCard>
+
+      {/* --- Section E: Vision and Hearing --- */}
+      <SectionHeader title="Vision and Hearing" note="Section E" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.sensory.vision_difficulty} tone="blue" />
+        <IndicatorKpi indicator={chh.sensory.uses_glasses} tone="aqua" />
+        <IndicatorKpi indicator={chh.sensory.hearing_difficulty} tone="violet" />
+        <IndicatorKpi indicator={chh.sensory.recurrent_ear_infection} tone="amber" />
+      </div>
+      <div className="kpi-row">
+        <CompositeKpi indicator={chh.sensory.any_sensory_concern} tone="amber" />
+        <CompositeKpi indicator={chh.sensory.any_vision_indicator} tone="blue" />
+      </div>
+
+      {/* --- Section F: Developmental and Learning History --- */}
+      <SectionHeader title="Developmental and Learning History" note="Section F" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.developmental.any_developmental_concern} tone="amber" />
+        <IndicatorKpi indicator={chh.developmental.diagnosed_condition} tone="blue" />
+        <PrevalenceKpi item={chh.developmental.concern_without_diagnosis} tone="neutral" />
+      </div>
+      <div className="chart-grid two-col">
+        <ChartCard title="Developmental Domains Affected" subtitle="Number of domains selected, per child">
+          <CategoryBarChart
+            data={chh.developmental.domain_count_distribution.map((c) => ({ label: c.code, count: c.count }))}
+            mode="sequential"
+            height={190}
+          />
+        </ChartCard>
+        <ChartCard title="Domain Prevalence" subtitle="Selected ÷ children who answered the developmental checklist">
+          <PrevalenceList items={chh.developmental.domain_prevalence} />
+        </ChartCard>
+      </div>
+
+      {/* --- Section G: Hospitalisation, Treatment and Allergy --- */}
+      <SectionHeader title="Hospitalisation, Treatment and Allergy" note="Section G" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.hospitalisation.ever_hospitalised} tone="blue" />
+        <IndicatorKpi indicator={chh.hospitalisation.surgery_or_procedure} tone="violet" />
+        <IndicatorKpi indicator={chh.hospitalisation.regular_medication} tone="aqua" />
+        <IndicatorKpi indicator={chh.hospitalisation.known_allergy} tone="amber" />
+      </div>
+      <div className="kpi-row">
+        <NumericSummaryCard label="Hospitalisation Count" summary={chh.hospitalisation.hospitalisation_count_summary} unit=" times" />
+        <PrevalenceKpi item={chh.hospitalisation.recurrent_hospitalisation} tone="neutral" />
+        <CompositeKpi indicator={chh.hospitalisation.major_treatment_history} tone="amber" />
+      </div>
+      <ChartCard title="Allergy Type" subtitle="Among children with a known allergy">
+        <PrevalenceList items={chh.hospitalisation.allergy_type_prevalence} />
+      </ChartCard>
+
+      {/* --- Section H: Functional Health Status --- */}
+      <SectionHeader title="Functional Health Status" note="Section H" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.functional_health.any_functional_limitation} tone="amber" />
+        <PrevalenceKpi item={chh.functional_health.suboptimal_health} tone="violet" />
+        <PrevalenceKpi item={chh.functional_health.poor_health} tone="neutral" />
+      </div>
+      <div className="chart-grid two-col">
+        <ChartCard title="Overall Perceived Health" subtitle="Compared with other children of the same age">
+          <CategoryBarChart
+            data={chh.functional_health.overall_health_distribution.map((c) => ({ label: c.code, count: c.count }))}
+            mode="sequential"
+            height={190}
+          />
+        </ChartCard>
+        <ChartCard title="Function-Specific Limitation" subtitle="Selected ÷ children who answered the functional-limitation checklist">
+          <PrevalenceList items={chh.functional_health.function_prevalence} />
+        </ChartCard>
+      </div>
+
+      {/* --- Section I: Assessment-Day Health Status --- */}
+      <SectionHeader title="Assessment Readiness" note="Section I - health status on the day of assessment" />
+      <div className="kpi-row">
+        <IndicatorKpi indicator={chh.assessment_day.condition_affecting_performance} tone="amber" />
+        <KpiCard
+          label="Any Assessment-Day Concern"
+          value={chh.assessment_day.any_assessment_day_concern_total > 0 ? `${chh.assessment_day.any_assessment_day_concern_count}/${chh.assessment_day.any_assessment_day_concern_total}` : "No data"}
+          sublabel={`${chh.assessment_day.any_assessment_day_concern_percent}% of classifiable respondents`}
+          tone="violet"
+        />
+      </div>
+      <div className="chart-grid two-col">
+        <ChartCard title="Well Enough for Assessment" subtitle="Yes / No / Unsure, kept distinct">
+          <ThreeWayList breakdown={chh.assessment_day.well_for_assessment} />
+        </ChartCard>
+        <ChartCard title="Assessment Decision" subtitle="Assessor's own recorded options only">
+          <PrevalenceList
+            items={chh.assessment_day.assessment_decision_distribution.map((c) => ({
+              label: c.code,
+              count: c.count,
+              total: chh.assessment_day.assessment_decision_distribution.reduce((s, x) => s + x.count, 0),
+              percent: percentOf(c.count, chh.assessment_day.assessment_decision_distribution.reduce((s, x) => s + x.count, 0)),
+            }))}
+          />
+        </ChartCard>
+      </div>
+      <ChartCard title="Performance-Affecting Conditions" subtitle="Among children with a condition that may affect performance">
+        <PrevalenceList items={chh.assessment_day.performance_condition_prevalence} />
+      </ChartCard>
+
+      {/* --- Section 13: Data Quality --- */}
+      <SectionHeader title="Data Quality" note="Instrument-level validation and completeness checks" />
+      <div className="table-card">
+        <DataQualityRow label="Checkbox 'None' selected with another option" entries={chh.data_quality.checkbox_none_conflicts} />
+        <DataQualityRow label="Yes response missing required specification" entries={chh.data_quality.yes_missing_specification} />
+        <DataQualityRow label="Branched field completed despite No" entries={chh.data_quality.branched_field_when_parent_no} />
+        <DataQualityRow label="Don't know / unknown responses by section" entries={chh.data_quality.dont_know_or_unknown_by_section} />
+        <DataQualityRow label="Invalid or negative numeric entries" entries={chh.data_quality.negative_numeric_entries} />
+      </div>
+      <div className="kpi-row">
+        <KpiCard
+          label="Health Concern, Decision Missing"
+          value={chh.data_quality.health_concern_decision_missing}
+          sublabel="Assessment-day concern recorded but no assessor decision"
+          tone="neutral"
+        />
+        <KpiCard
+          label="Duplicate Child ID Records"
+          value={chh.data_quality.duplicate_child_id_records}
+          sublabel="Registered dataset-wide check, not specific to this instrument"
+          tone="neutral"
+        />
+      </div>
     </section>
   );
 }
