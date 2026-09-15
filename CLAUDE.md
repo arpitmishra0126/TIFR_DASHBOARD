@@ -2628,6 +2628,285 @@ tool was available this session, so pixel-level visual QA (chart rendering,
 theme, mobile layout) was **not** performed - verify visually before
 treating this as demo-ready.
 
+**Chart tooltip overlap fixed (2026-09-15, shared chart-component fix, not
+a CHH-page-only patch):** two reported layout bugs on the Child Health
+History page - the Illness Frequency chart's hover tooltip covering the
+neighboring bar, and content appearing to "collide" near Assessment
+Readiness - both traced to the **same root cause**: Recharts' default
+`<Tooltip>` positions itself relative to the cursor/hovered data point with
+no vertical clamping suited to a short (170-220px) `BarChart`. For a tall
+bar, the tooltip rendered at the bar's own height and drifted onto the
+adjacent bar (confirmed live via a headless-browser hover test - the
+"Illness Frequency (3 months)" tooltip visibly covered the "Once" bar and
+its "17" label); for a bar hovered near the baseline, the same unclamped
+positioning could plausibly extend the tooltip low enough to reach the
+next section's cards. Fixed at the **shared component level** (not per-
+chart): `CategoryBarChart.tsx`'s `<Tooltip>` gained `allowEscapeViewBox=
+{{x:true,y:true}}` (stop clamping the tooltip inside the chart's own
+bounds - the clamping was what pushed it sideways onto neighbors),
+`wrapperStyle={{zIndex:20}}`, and `position={{y:-16}}` (pins the tooltip
+just above the plot area regardless of which bar/row is hovered, so it
+never depends on the hovered bar's own height). `ConditionCompositionChart
+.tsx` (the other chart type this page uses, for the top "Reported Health
+Conditions"/"...Indicators" charts) got the same `allowEscapeViewBox`/
+`wrapperStyle` addition for consistency, without the fixed `position` (its
+taller, row-per-item horizontal-bar geometry doesn't exhibit the same acute
+squeeze). Both components are shared dashboard-wide (`CategoryBarChart` is
+also used by Overview/Demographics/Physical Activity/Screen Time), so this
+fix applies everywhere these charts render, not only on this page.
+Live-verified via headless-browser hover tests across all 6
+`CategoryBarChart` instances on the CHH page (Current Symptoms, Illness
+Frequency, Chronic Conditions, Neurological Concern Count, Developmental
+Domains, Overall Perceived Health) at 1400px - every hover now floats
+clearly above the bars with zero neighbor-bar/label overlap. The
+originally-reported "Assessment Readiness" static-layout overlap could not
+be reproduced in a non-hover state at 1400/1024/600px widths after the
+tooltip fix (`.chart-card`/`.chart-grid`/`.kpi-row` CSS - grid `minmax(0,
+1fr)` tracks, default `align-items: stretch`, no absolute positioning -
+were all re-audited and are structurally sound); this strongly suggests it
+was the same tooltip-overlap symptom, from hovering the "Overall Perceived
+Health" chart immediately above that section. No data, calculation, chart
+logic, or label changed - `frontend/src/components/CategoryBarChart.tsx`
+and `frontend/src/components/charts/ConditionCompositionChart.tsx` are the
+only files touched. Frontend `tsc --noEmit` and `npm run build` both
+succeed; backend untouched. A `playwright` install was already cached
+locally (`C:\Users\<user>\AppData\Local\ms-playwright`) from an earlier
+session, invoked via `npx --yes playwright` against a temporary local
+dev-server pair (backend :8001, frontend :5173, matching `frontend/.env`) -
+not a persistent project dependency, nothing added to `package.json`.
+
+**Page-wide layout and metric-card-hierarchy redesign (2026-09-15):**
+two further problems reported on the Child Health History page - KPI cards
+reading as "colliding" with the charts below them across every section, and
+far too many near-identical `x/47` single-item KPI cards (explicitly
+called out: seizures/fainting/CNS infection/head injury each getting their
+own card). Both traced to structural, not cosmetic, causes and fixed at the
+shared/reusable level, not per-section patches.
+- **Root cause of the "collision" reading**: `.kpi-row` carries no
+  `margin-bottom` and `.chart-card`/`.table-card` carry no `margin-top` -
+  so wherever a `.kpi-row` sat directly above a `.chart-card` within the
+  same section (the norm throughout this page), the two rendered flush
+  against each other with zero gap, box-shadows nearly touching. Fixed
+  with a new shared wrapper, `.chh-section-body` (`display:flex;
+  flex-direction:column; gap: var(--space-4)`), plus three scoped overrides
+  zeroing out `.chart-card`/`.table-card`/`.chh-alert-strip`/`.detail-
+  disclosure`'s own margins **only when they are a direct child of this
+  wrapper** - so the wrapper's `gap` is the single source of spacing (no
+  doubled margin+gap, no negative margins, no fixed heights - rows size
+  purely from content). Every one of the page's 12 sections (Overview
+  through Data Quality) now wraps its body in `<div className="chh-
+  section-body">`. This is additive CSS (new class + 4 scoped overrides) -
+  no other page uses `.chh-section-body`, so nothing else is affected.
+- **Card-hierarchy reduction**: added `conditionToPrevalence()` (reshapes a
+  full `ConditionIndicator` down to the `{count,total,percent}` shape the
+  existing `PrevalenceList` component already renders) so several raw
+  Yes/No/Don't-know items can be folded into **one compact grouped list**
+  instead of one `KpiCard` each - exact Yes/No/Don't-know/Valid N/Asked N
+  detail is never dropped, just moved one click away via the existing
+  `DetailDisclosure`+`DetailTable` pattern already used at the top of the
+  page (reused as-is, not reinvented). Applied to the three sections that
+  had 4+ same-shaped raw indicators each with its own card:
+  - **Neurological History** (Section D): seizure/fainting/CNS-infection/
+    head-injury collapsed from 4 KPI cards into 1 grouped list (+ exact-
+    values disclosure); `any_neurological_history` (composite) and
+    `treated_head_injury` (conditional prevalence) kept as the 2 genuinely
+    distinct headline KPI cards. 6 cards -> 2 cards + 1 list panel.
+  - **Vision and Hearing** (Section E): vision/glasses/hearing/ear-
+    infection collapsed the same way; `any_sensory_concern`/`any_vision
+    _indicator` composites kept as 2 KPI cards. 6 cards -> 2 cards + 1 list
+    panel (this section previously had no chart/list content at all,
+    only 6 flush KPI cards).
+  - **Hospitalisation, Treatment and Allergy** (Section G):
+    ever_hospitalised/surgery/medication/known_allergy collapsed the same
+    way, with `recurrent_hospitalisation` (a `ChhPrevalenceItem`, different
+    conditional denominator) appended as a 5th list row; `major_treatment
+    _history` composite and the hospitalisation-count numeric summary kept
+    as 2 KPI cards. 7 cards -> 2 cards + 1 list panel (Allergy Type
+    prevalence chart-card unchanged).
+  Sections A, B, C, F, H, I, and Data Quality were **not** restructured -
+  their existing 2-3 KPI cards each represent genuinely distinct dashboard
+  variables the spec itself lists as separate "KPI"-recommended rows (e.g.
+  Section A's `curr_ill`/`any_current_symptom`/`ill_affect_7d`), not a
+  repeated group of same-shaped raw items, so collapsing them would have
+  hidden real information for no hierarchy benefit - only their spacing
+  (the `.chh-section-body` wrap) changed.
+No REDCap mapping, calculation, denominator, Don't-know/Not-applicable/
+missing handling, Q27 finalization, or backend file changed - this was a
+frontend-only structural/presentation pass on `HealthScreening.tsx` (and
+the new shared `.chh-section-body` CSS). Files changed:
+`frontend/src/routes/HealthScreening.tsx`,
+`frontend/src/styles/app.css`. Backend: 158/158 tests pass (unaffected, no
+backend file touched). Frontend `tsc --noEmit` and `npm run build` both
+succeed. Live-verified via the same cached local Playwright install:
+re-screenshotted Neurological History, Vision and Hearing, Hospitalisation/
+Treatment/Allergy, and Assessment Readiness at 1400px (all sections
+consistently spaced, zero overlap, grouped lists render correctly with
+real live counts/percentages) and at 600px (Neurological History and
+Hospitalisation sections both reflow cleanly to single-column, no
+overlap); also verified a `DetailDisclosure` expanding in place pushes
+following content down naturally with no clipping/overlap.
+
+**Repetitive x/47 KPI cards replaced with compact grouped-indicator panels
+(2026-09-15, same day - supersedes the "collapsed into `PrevalenceList`
+chart-card" treatment for Sections D/E/G above; matches a user-supplied
+screenshot reference exactly):** a further pass replaced every remaining
+row of several small, same-denominator-style `x/47` KPI cards with one
+compact rounded panel per subsection - short label + `n/N · pct%` per
+indicator, inline, wrapping naturally across one or more rows (flex-wrap,
+not CSS grid, so there are never empty trailing slots - same precedent as
+`.instrument-grid`). New reusable local component,
+`IndicatorGroup({ title, items: ChhPrevalenceItem[] })`, plus new CSS
+(`.indicator-group`/`-title`/`-grid`/`-item`/`-item-label`/`-item-value`/
+`-empty` in `app.css`, reusing the existing `.chart-card` background/
+border/radius/shadow language and the `.section-header h2` uppercase-
+caption typography - no new color tokens). Purely a display regrouping -
+every count/total/percent rendered is exactly what the existing
+`ConditionIndicator`/`ChhPrevalenceItem` fields already carry (via the
+existing `conditionToPrevalence()` helper for `ConditionIndicator`
+sources); no calculation, denominator, Don't-know/Not-applicable/missing
+handling, or REDCap mapping changed.
+- **Current Health Status** (Section A): the 3-card `IndicatorKpi` row
+  (`currently_ill`/`any_current_symptom`/`activity_or_school_affected`)
+  replaced with one `IndicatorGroup` - matches the user's own worked
+  example exactly (verified live: "Currently ill 0/47 · 0%", "Any current
+  symptom 0/47 · 0%", "Activity/school affected (7 days) 3/47 · 6.4%").
+- **Recent History of Illness** (Section B): `consultation_required` +
+  `recurrent_illness` folded into one `IndicatorGroup`;
+  `school_days_missed_summary` (a mean/median/range numeric summary, not a
+  simple n/N%) kept as its own `NumericSummaryCard` in a single-card
+  `kpi-row` below the group, per the instruction to keep numeric summaries
+  separate.
+- **Neurological History** (Section D) / **Vision and Hearing** (Section
+  E) / **Hospitalisation, Treatment and Allergy** (Section G): the
+  `ChartCard`-wrapped `PrevalenceList` used for the 4 (D/E) or 5 (G)
+  same-shaped raw indicators is now an `IndicatorGroup` instead - visually
+  more compact (inline rows vs. one progress-bar row each) while keeping
+  the exact same items; the paired `DetailDisclosure`+`DetailTable` (exact
+  Yes/No/Don't-know/Valid N/Asked N values) is unchanged, just no longer
+  nested inside a `ChartCard` wrapper. The genuinely distinct composite/
+  conditional-denominator KPI cards above each group
+  (`any_neurological_history`, `treated_head_injury`,
+  `any_sensory_concern`, `any_vision_indicator`, `major_treatment_history`,
+  `hospitalisation_count_summary`) are unchanged. G's separate "Allergy
+  Type" prevalence chart-card (a variable-length category distribution, not
+  a small fixed set of Yes/No indicators) is unchanged.
+- **Functional Health Status** (Section H): the 3-card row
+  (`any_functional_limitation`/`suboptimal_health`/`poor_health`) folded
+  into one `IndicatorGroup`; the `chart-grid two-col` (Overall Perceived
+  Health distribution + Function-Specific Limitation prevalence list) is
+  unchanged - both are genuinely multi-item distributions, not a handful of
+  flat indicators.
+- **Assessment Readiness** (Section I): the 2-card row
+  (`condition_affecting_performance` + the manually-built "Any
+  Assessment-Day Concern" count/total/percent) folded into one
+  `IndicatorGroup`; the `chart-grid two-col` (Well Enough for Assessment
+  three-way breakdown + Assessment Decision distribution) and the
+  Performance-Affecting Conditions prevalence chart-card are unchanged.
+- **Not touched**: Major or Chronic Illness (Section C), Developmental and
+  Learning History (Section F), and Data Quality - their existing KPI
+  cards are either composites/numeric-summaries (kept separate per
+  instruction) or already a proper distribution/chart, not a repeated group
+  of same-shaped flat indicators.
+Files changed: `frontend/src/routes/HealthScreening.tsx` (new
+`IndicatorGroup` component + the 7 section edits above),
+`frontend/src/styles/app.css` (new `.indicator-group*` rules). No backend
+file touched. Frontend `tsc --noEmit` and `npm run build` both succeed.
+Live-verified via the same cached local Playwright install at 1400px
+(Current Health Status, Neurological History, Assessment Readiness - all
+render as compact bordered panels with correctly wrapped inline rows,
+composite KPI cards and charts unaffected, zero overlap) and at 400px
+(Hospitalisation/Treatment/Allergy and Current Health Status both reflow
+each indicator to its own full-width row, no clipping/overlap). Backend
+untouched (158/158 tests unaffected, not re-run since no backend file
+changed).
+
+**Page-wide visual-hierarchy consistency pass (2026-09-15, same day -
+supersedes the section-by-section `IndicatorGroup` additions above; every
+one of the 9 CHH sections now follows one identical template instead of
+each having its own ad hoc mix of KPI rows):** the prior pass had only
+added a compact grouped panel *alongside* each section's existing KPI
+cards, so several sections (most visibly Hospitalisation, Treatment and
+Allergy - the example called out) still opened with 1-2 large `x/47` KPI
+cards above the new compact panel, and Major or Chronic Illness displayed
+one number twice (`unknown_chronic_history_count` as its own standalone
+KPI card, when it is defined as - and was already visible via -
+`any_listed_condition`'s own composite sublabel). Root cause: there was
+no single shared template governing section layout - each section's JSX
+independently decided its own card mix, so "compact panel" and "large KPI
+card" ended up applied inconsistently section to section.
+
+Fixed by giving every one of the 9 sections the same three-part body,
+built from the same two reusable pieces:
+1. **`IndicatorGroup`** (the compact panel from the prior pass) always
+   comes first and now holds *every* flat or conditionally-denominated
+   indicator in the section - including ones that were previously left in
+   a separate KPI card because they have their own smaller denominator
+   (e.g. Neurological History's `treated_head_injury`, "among those with a
+   head injury"; Developmental History's `concern_without_diagnosis`) -
+   `IndicatorGroup`'s row format already carries each item's own N, so a
+   differing denominator was never a reason to keep it as a separate card.
+2. **`.chh-highlight-row`** (new CSS, `app.css`) - a compact, sharper-
+   corner/tighter-padding scoped override on `.kpi-card` (same established
+   pattern as `.ses-metric-row .kpi-card`/`.coding-score-row .kpi-card`/
+   `.physical-activity-page .kpi-card`), applied to a `kpi-row` that now
+   holds *only* composite indicators (`CompositeKpi`, which need their own
+   "unknown/missing" sublabel) or true numeric summaries (mean/median/
+   range) - and only when that metric is genuinely non-duplicative of the
+   group above it. This row is visually smaller than the page's ordinary
+   `.kpi-row`, so it never again reads as "large cards" beside the compact
+   panel.
+3. Charts/distributions and the exact-value `DetailDisclosure` come after,
+   unchanged in content.
+- **Hospitalisation, Treatment and Allergy** (the flagged example): now
+  opens with one `IndicatorGroup` (ever hospitalised, surgery, medication,
+  known allergy, recurrent hospitalisation - 5 items, unchanged data) and
+  ONE compact `.chh-highlight-row` below it (major treatment history
+  composite + hospitalisation count numeric summary - both non-duplicative
+  of the 5 flat items above), then the exact-values disclosure and the
+  Allergy Type chart - no card appears above the group, no metric repeats.
+- **Major or Chronic Illness**: `diagnosed_condition` moved into a
+  (single-item) `IndicatorGroup`; the standalone "Unknown Chronic History"
+  KPI card was **removed outright** - its number was always identical to
+  `any_listed_condition`'s own `unknown_or_missing_count`, already shown in
+  that composite card's sublabel, so keeping both was showing one number
+  twice. Only `any_listed_condition` remains as a `.chh-highlight-row`
+  composite card.
+- **Neurological History**: `treated_head_injury` moved from its own KPI
+  card into the `IndicatorGroup` (now 5 items); `any_neurological_history`
+  is the sole remaining `.chh-highlight-row` composite card.
+- **Vision and Hearing**: unchanged item set, just reordered so the
+  `IndicatorGroup` (4 items) comes before the `any_sensory_concern`/
+  `any_vision_indicator` `.chh-highlight-row` pair instead of after.
+- **Developmental and Learning History**: `any_developmental_concern`,
+  `diagnosed_condition`, and `concern_without_diagnosis` (previously 2 flat
+  KPI cards + 1 differently-denominated KPI card) all moved into one
+  `IndicatorGroup` - this section now has no separate composite/highlight
+  row at all, since none of its remaining metrics need one.
+- **Recent History of Illness**: unchanged item set; `school_days_missed_
+  summary` (mean/median/range, non-duplicative) moved into a
+  `.chh-highlight-row` instead of the page's ordinary `.kpi-row`.
+- **Current Health Status / Functional Health Status / Assessment
+  Readiness**: already matched the template from the prior pass (a single
+  `IndicatorGroup`, no separate KPI row) - unchanged.
+`IndicatorKpi`/`PrevalenceKpi` (the two prior per-item KPI-card components)
+are now fully unused and were deleted, not left as dead code - every caller
+that used them now reads from `IndicatorGroup` instead.
+Files changed: `frontend/src/routes/HealthScreening.tsx` (reordered/
+consolidated all 9 sections onto the shared template, deleted the two dead
+components), `frontend/src/styles/app.css` (new `.chh-highlight-row`
+rule). No REDCap mapping, calculation, denominator, Don't-know/Not-
+applicable/missing handling, or backend file changed - confirmed by
+re-checking `git status` before considering this done. Frontend
+`tsc --noEmit` and `npm run build` both succeed. Live-verified via the same
+cached local Playwright install at 1400px (all 9 sections screenshotted -
+every section now opens with exactly one compact `IndicatorGroup`, at most
+one small `.chh-highlight-row` beneath it, no card appears above the group,
+no metric duplicated between the group and a highlight card, zero
+overlap) and at 390px (Hospitalisation, Treatment and Allergy - the
+flagged example - reflows cleanly to one column with no clipping or
+overlap). Backend untouched (158/158 tests unaffected, no backend file
+changed).
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)

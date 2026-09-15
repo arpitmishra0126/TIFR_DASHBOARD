@@ -599,6 +599,36 @@ a, button {
   color: var(--text-secondary);
 }
 
+/* --- Child Health History section body wrapper (2026-09-15) - the
+   structural fix for cards/charts reading as "colliding": every section's
+   content (KPI row, chart-grid, chart-card, table-card) is wrapped in one
+   flex column with an explicit `gap`, so vertical separation is guaranteed
+   by the layout itself rather than depending on each child component's own
+   margin (which is 0 on .kpi-row, so two block children placed directly
+   next to each other with no gap-based container would render flush
+   against one another). `.chart-card`/`.table-card` each already carry
+   their own `margin-bottom` for their normal (non-CHH) callers elsewhere in
+   the app - the two override rules below zero that out ONLY when they are
+   a direct child of this wrapper, so the wrapper's `gap` is the single
+   source of spacing here (no doubled margin+gap, no negative margins).
+   Rows/charts size purely from their own content - no fixed heights. */
+.chh-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chh-section-body > .chart-card,
+.chh-section-body > .table-card,
+.chh-section-body > .chh-alert-strip {
+  margin-bottom: 0;
+}
+
+.chh-section-body > .detail-disclosure {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 /* --- Child Health History "Overview" alert strip (2026-09-14) - one row
    of 4 compact stat cells matching the spec's green/amber/red/grey
    assessment-day alert categories. Page-scoped (Child Health History
@@ -706,6 +736,21 @@ a, button {
    Per-Capita Income / Mean Household Size) only, same sharper-corner
    treatment as the other pages' Key Scores rows above. */
 .ses-metric-row .kpi-card {
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Child Health History - composite/analytical "highlight" cards only
+   (2026-09-15 page-wide consistency pass). Every CHH section now follows
+   one template: an IndicatorGroup compact panel for the section's flat/
+   conditional indicators first, then - only where a genuinely
+   non-duplicative composite or numeric-summary metric exists (e.g. "any
+   neurological history", "hospitalisation count") - a small `.kpi-row
+   .chh-highlight-row` beneath it. Same sharper-corner/tighter-padding
+   treatment as the other pages' scoped Key-Scores rows above, so a
+   highlight card never reads as a bulkier "large card" next to the compact
+   panel it sits beside. */
+.chh-highlight-row .kpi-card {
   border-radius: var(--radius-control);
   padding: var(--space-3) var(--space-4);
 }
@@ -2176,6 +2221,71 @@ table.data-table tbody tr:hover {
 .response-item-sublabel {
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* --- Compact grouped-indicator panel (2026-09-15) - replaces a row of
+   individual x/N KPI cards for several small, closely-related indicators
+   with one rounded panel of inline "label   n/N · pct%" rows. Same card
+   language as .chart-card (background/border/radius/shadow) so it sits
+   consistently among the other panels on a section. Flex-wrap (not CSS
+   grid) so rows wrap naturally at any width with no empty trailing grid
+   slots - same precedent as .instrument-grid. */
+.indicator-group {
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4) var(--space-5);
+}
+
+.indicator-group-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.indicator-group-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.indicator-group-grid {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-6);
+  row-gap: var(--space-3);
+}
+
+.indicator-group-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.indicator-group-item-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.indicator-group-item-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .indicator-group-item {
+    flex: 1 1 100%;
+  }
 }
 
 .pagination-controls {

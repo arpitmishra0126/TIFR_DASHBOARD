@@ -95,6 +95,9 @@ export default function CategoryBarChart({ data, mode, height, xTickMaxChars, sh
         />
         <Tooltip
           cursor={{ fill: "var(--surface-2)" }}
+          allowEscapeViewBox={{ x: true, y: true }}
+          wrapperStyle={{ zIndex: 20 }}
+          position={{ y: -16 }}
           content={(props) => {
             const point = props.payload?.[0]?.payload as CategoryBarDatum | undefined;
             if (!point) return null;

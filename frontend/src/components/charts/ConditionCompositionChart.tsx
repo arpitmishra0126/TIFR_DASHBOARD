@@ -62,6 +62,8 @@ export default function ConditionCompositionChart({ items, height }: ConditionCo
         />
         <Tooltip
           cursor={{ fill: "var(--surface-2)" }}
+          allowEscapeViewBox={{ x: true, y: true }}
+          wrapperStyle={{ zIndex: 20 }}
           content={(props) => {
             const point = props.payload?.[0]?.payload as Row | undefined;
             if (!point) return null;
