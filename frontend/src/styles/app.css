@@ -740,21 +740,6 @@ a, button {
   padding: var(--space-3) var(--space-4);
 }
 
-/* Child Health History - composite/analytical "highlight" cards only
-   (2026-09-15 page-wide consistency pass). Every CHH section now follows
-   one template: an IndicatorGroup compact panel for the section's flat/
-   conditional indicators first, then - only where a genuinely
-   non-duplicative composite or numeric-summary metric exists (e.g. "any
-   neurological history", "hospitalisation count") - a small `.kpi-row
-   .chh-highlight-row` beneath it. Same sharper-corner/tighter-padding
-   treatment as the other pages' scoped Key-Scores rows above, so a
-   highlight card never reads as a bulkier "large card" next to the compact
-   panel it sits beside. */
-.chh-highlight-row .kpi-card {
-  border-radius: var(--radius-control);
-  padding: var(--space-3) var(--space-4);
-}
-
 /* Demographics & SES Profile (2026-09-11, visual-only) - every chart/KPI
    panel on this page gets an even sharper, almost-square corner
    (--radius-sharp, 3px) than the --radius-control (8px) used elsewhere -
@@ -960,6 +945,127 @@ a, button {
 :root[data-theme="dark"] .snapshot-tone-aqua { --tone-accent-soft: rgba(25, 158, 112, 0.28); }
 :root[data-theme="dark"] .snapshot-tone-amber { --tone-accent-soft: rgba(201, 133, 0, 0.32); }
 :root[data-theme="dark"] .snapshot-tone-violet { --tone-accent-soft: rgba(144, 133, 233, 0.3); }
+
+/* --- Overview: "Current Active Cases" info banner (2026-09-17, glow made
+   "breathing" same day; Light Mode contrast strengthened same day;
+   Dark Mode brought to equal prominence same day) - a small, non-card
+   informational strip directly below Study Snapshot, restating the live
+   current/active count (reads `overview.total_registered`, the same live
+   value every other figure on this page uses - never a second number).
+   Visually distinguished from surrounding content with a soft, diffused
+   glow using the dashboard's existing blue accent (`--series-1`, the same
+   color used by the live badge, links, and section-header dots) - not a
+   new color, not a status/alert tone (`--status-warning`/`--status-
+   critical`), so it never reads as a warning. rgba literals (not
+   var()-based alpha) match the existing precedent set by `.kpi-tone-*`/
+   `.registry-result-context`, which do the same for the same reason (CSS
+   custom properties can't carry an alpha channel on their own without
+   color-mix()).
+
+   Both themes are tuned to the SAME visual weight (Light Mode is the
+   reference), each via its own `--series-1` hex so the accent color still
+   matches each theme's own palette:
+     - Light Mode: background 0.12, border 0.55, resting glow 0.12/0.22,
+       breathing peak 0.22/0.32 - against the page's white canvas.
+     - Dark Mode: background 0.18, border 0.55, resting glow 0.18/0.3,
+       breathing peak 0.28/0.42 - deliberately a *higher* background/glow
+       alpha than Light Mode (not a reused/copied value), since the same
+       alpha over Dark Mode's near-black page (`--surface-0` #0c1220)
+       reads far more subdued than over white - this is what makes the
+       banner "a noticeably darker blue-tinted surface" that still clearly
+       separates from the surrounding dark background, not the page's
+       normal `--surface-1`/`--surface-2` card tone.
+   `.active-cases-banner-text` is `--text-primary` (near-black) in Light
+   Mode and explicitly overridden to `--text-secondary` (light slate) in
+   Dark Mode - each theme's own high-contrast-but-secondary text token,
+   never one color reused unreadably in the other theme.
+
+   The base `box-shadow` below is the resting/fallback glow - always
+   present. A separate `animation` (declared further down, inside its own
+   `prefers-reduced-motion: no-preference` block) slowly grows and shrinks
+   ONLY that box-shadow's blur/spread/opacity between two keyframes (one
+   per theme); it never touches `transform`, `border`, `padding`,
+   `margin`, or any layout property, so the banner itself - its position,
+   size, border, and text - stays completely stationary in both themes. A
+   reduced-motion preference simply leaves the static resting glow in
+   place (no animation applied at all, not a frozen mid-animation
+   frame). */
+.active-cases-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: var(--space-4) 0 var(--space-6);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-control);
+  background: rgba(42, 120, 214, 0.12);
+  border: 1px solid rgba(42, 120, 214, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(42, 120, 214, 0.12),
+    0 0 22px 2px rgba(42, 120, 214, 0.22);
+}
+
+.active-cases-banner-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--series-1);
+}
+
+.active-cases-banner-text {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+:root[data-theme="dark"] .active-cases-banner {
+  background: rgba(57, 135, 229, 0.18);
+  border-color: rgba(57, 135, 229, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(57, 135, 229, 0.18),
+    0 0 26px 3px rgba(57, 135, 229, 0.3);
+}
+
+:root[data-theme="dark"] .active-cases-banner-text {
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .active-cases-banner {
+    animation: active-cases-banner-glow 3.6s ease-in-out infinite;
+  }
+
+  :root[data-theme="dark"] .active-cases-banner {
+    animation-name: active-cases-banner-glow-dark;
+  }
+}
+
+@keyframes active-cases-banner-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(42, 120, 214, 0.12),
+      0 0 22px 2px rgba(42, 120, 214, 0.22);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(42, 120, 214, 0.22),
+      0 0 36px 7px rgba(42, 120, 214, 0.32);
+  }
+}
+
+@keyframes active-cases-banner-glow-dark {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(57, 135, 229, 0.18),
+      0 0 26px 3px rgba(57, 135, 229, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(57, 135, 229, 0.28),
+      0 0 40px 8px rgba(57, 135, 229, 0.42);
+  }
+}
 
 /* --- Overview: Assessment Tool Status card (2026-09-11) - one overall
    figure on top, four equal, clearly separate test columns below, in a
@@ -2223,19 +2329,129 @@ table.data-table tbody tr:hover {
   color: var(--text-muted);
 }
 
-/* --- Compact grouped-indicator panel (2026-09-15) - replaces a row of
-   individual x/N KPI cards for several small, closely-related indicators
-   with one rounded panel of inline "label   n/N · pct%" rows. Same card
-   language as .chart-card (background/border/radius/shadow) so it sits
-   consistently among the other panels on a section. Flex-wrap (not CSS
-   grid) so rows wrap naturally at any width with no empty trailing grid
-   slots - same precedent as .instrument-grid. */
-.indicator-group {
+/* --- Child Health History section panel (2026-09-15, visual-hierarchy
+   pass) - every CHH section's body (`.chh-section-body`, which still
+   supplies the flex/gap spacing mechanics from the earlier layout fix) is
+   additionally wrapped in `.chh-section-panel` so the whole section reads
+   as ONE cohesive bordered block instead of a stack of individually-boxed
+   cards. Data Quality intentionally does NOT get this class - unchanged
+   per instruction. This establishes a deliberate three-tier hierarchy
+   inside that one frame, so the page no longer reads as one repeated card
+   shape end to end:
+     1. `.indicator-group` / `.chh-summary-panel` - flat, tinted, list-style
+        panels for quick facts (no shadow - intentionally the *quietest*
+        tier).
+     2. `.kpi-card` (untouched, still shadowed + tone accent bar) - the
+        only tier that should look "prominent," reserved for composite/
+        numeric highlights.
+     3. `.chart-card` - flattened to plain content within the frame,
+        separated from a neighboring chart by a hairline divider instead
+        of its own card chrome.
+   Every rule below is scoped under `.chh-section-panel`, so `.chart-card`/
+   `.kpi-card`/`.table-card`'s own default styling - used by every other
+   page - is completely unchanged. */
+.chh-section-panel {
   background: var(--surface-1);
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-card-lg);
+  padding: var(--space-5);
+}
+
+.chh-section-panel > .chart-card,
+.chh-section-panel .chart-grid > .chart-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+/* `.chart-grid`'s shared CSS (used dashboard-wide) relies on CSS Grid's
+   default `align-items: stretch` - harmless on every other page, where
+   each `.chart-card` still has its own visible border/shadow, so a taller
+   sibling just means a taller white box. Once `.chart-card` is flattened
+   above (no border/background of its own), that same stretch instead
+   shows as bare empty space below a short chart (e.g. "Developmental
+   Domains Affected" stretched to match the much taller "Domain
+   Prevalence" list beside it) and the two-col divider rules below extend
+   past the chart's own content into that empty space. Fixed by sizing
+   each grid item to its own content instead of the row's tallest
+   sibling - rows now expand naturally per content, consistent with the
+   rest of this page's no-fixed-heights rule. Scoped to `.chh-section-
+   panel` only; `.chart-grid` on every other page is unaffected. */
+.chh-section-panel .chart-grid {
+  align-items: start;
+}
+
+.chh-section-panel > .chart-card + .chart-card {
+  border-top: 1px solid var(--gridline);
+  padding-top: var(--space-4);
+  margin-top: 0;
+}
+
+@media (min-width: 761px) {
+  .chh-section-panel .chart-grid.two-col > .chart-card:nth-child(2) {
+    border-left: 1px solid var(--gridline);
+    padding-left: var(--space-5);
+  }
+}
+
+@media (max-width: 760px) {
+  .chh-section-panel .chart-grid.two-col > .chart-card + .chart-card {
+    border-top: 1px solid var(--gridline);
+    padding-top: var(--space-4);
+    margin-top: 0;
+  }
+}
+
+/* --- Hospitalisation, Treatment and Allergy (Section G) focused cleanup
+   (2026-09-15) - scoped to this one section only, not the shared
+   `.chh-section-panel` rule every other section also uses:
+   1. The panel no longer repeats "Hospitalisation, Treatment and Allergy"
+      as its own internal `.indicator-group` heading (removed at the JSX
+      call site, via `IndicatorGroup`'s now-optional `title`) - the
+      `SectionHeader` immediately above the panel is the only heading. With
+      that internal title/divider gone, less top padding is needed before
+      the first indicator row, so this section's own top padding is
+      tightened from the shared `--space-5` (24px) to `--space-4` (16px);
+      side/bottom padding are unchanged, and no other section's panel
+      padding is affected.
+   2. `Major treatment history`/`Hospitalisation Count` (the 2-card
+      `.kpi-row` right below the indicator panel) get the same
+      sharper-corner/tighter-padding treatment already established
+      elsewhere on this page (`.ses-metric-row .kpi-card`, `.coding-score-
+      row .kpi-card`) - `--space-3`/`--space-4` instead of the default
+      `--space-4` all around - so each card's height matches its own
+      3-line content (label/value/sublabel) instead of carrying extra
+      padding on every edge. `.kpi-row`'s own grid (equal-width columns,
+      stretched to equal height, collapsing to one column on narrow
+      screens) is untouched, so the two cards remain aligned at equal
+      height on desktop and stack cleanly on mobile exactly as before. */
+.chh-hospitalisation-panel {
+  padding-top: var(--space-4);
+}
+
+.chh-hospitalisation-panel .kpi-row .kpi-card {
+  padding: var(--space-3) var(--space-4);
+}
+
+/* --- Compact grouped-indicator panel (2026-09-15, restyled same day from
+   a mini-card-grid look to a flat, tinted, list-style panel - the earlier
+   version shared .chart-card's background/border/radius/shadow almost
+   exactly, which is why consolidating cards into it didn't visibly change
+   the page's card-heavy rhythm). Deliberately the quietest visual tier on
+   the page: a light `--surface-2` tint, no shadow, a sharper radius than
+   `.chart-card`, and each indicator rendered as a label/value row
+   separated by a hairline `border-bottom` (a compact list, not a grid of
+   mini-cards) - "separators, small labels, aligned values" instead of
+   free-floating chips. CSS grid (not flex-wrap) so rows align into neat
+   columns and collapse to one column automatically below ~230px, with no
+   media query needed. */
+.indicator-group {
+  background: var(--surface-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
 }
 
 .indicator-group-title {
@@ -2244,7 +2460,9 @@ table.data-table tbody tr:hover {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .indicator-group-empty {
@@ -2253,25 +2471,24 @@ table.data-table tbody tr:hover {
 }
 
 .indicator-group-grid {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: var(--space-6);
-  row-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  column-gap: var(--space-5);
 }
 
 .indicator-group-item {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
-  flex: 1 1 220px;
-  min-width: 200px;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--gridline);
 }
 
 .indicator-group-item-label {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-secondary);
-  white-space: nowrap;
 }
 
 .indicator-group-item-value {
@@ -2282,10 +2499,93 @@ table.data-table tbody tr:hover {
   white-space: nowrap;
 }
 
-@media (max-width: 480px) {
-  .indicator-group-item {
-    flex: 1 1 100%;
-  }
+/* --- Combined summary panel for the "weak" sections (Major/Chronic
+   Illness, Developmental and Learning History, Functional Health Status)
+   (2026-09-15) - merges a near-empty compact panel and a separately
+   elevated highlight card (which together still looked like two
+   disconnected boxes) into ONE bordered, tone-accented panel: the
+   section's one important composite/derived metric as a header line,
+   its remaining flat indicators as compact rows below a divider. Reuses
+   the `kpi-tone-*` custom properties (--tone-accent/--tone-accent-soft)
+   every KpiCard already defines, so the accent-color language matches the
+   highlight-card tier exactly - a soft tone-tinted fill plus a solid
+   left accent bar (rather than `.kpi-card`'s top bar), keeping it
+   visually distinct from an actual `.kpi-card` while still reading as
+   "important." */
+.chh-summary-panel {
+  background: var(--tone-accent-soft, var(--surface-2));
+  border: 1px solid var(--border-hairline);
+  border-left: 3px solid var(--tone-accent, var(--series-1));
+  border-radius: var(--radius-control);
+  padding: var(--space-4);
+}
+
+.chh-summary-panel-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.chh-summary-panel-highlight {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.chh-summary-panel-highlight-label {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1 1 auto;
+}
+
+.chh-summary-panel-highlight-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--tone-accent, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+}
+
+.chh-summary-panel-highlight-sublabel {
+  flex-basis: 100%;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.chh-summary-panel-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  column-gap: var(--space-5);
+}
+
+.chh-summary-panel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--gridline);
+  font-size: 0.82rem;
+}
+
+.chh-summary-panel-row span:first-child {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.chh-summary-panel-row span:last-child {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .pagination-controls {

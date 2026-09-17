@@ -104,15 +104,20 @@ function conditionToPrevalence(indicator: ConditionIndicator): ChhPrevalenceItem
  * regrouping - every count/total/percent shown is exactly what the
  * underlying ConditionIndicator/ChhPrevalenceItem field already computes,
  * nothing recalculated. Composite indicators (which need their own
- * "unknown/missing" sublabel) and true numeric summaries (mean/median/
- * range) are deliberately never folded in here - callers keep those as a
- * separate, compact `.chh-highlight-row` of KpiCards, only where that
- * metric is genuinely non-duplicative of the group above it. */
-function IndicatorGroup({ title, items }: { title: string; items: ChhPrevalenceItem[] }) {
+ * "unknown/missing" sublabel), true numeric summaries (mean/median/
+ * range), and the handful of individual indicators important enough to
+ * be called out on their own (e.g. "Any Developmental Concern") are
+ * deliberately never folded in here - callers keep those as a separate
+ * `.kpi-row` of standard-size highlight KpiCards, only where that metric
+ * is genuinely non-duplicative of the group above it. `title` is optional
+ * - omit it when the section's own SectionHeader immediately above already
+ * states the same name, so it isn't repeated a second time inside the
+ * panel. */
+function IndicatorGroup({ title, items }: { title?: string; items: ChhPrevalenceItem[] }) {
   const hasData = items.length > 0 && items.some((i) => i.total > 0);
   return (
     <div className="indicator-group">
-      <div className="indicator-group-title">{title}</div>
+      {title && <div className="indicator-group-title">{title}</div>}
       {hasData ? (
         <div className="indicator-group-grid">
           {items.map((item) => (
@@ -131,17 +136,88 @@ function IndicatorGroup({ title, items }: { title: string; items: ChhPrevalenceI
   );
 }
 
+/** Shared value/sublabel formatters for the three highlight-indicator
+ * shapes - used both by the standalone highlight KpiCards below AND by
+ * SectionSummaryPanel (so the "combined" weak-section layout never
+ * recomputes a number differently than the standalone card would). */
+function compositeValue(indicator: ChhCompositeIndicator): string {
+  return indicator.valid_n > 0 ? `${indicator.yes_count}/${indicator.valid_n}` : "No data";
+}
+function compositeSublabel(indicator: ChhCompositeIndicator): string {
+  return indicator.valid_n > 0
+    ? `${indicator.percent_yes}% of ${indicator.valid_n} classifiable · ${indicator.unknown_or_missing_count} unknown/missing`
+    : `${indicator.unknown_or_missing_count} unknown/missing of ${indicator.total} registered`;
+}
+function indicatorValue(indicator: ConditionIndicator): string {
+  return indicator.valid_n > 0 ? `${indicator.yes_count}/${indicator.valid_n}` : "No data";
+}
+function indicatorSublabel(indicator: ConditionIndicator): string {
+  return indicator.valid_n > 0
+    ? `${indicator.percent_yes}% · asked ${indicator.asked_n}${indicator.dont_know_count > 0 ? ` · ${indicator.dont_know_count} don't know` : ""}`
+    : `0/${indicator.asked_n} completed the instrument`;
+}
+function prevalenceValue(item: ChhPrevalenceItem): string {
+  return item.total > 0 ? `${item.count}/${item.total}` : "No data";
+}
+function prevalenceSublabel(item: ChhPrevalenceItem): string {
+  return item.total > 0 ? `${item.percent}%` : "No respondents in this denominator";
+}
+
 /** Composite-variable KPI (spec Section 1) - Yes if any component is Yes,
  * No only if every component is No, otherwise unknown/missing - the
  * "unknown or missing" count is always shown, never silently folded into
  * No. */
 function CompositeKpi({ indicator, tone = "neutral" }: { indicator: ChhCompositeIndicator; tone?: "blue" | "violet" | "aqua" | "amber" | "neutral" }) {
-  const value = indicator.valid_n > 0 ? `${indicator.yes_count}/${indicator.valid_n}` : "No data";
-  const sublabel =
-    indicator.valid_n > 0
-      ? `${indicator.percent_yes}% of ${indicator.valid_n} classifiable · ${indicator.unknown_or_missing_count} unknown/missing`
-      : `${indicator.unknown_or_missing_count} unknown/missing of ${indicator.total} registered`;
-  return <KpiCard label={indicator.label} value={value} sublabel={sublabel} tone={tone} />;
+  return <KpiCard label={indicator.label} value={compositeValue(indicator)} sublabel={compositeSublabel(indicator)} tone={tone} />;
+}
+
+/** Combined summary panel for the "weak" sections (C, F, H) whose compact
+ * IndicatorGroup only ever holds 1-2 items - rather than stacking a
+ * near-empty flat panel above a separate elevated highlight card (which
+ * still read as two disconnected boxes), this merges the section's one
+ * important composite/derived metric and its remaining flat indicators
+ * into ONE bordered, tone-accented panel: the highlight reads as the
+ * panel's header line, the flat indicators as compact rows below a
+ * divider. Reuses the same `kpi-tone-*` CSS custom properties (--tone-
+ * accent/--tone-accent-soft) every KpiCard already defines, so the accent
+ * color language is identical, not a new palette. No calculation happens
+ * here - every value/sublabel string is built by the same formatters the
+ * standalone highlight KpiCards use. */
+function SectionSummaryPanel({
+  title,
+  highlightLabel,
+  highlightValue,
+  highlightSublabel,
+  tone = "neutral",
+  items,
+}: {
+  title: string;
+  highlightLabel: string;
+  highlightValue: string;
+  highlightSublabel: string;
+  tone?: "blue" | "violet" | "aqua" | "amber" | "neutral";
+  items: ChhPrevalenceItem[];
+}) {
+  return (
+    <div className={`chh-summary-panel kpi-tone-${tone}`}>
+      <div className="chh-summary-panel-title">{title}</div>
+      <div className="chh-summary-panel-highlight">
+        <span className="chh-summary-panel-highlight-label">{highlightLabel}</span>
+        <span className="chh-summary-panel-highlight-value">{highlightValue}</span>
+        <span className="chh-summary-panel-highlight-sublabel">{highlightSublabel}</span>
+      </div>
+      {items.length > 0 && (
+        <div className="chh-summary-panel-rows">
+          {items.map((item) => (
+            <div className="chh-summary-panel-row" key={item.label}>
+              <span>{item.label}</span>
+              <span>{item.total > 0 ? `${item.count}/${item.total} · ${item.percent}%` : "No data"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** A list of prevalence items each with their own denominator - reused for
@@ -290,7 +366,7 @@ export default function HealthScreening() {
       </div>
 
       <SectionHeader title="Overview" note="Assessment-day alert distribution and instrument data quality, at a glance" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <AlertStrip alerts={chh.alerts} />
         <div className="kpi-row">
           <KpiCard
@@ -311,7 +387,7 @@ export default function HealthScreening() {
         title="Reported Health Conditions, n (%)"
         note="Percentages use each condition's own valid respondents, not the full registered cohort"
       />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <ChartCard title="Reported Health Conditions" subtitle={`Among ${completion.completed} children who completed this instrument`}>
           <CompositionLegend />
           <ConditionCompositionChart items={data.named_conditions} />
@@ -325,7 +401,7 @@ export default function HealthScreening() {
         title="Reported Health and Medical-History Indicators, n (%)"
         note="Percentages use each indicator's own valid respondents, not the full registered cohort"
       />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <ChartCard
           title="Reported Health and Medical-History Indicators"
           subtitle={`Among ${completion.completed} children who completed this instrument`}
@@ -340,7 +416,7 @@ export default function HealthScreening() {
 
       {/* --- Section A: Current Health Status --- */}
       <SectionHeader title="Current Health Status" note="Section A - today's symptoms and activity impact" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <IndicatorGroup
           title="Current Health Status"
           items={[
@@ -363,12 +439,12 @@ export default function HealthScreening() {
 
       {/* --- Section B: Recent History of Illness --- */}
       <SectionHeader title="Recent History of Illness" note="Section B - past 3 months" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <IndicatorGroup
           title="Recent History of Illness"
           items={[conditionToPrevalence(chh.recent_illness.consultation_required), chh.recent_illness.recurrent_illness]}
         />
-        <div className="kpi-row chh-highlight-row">
+        <div className="kpi-row">
           <NumericSummaryCard label="School Days Missed" summary={chh.recent_illness.school_days_missed_summary} unit=" days" />
         </div>
         <div className="chart-grid two-col">
@@ -387,11 +463,15 @@ export default function HealthScreening() {
 
       {/* --- Section C: Major or Chronic Illness --- */}
       <SectionHeader title="Major or Chronic Illness" note="Section C - condition prevalence shown above; composite indicator below" />
-      <div className="chh-section-body">
-        <IndicatorGroup title="Major or Chronic Illness" items={[conditionToPrevalence(chh.chronic_illness.diagnosed_condition)]} />
-        <div className="kpi-row chh-highlight-row">
-          <CompositeKpi indicator={chh.chronic_illness.any_listed_condition} tone="amber" />
-        </div>
+      <div className="chh-section-body chh-section-panel">
+        <SectionSummaryPanel
+          title="Major or Chronic Illness"
+          highlightLabel="Any Listed Chronic Condition"
+          highlightValue={compositeValue(chh.chronic_illness.any_listed_condition)}
+          highlightSublabel={compositeSublabel(chh.chronic_illness.any_listed_condition)}
+          tone="amber"
+          items={[conditionToPrevalence(chh.chronic_illness.diagnosed_condition)]}
+        />
         <ChartCard title="Number of Chronic Conditions" subtitle="Among children who answered at least one condition">
           <CategoryBarChart
             data={chh.chronic_illness.condition_count_distribution.map((c) => ({ label: c.code, count: c.count }))}
@@ -403,7 +483,7 @@ export default function HealthScreening() {
 
       {/* --- Section D: Neurological History --- */}
       <SectionHeader title="Neurological History" note="Section D" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <IndicatorGroup
           title="Neurological History"
           items={[
@@ -415,7 +495,7 @@ export default function HealthScreening() {
             .map(conditionToPrevalence)
             .concat([chh.neurological.treated_head_injury])}
         />
-        <div className="kpi-row chh-highlight-row">
+        <div className="kpi-row">
           <CompositeKpi indicator={chh.neurological.any_neurological_history} tone="amber" />
         </div>
         <DetailDisclosure summary="Show exact values (Yes / No / Don't know / Valid N)">
@@ -439,7 +519,7 @@ export default function HealthScreening() {
 
       {/* --- Section E: Vision and Hearing --- */}
       <SectionHeader title="Vision and Hearing" note="Section E" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <IndicatorGroup
           title="Vision and Hearing"
           items={[
@@ -449,7 +529,7 @@ export default function HealthScreening() {
             chh.sensory.recurrent_ear_infection,
           ].map(conditionToPrevalence)}
         />
-        <div className="kpi-row chh-highlight-row">
+        <div className="kpi-row">
           <CompositeKpi indicator={chh.sensory.any_sensory_concern} tone="amber" />
           <CompositeKpi indicator={chh.sensory.any_vision_indicator} tone="blue" />
         </div>
@@ -467,14 +547,14 @@ export default function HealthScreening() {
 
       {/* --- Section F: Developmental and Learning History --- */}
       <SectionHeader title="Developmental and Learning History" note="Section F" />
-      <div className="chh-section-body">
-        <IndicatorGroup
+      <div className="chh-section-body chh-section-panel">
+        <SectionSummaryPanel
           title="Developmental and Learning History"
-          items={[
-            conditionToPrevalence(chh.developmental.any_developmental_concern),
-            conditionToPrevalence(chh.developmental.diagnosed_condition),
-            chh.developmental.concern_without_diagnosis,
-          ]}
+          highlightLabel="Any Developmental Concern"
+          highlightValue={indicatorValue(chh.developmental.any_developmental_concern)}
+          highlightSublabel={indicatorSublabel(chh.developmental.any_developmental_concern)}
+          tone="amber"
+          items={[conditionToPrevalence(chh.developmental.diagnosed_condition), chh.developmental.concern_without_diagnosis]}
         />
         <div className="chart-grid two-col">
           <ChartCard title="Developmental Domains Affected" subtitle="Number of domains selected, per child">
@@ -492,9 +572,8 @@ export default function HealthScreening() {
 
       {/* --- Section G: Hospitalisation, Treatment and Allergy --- */}
       <SectionHeader title="Hospitalisation, Treatment and Allergy" note="Section G" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel chh-hospitalisation-panel">
         <IndicatorGroup
-          title="Hospitalisation, Treatment and Allergy"
           items={[
             chh.hospitalisation.ever_hospitalised,
             chh.hospitalisation.surgery_or_procedure,
@@ -504,7 +583,7 @@ export default function HealthScreening() {
             .map(conditionToPrevalence)
             .concat([chh.hospitalisation.recurrent_hospitalisation])}
         />
-        <div className="kpi-row chh-highlight-row">
+        <div className="kpi-row">
           <CompositeKpi indicator={chh.hospitalisation.major_treatment_history} tone="amber" />
           <NumericSummaryCard label="Hospitalisation Count" summary={chh.hospitalisation.hospitalisation_count_summary} unit=" times" />
         </div>
@@ -525,14 +604,14 @@ export default function HealthScreening() {
 
       {/* --- Section H: Functional Health Status --- */}
       <SectionHeader title="Functional Health Status" note="Section H" />
-      <div className="chh-section-body">
-        <IndicatorGroup
+      <div className="chh-section-body chh-section-panel">
+        <SectionSummaryPanel
           title="Functional Health Status"
-          items={[
-            conditionToPrevalence(chh.functional_health.any_functional_limitation),
-            chh.functional_health.suboptimal_health,
-            chh.functional_health.poor_health,
-          ]}
+          highlightLabel="Suboptimal Health (Fair/Poor/Very poor)"
+          highlightValue={prevalenceValue(chh.functional_health.suboptimal_health)}
+          highlightSublabel={prevalenceSublabel(chh.functional_health.suboptimal_health)}
+          tone="violet"
+          items={[conditionToPrevalence(chh.functional_health.any_functional_limitation), chh.functional_health.poor_health]}
         />
         <div className="chart-grid two-col">
           <ChartCard title="Overall Perceived Health" subtitle="Compared with other children of the same age">
@@ -550,7 +629,7 @@ export default function HealthScreening() {
 
       {/* --- Section I: Assessment-Day Health Status --- */}
       <SectionHeader title="Assessment Readiness" note="Section I - health status on the day of assessment" />
-      <div className="chh-section-body">
+      <div className="chh-section-body chh-section-panel">
         <IndicatorGroup
           title="Assessment Readiness"
           items={[

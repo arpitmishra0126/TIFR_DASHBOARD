@@ -25,6 +25,25 @@ import { GROUPS } from "./AssessmentsHub";
 // so the two pages can never drift apart on what an instrument is called.
 const OVERVIEW_INSTRUMENTS = GROUPS.flatMap((g) => g.available).filter((i) => i.key !== "registration");
 
+/** Original-cohort enrollment figures (2026-09-17, senior-confirmed) -
+ * deliberately NOT derived from REDCap: a full field/instrument audit
+ * found no REDCap field, form, or record anywhere that encodes the
+ * original 222-child enrollment or a migrated/deceased status (the only
+ * status-like field, `baby_status`, is Live/Dead only and already governs
+ * the separate Excel/CSV export's "Active Case" definition - unrelated to
+ * this headline). Per explicit instruction, this is a documented static
+ * exception to the "never hardcode participant counts" rule - update these
+ * three numbers by hand if the senior-confirmed figures ever change; they
+ * will NOT move on their own the way every other number on this page does.
+ * Used ONLY for the Snapshot strip's "Total Registered" headline card
+ * below - every other count on this page (denominators, percentages, the
+ * Sex/Age charts, SES/SSRS coverage, every other route) still reads
+ * `overview.total_registered`, the live REDCap-computed count (212 at time
+ * of writing), completely unchanged. */
+const STUDY_ORIGINAL_ENROLLMENT = 222;
+const STUDY_MIGRATED_COUNT = 5;
+const STUDY_DECEASED_COUNT = 5;
+
 interface SsrsRow {
   label: string;
   count: number;
@@ -325,12 +344,15 @@ export default function Overview() {
         subtitle="Live snapshot of study registration and assessment progress."
       />
 
-      <SectionHeader title="Study snapshot" note="Headline counts, each independently live-calculated from REDCap" />
+      <SectionHeader
+        title="Study snapshot"
+        note="Headline counts, each independently live-calculated from REDCap (Total Registered's enrollment figure is senior-confirmed, see below)"
+      />
       <div className="snapshot-strip">
         <SnapshotMetricCard
-          label="Registered"
-          value={overview.total_registered.toLocaleString()}
-          support="Total study population"
+          label="Total Registered"
+          value={STUDY_ORIGINAL_ENROLLMENT.toLocaleString()}
+          support={`${overview.total_registered.toLocaleString()} current/active · ${STUDY_MIGRATED_COUNT} migrated · ${STUDY_DECEASED_COUNT} deceased`}
           icon={IconUsers}
           tone="blue"
         />
@@ -352,6 +374,13 @@ export default function Overview() {
             { label: "Teacher", count: overview.ssrs_teacher_count, total: overview.total_registered, percent: overview.ssrs_teacher_percent },
           ]}
         />
+      </div>
+
+      <div className="active-cases-banner">
+        <div className="active-cases-banner-title">Current Active Cases: {overview.total_registered.toLocaleString()}</div>
+        <div className="active-cases-banner-text">
+          Assessment and dashboard analysis currently reflects {overview.total_registered.toLocaleString()} active cases.
+        </div>
       </div>
 
       {assessmentToolStatus && (

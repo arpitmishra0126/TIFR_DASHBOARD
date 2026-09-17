@@ -2907,6 +2907,508 @@ flagged example - reflows cleanly to one column with no clipping or
 overlap). Backend untouched (158/158 tests unaffected, no backend file
 changed).
 
+**Highlight cards restored to standard size + two composites promoted out
+of their compact panel (2026-09-15, same day - refines, not reverts, the
+consistency pass above; the `IndicatorGroup` compact-panel-first structure
+and every calculation/denominator are unchanged):** a senior review asked
+for genuinely important composite indicators to read as prominent
+"highlight cards" again (naming "Any Developmental Concern," "Any
+Neurological History," "Suboptimal Health," "Participants Flagged for
+Review," and "Completed Forms" as examples) - the prior pass's
+`.chh-highlight-row` had shrunk every composite/numeric-summary card to a
+tighter, sharper-corner size specifically to avoid reading as "large
+cards" next to the compact panel. Since the compact `IndicatorGroup` panel
+now always comes first on every section (fixed in the pass above), a
+standard-size highlight row after it no longer reads as a heavy card
+sitting above/beside the compact content - it reads as a normal "here are
+the key figures" row, which is what was wanted.
+- **`.chh-highlight-row` CSS rule removed** (`app.css`) and every
+  `className="kpi-row chh-highlight-row"` in `HealthScreening.tsx`
+  reverted to plain `className="kpi-row"` - so every composite
+  (`CompositeKpi`) and numeric-summary (`NumericSummaryCard`) highlight
+  card on the page (Recent History of Illness's School Days Missed, Major/
+  Chronic Illness's `any_listed_condition`, Neurological History's
+  `any_neurological_history`, Vision and Hearing's `any_sensory_concern`/
+  `any_vision_indicator`, Hospitalisation's `major_treatment_history`/
+  Hospitalisation Count) now renders at the same standard `.kpi-card` size
+  as Overview's "Participants Flagged for Review"/"Completed Forms" cards -
+  one consistent highlight-card size dashboard-wide, not two competing
+  sizes.
+- **Two composites promoted out of their `IndicatorGroup` into their own
+  highlight card**, per the named examples: **Developmental and Learning
+  History**'s `any_developmental_concern` (previously folded into the
+  compact panel alongside `diagnosed_condition`/`concern_without_diagnosis`
+  - the panel now holds just those 2, with `any_developmental_concern` as
+  its own full-width highlight card below) and **Functional Health
+  Status**'s `suboptimal_health` (previously folded in alongside
+  `any_functional_limitation`/`poor_health` - the panel now holds just
+  those 2, with `suboptimal_health` as its own highlight card). Two new,
+  narrowly-scoped local components render these - `IndicatorHighlightKpi`
+  (a single `ConditionIndicator`, same shape as the deleted `IndicatorKpi`)
+  and `PrevalenceHighlightKpi` (a single `ChhPrevalenceItem`, same shape as
+  the deleted `PrevalenceKpi`) - reintroduced deliberately narrow (used
+  only for these 2 promoted metrics), not a full revert of the prior
+  consolidation. `poor_health`/`any_functional_limitation` and
+  `diagnosed_condition`/`concern_without_diagnosis` remain in their compact
+  panels - only the two explicitly named metrics were promoted.
+- Every other section's highlight-card set is unchanged in content (only
+  in size, per the CSS revert above): Overview, Major/Chronic Illness,
+  Neurological History, Vision and Hearing, Hospitalisation.
+No REDCap mapping, calculation, denominator, or backend file changed -
+purely a presentation/component-choice change on `HealthScreening.tsx` and
+`app.css`. Frontend `tsc --noEmit` and `npm run build` both succeed.
+Live-verified via the same cached local Playwright install at 1400px
+(Overview, Developmental and Learning History, Functional Health Status
+all screenshotted - both promoted composites now render as full-width
+standard highlight cards with real live values, e.g. "Any Developmental
+Concern 11/47 · 23.4%," "Suboptimal Health 12/47 · 25.5%"; Hospitalisation's
+2-card highlight row now renders at standard equal-width/aligned-corner
+size) and at 390px (Functional Health Status reflows cleanly to one
+column, no overlap, no orphaned row). Backend untouched (158/158 tests
+unaffected, no backend file changed).
+
+**Genuine visual-hierarchy redesign (2026-09-15, same day - supersedes the
+"card sizing" framing of every pass above; this is the pass that actually
+changes what the page looks like, not just how many cards each section
+has):** a user audit correctly identified that `.indicator-group`,
+`.kpi-card`, and `.chart-card` all shared nearly identical background/
+border/radius/shadow, so every prior consolidation pass only changed *card
+count*, never *card appearance* - the page still read as one long stack of
+same-looking white boxes. Fixed with a real three-tier visual system,
+scoped entirely to this page (no shared component's default styling
+touched):
+- **New `.chh-section-panel` wrapper** - every section's `.chh-section-body`
+  (Overview through Assessment Readiness; **Data Quality intentionally
+  excluded**, unchanged per instruction) now also carries this class, which
+  gives the whole section ONE bordered frame (`--surface-1` background,
+  hairline border, `--radius-card-lg`, one padding) - so a section reads as
+  one cohesive block, not a stack of independently-boxed cards.
+- **Tier 1 - `.indicator-group` restyled from a mini-card-grid to a flat,
+  tinted, list-style panel**: `--surface-2` tint (not `--surface-1`), no
+  shadow, sharper `--radius-control` corner, each indicator a label/value
+  row on a CSS grid separated by a hairline `border-bottom` (was flex-wrap
+  chips with no separators) - reads as a compact fact sheet, deliberately
+  the quietest tier. Sections D and G (5 items each) now most clearly
+  demonstrate this - a proper multi-column list of rows, not a card grid.
+- **Tier 2 - `.kpi-card` (untouched)** - since tier 1 is now flat/tinted
+  and tier 3 (below) is flattened, the existing shadow + top tone-accent
+  bar on `.kpi-card` now genuinely reads as "the prominent tier" by
+  contrast, without changing `.kpi-card`'s own CSS at all (it's used
+  dashboard-wide, so it was never touched). Holds exactly the named
+  composite/numeric highlights: Any Neurological History (D), Any
+  Developmental Concern (F, inside its summary panel - see below), Any
+  Sensory Concern/Any Vision Indicator (E), Major Treatment History +
+  Hospitalisation Count (G), Suboptimal Health (H, inside its summary
+  panel), Participants Flagged for Review + Completed Forms (Overview).
+- **Tier 3 - `.chart-card` flattened inside `.chh-section-panel`**: `.chart-
+  card`'s background/border/shadow/radius/padding are all overridden to
+  `none`/`0` **only when it is a direct child (or a `.chart-grid` child) of
+  `.chh-section-panel`** - a chart now renders as plain analytical content
+  inside the section's one frame, not another identical floating card.
+  Consecutive stacked charts get a hairline `border-top` divider instead of
+  their own card border; two-column (`chart-grid.two-col`) pairs get a
+  vertical `border-left` divider on the second chart above 760px, which
+  switches to a horizontal `border-top` divider once the grid collapses to
+  one column below 760px (kept in sync with `.chart-grid.two-col`'s own
+  breakpoint) - verified live at both 1400px (vertical divider) and 390px
+  (horizontal divider, clean single-column stack, no clipping). `.chart-
+  card`'s own default styling - used by every other page - is completely
+  unchanged; every override is scoped under `.chh-section-panel`.
+- **Sections C, F, and H specifically redesigned** (the "weak" sections
+  called out in the audit, where a near-empty 1-2-item flat panel sat above
+  a separately elevated highlight card and still read as two disconnected
+  boxes): new `SectionSummaryPanel` component merges the section's one
+  important composite/derived metric and its remaining flat indicators into
+  ONE bordered, tone-accented panel - the highlight renders as a header
+  line (large tone-colored value + label + sublabel) above a hairline
+  divider, with the flat indicator(s) as compact rows below. Reuses the
+  exact `kpi-tone-*` CSS custom properties (`--tone-accent`/`--tone-accent-
+  soft`) every `KpiCard` already defines (applied via `kpi-tone-${tone}` on
+  the wrapper), so the accent-color language matches the highlight-card
+  tier exactly, distinguished by a left accent bar instead of `.kpi-card`'s
+  top bar. C now combines `diagnosed_condition` + `any_listed_condition`;
+  F combines `diagnosed_condition`/`concern_without_diagnosis` +
+  `any_developmental_concern`; H combines `any_functional_limitation`/
+  `poor_health` + `suboptimal_health`. No value is duplicated between the
+  highlight line and the rows below - each metric appears exactly once.
+- **Formatter refactor (no calculation change)**: the value/sublabel
+  string-building logic previously inlined in `CompositeKpi`/the two
+  deleted highlight-Kpi components is now 6 small pure functions
+  (`compositeValue`/`compositeSublabel`/`indicatorValue`/
+  `indicatorSublabel`/`prevalenceValue`/`prevalenceSublabel`), called both
+  by the standalone highlight `KpiCard`s (D, E, G, Overview) and by
+  `SectionSummaryPanel` (C, F, H) - so a metric's displayed string can never
+  drift between the two rendering paths. `IndicatorHighlightKpi`/
+  `PrevalenceHighlightKpi` (added in the prior pass) were deleted - fully
+  superseded by `SectionSummaryPanel` at their only two call sites.
+No REDCap mapping, calculation, denominator, API contract, or Data Quality
+section changed - purely `HealthScreening.tsx` (component restructuring)
+and `app.css` (the new `.chh-section-panel`/`.chh-summary-panel` rules and
+the restyled `.indicator-group`). Frontend `tsc --noEmit` and `npm run
+build` both succeed. Live-verified via the same cached local Playwright
+install against real REDCap data: full-page 1400px screenshot confirms
+every section (Overview through Assessment Readiness) now renders as one
+bordered frame containing a visually distinct flat tinted list, prominent
+shadowed highlight card(s), and flattened in-frame charts - a clearly
+different rhythm from the prior "stack of identical cards" look; close-up
+screenshots of Neurological History and Hospitalisation confirm the
+three-tier hierarchy and the two-column chart divider render correctly;
+Data Quality confirmed still rendering with its original plain styling
+(no frame). 390px screenshots of Recent History of Illness,
+Hospitalisation, and Functional Health Status confirm clean single-column
+reflow with no overlap, clipping, or orphaned rows. Backend untouched
+(158/158 tests unaffected, no backend file changed).
+
+**"Developmental Domains Affected" chart stretch/empty-space bug fixed
+(2026-09-15, same day - one-line CSS fix, no data/component change):**
+reported as excessive empty space below the bars, a compressed-looking
+plot area, an oversized card, and a vertical divider running far past the
+actual chart. **Root cause**: `.chart-grid` (the shared grid used
+dashboard-wide) relies on CSS Grid's default `align-items: stretch`. On
+every other page this is harmless, because each `.chart-card` still has
+its own visible border/shadow - a taller sibling just means a taller white
+box. The prior same-day visual-hierarchy pass flattened `.chart-card`
+*inside* `.chh-section-panel` (removed its border/background), so that
+same stretch instead produced bare, unbounded empty space below a short
+chart. Measured live before the fix: the "Developmental Domains Affected"
+chart-card (title + 190px chart) was stretched to 422px to match its much
+taller sibling, "Domain Prevalence" (an 8-row list) - and the two-column
+divider rule (`border-left` on the second grid item) inherited that same
+stretched height, so it visibly ran well past the chart's own content.
+**Fix**: added `.chh-section-panel .chart-grid { align-items: start; }` -
+each grid item now sizes to its own content instead of the row's tallest
+sibling, consistent with this page's existing "no fixed heights, rows
+expand naturally per content" rule. Scoped to `.chh-section-panel` only -
+`.chart-grid` on every other page (Overview, Demographics, Screen Time,
+etc.) is completely unaffected. No `CategoryBarChart`/`ChartCard` prop,
+height, margin, data, calculation, or REDCap mapping was touched - the
+190px chart height that was already producing clearly readable bars/
+gridlines/labels is unchanged; the container around it just no longer
+gets artificially stretched.
+- **Confirmed same bug, same fix, on the identically-shaped pairing**:
+  Functional Health Status's "Overall Perceived Health" chart (190px)
+  next to "Function-Specific Limitation" (an 8-row list) had the exact
+  same stretch/divider symptom - now sizes correctly with the same rule
+  (no separate CSS needed, since the fix is scoped to `.chh-section-panel
+  .chart-grid` broadly, covering every two-column chart pairing on the
+  page: B, F, H, I).
+Live-verified via the same cached local Playwright install, measuring
+actual rendered heights before/after: "Developmental Domains Affected"'s
+chart-card went from a stretched 422px (matching its sibling) to its own
+natural 244px; screenshots confirm the bars/gridlines/x-axis labels
+(0/1/2/3+) render exactly as before (same chart, same data), the empty
+space below the bars is gone, and the divider between the two columns now
+ends at each column's own real content height. Re-checked "Overall
+Perceived Health" with the same result. At 390px, `.chart-grid.two-col`'s
+existing breakpoint collapses to one column as before - confirmed no
+horizontal overflow (`document.documentElement.scrollWidth <=
+clientWidth`) and no leftover stretch artifacts. Data Quality untouched.
+Frontend `tsc --noEmit` and `npm run build` both succeed; no backend file
+touched.
+
+**Section G (Hospitalisation, Treatment and Allergy) focused visual cleanup
+(2026-09-15, same day - scoped to this one section only, no other section
+touched):**
+- **Duplicate heading removed**: the section's `IndicatorGroup` call was
+  passing `title="Hospitalisation, Treatment and Allergy"`, which repeated
+  the exact same text the `SectionHeader` immediately above the panel
+  already shows - `IndicatorGroup`'s `title` prop is now optional
+  (`title?: string`, `HealthScreening.tsx`) and the internal
+  `.indicator-group-title` element is only rendered when a title is passed;
+  Section G's call now omits it entirely. Every other `IndicatorGroup`
+  caller (A, B, D, E, I) still passes its own title and is unaffected -
+  this is a per-call opt-out, not a component-wide behavior change.
+- **New scoped CSS class, `.chh-hospitalisation-panel`** (added alongside
+  `chh-section-body chh-section-panel` on this section's wrapper div only):
+  top padding tightened from the shared `--space-5` (24px) to `--space-4`
+  (16px) - now that the internal title/divider is gone, less top padding
+  is needed before the first indicator row; side/bottom padding and every
+  other section's panel padding are unchanged. The same class also scopes
+  a `.kpi-card` padding override (`--space-3`/`--space-4` instead of the
+  default `--space-4` all around) for the "Major treatment history"/
+  "Hospitalisation Count" pair directly below the panel - same established
+  pattern as `.ses-metric-row .kpi-card`/`.coding-score-row .kpi-card`
+  elsewhere in the app. `.kpi-row`'s own grid (equal-width, stretched to
+  equal height, collapsing to one column on narrow screens) was not
+  touched, so the two cards remain aligned at equal height on desktop and
+  stack cleanly on mobile, exactly as before - just shorter.
+No value, calculation, denominator, label, API call, or REDCap mapping
+changed - purely the heading/padding presentation described above. Data
+Quality and every other section's frame/padding are untouched. Frontend
+`tsc --noEmit` and `npm run build` both succeed. Live-verified via the
+same cached local Playwright install against real REDCap data: measured
+before/after - both KPI cards went from a stretched-but-matched 118px to a
+tighter 118px→110px pair (still exactly equal height to each other);
+confirmed zero `.indicator-group-title` elements render inside this
+section's panel (was 1, duplicating the SectionHeader). Screenshots at
+1400px confirm the section now reads as one cohesive block (heading once,
+compact flat panel, then the two KPI cards immediately below with no
+redundant title bar in between) and at 390px confirm clean single-column
+stacking with no horizontal overflow (`document.documentElement.
+scrollWidth <= clientWidth`).
+
+---
+
+## STUDY ENROLLMENT HEADLINE - 222 vs 212 (2026-09-17)
+
+Overview's Study Snapshot "Total Registered" card now shows **222**
+(original/overall enrolled cohort), with a support line reading "212
+current/active · 5 migrated · 5 deceased" - **every other count on the
+entire dashboard is completely unchanged** and still reads the live,
+REDCap-computed `total_registered` (212 at time of writing).
+
+**Why 222 is hardcoded (the one deliberate exception to "never hardcode
+participant counts"):** before implementing, the full frontend + backend
+was searched for `212`, `222`, `migrated`, `deceased`, `enroll`,
+`withdraw`, `original`, `cohort` - confirmed `total_registered` is never a
+literal; it is `len(children)` computed fresh from live REDCap registration
+records on every request (`live_dashboard_service.py`). There is **no
+REDCap field, instrument, or record anywhere** that encodes an original
+222-count or a migrated/deceased status - the only status-like field,
+`baby_status` (Live/Dead), already governs the unrelated Excel/CSV export's
+"Active Case" definition (see ACTIVE CASE DEFINITION above) and has never
+fed the main "Registered" count. Since 222/5/5 are senior-confirmed
+figures with no REDCap source, and the user explicitly chose "static
+configured constant" over inventing a REDCap field or re-auditing metadata
+for something that provably isn't there, this was implemented as a
+documented, clearly-commented exception rather than left unimplemented or
+silently guessed at.
+
+**Implementation** (`frontend/src/routes/Overview.tsx` only - no backend
+file touched): three new local constants, `STUDY_ORIGINAL_ENROLLMENT =
+222`, `STUDY_MIGRATED_COUNT = 5`, `STUDY_DECEASED_COUNT = 5`, with a code
+comment explaining they are NOT REDCap-derived and must be updated by hand
+if the senior-confirmed figures ever change - unlike every other number on
+this page. Only the Snapshot strip's first card changed: `label` "Registered"
+→ "Total Registered", `value` `overview.total_registered` → `STUDY_
+ORIGINAL_ENROLLMENT`, `support` "Total study population" → "{live
+total_registered} current/active · 5 migrated · 5 deceased" (reuses the
+existing `SnapshotMetricCard` component's `support` line - no new card, no
+UI expansion, per instruction). The Study Snapshot section's own note text
+was also updated ("...Total Registered's enrollment figure is
+senior-confirmed, see below") so the section no longer overstates that
+*every* headline is live-calculated. `overview.total_registered` itself is
+byte-for-byte unchanged and still powers every denominator/percentage/chart
+on this page (SES/SSRS coverage, Sex/Age Distribution, the Assessment Tool
+Status section) and every other route (Registry, Progress, Assessments hub,
+Demographics, the Excel/CSV export, Child Health History) - confirmed via
+`git diff --stat` showing only `Overview.tsx` changed for this task, and a
+live API check (`/api/v1/dashboard/overview` → `total_registered: 212`,
+unchanged).
+
+**Not touched, intentionally**: Registry's "N registered participants"
+result-count text (an operational/filtered count, not the headline) and
+the Assessments hub's "Total Registered Cases" `InstrumentCoverageCard`
+(a registration-form-*completion* coverage metric, `212/212 (100%)`, not
+the enrollment headline) - both left reading the live 212, since the task
+was scoped to "the main overall record-count KPI/headline" and explicitly
+said not to expand the UI or duplicate the second metric elsewhere.
+
+Verified: `tsc --noEmit` clean, `npm run build` succeeds. Live-checked: API
+still returns `total_registered: 212`; screenshot confirms the Snapshot
+card renders "Total Registered / 222 / 212 current/active · 5 migrated · 5
+deceased" while every other Overview figure (SES 67/212, SSRS Parent/Child,
+Assessment Tool Status, Sex Distribution "212 REGISTERED", Age Distribution
+181/31) remains exactly the live 212-based values. `git diff -- frontend/
+src/routes/Overview.tsx` shows the complete, minimal change. Backend
+untouched.
+
+---
+
+## LOCAL DEV CORS - PORT 5174 ALLOWED (2026-09-17)
+
+Local dev CORS errors on `/api/v1/dashboard/overview` and
+`/api/v1/dashboard/assessment-tool-status` when the frontend ran on
+`http://localhost:5174` (Vite's fallback port when 5173 is already taken)
+were fixed by widening the **existing** `CORSMiddleware` config - no second
+CORS implementation was added.
+
+- **`backend/app/config.py`**: `Settings.cors_allow_origins` default
+  changed from `"http://localhost:5173"` to
+  `"http://localhost:5173,http://localhost:5174"` (comma-separated, parsed
+  by the existing `cors_origins_list` property - unchanged logic). This is
+  still explicit origins, not `*` - `app/main.py`'s
+  `app.add_middleware(CORSMiddleware, allow_origins=settings.
+  cors_origins_list, allow_credentials=True, ...)` is completely untouched,
+  since `allow_credentials=True` already made a wildcard origin invalid
+  per the CORS spec (browsers reject `*` with credentials) even before
+  this fix.
+- **`backend/.env`** (local, untracked - not committed): the same
+  `CORS_ALLOW_ORIGINS` line updated to include both origins, since this
+  file overrides the `config.py` default whenever present and is what was
+  actually driving the running local backend.
+- **`backend/.env.example`**: same value + a comment explaining Vite's
+  5173→5174 fallback behavior, so a fresh local setup gets both ports
+  allowed by default without needing this fix rediscovered.
+
+**Root cause of an initial false negative while verifying this fix**: a
+stale backend process from an earlier session was still holding port 8001
+(confirmed via `netstat -ano | grep 8001` → PID still listening), so a
+freshly-started `uvicorn --reload` process failed to bind
+(`WinError 10013`) and requests kept silently hitting the old process with
+the old CORS origin list - same "stale/zombie backend process" precedent
+already documented in the FRONTEND ERROR ISOLATION section above, now also
+seen on port 8001, not just 8000. Killed the stale PID and restarted
+cleanly before re-verifying.
+
+Verified after a clean restart: `curl` with `Origin: http://localhost:5174`
+against both `/dashboard/overview` and `/dashboard/assessment-tool-status`
+returns `access-control-allow-origin: http://localhost:5174` (200 OK, both
+simple GET and CORS preflight OPTIONS); `Origin: http://localhost:5173`
+still returns `access-control-allow-origin: http://localhost:5173`
+(unaffected). A headless-browser load of `http://localhost:5174/` against
+the live backend rendered Overview fully (Study Snapshot, Assessment Tool
+Status, Sex/Age Distribution) with zero console errors. Backend
+`test_config.py` (4/4) re-run, unaffected - it constructs its own
+`Settings` with an explicit `cors_allow_origins` value, never depends on
+the default. Frontend `tsc --noEmit` and `npm run build` both succeed. No
+API endpoint, REDCap logic, dashboard calculation, or data-processing code
+was touched - this was a CORS-configuration-only change.
+
+---
+
+## OVERVIEW - "CURRENT ACTIVE CASES" INFO BANNER (2026-09-17)
+
+A new, small, static info banner - **"CURRENT ACTIVE CASES: {N}" / "Assessment
+and dashboard analysis currently reflects {N} active cases."** - was added to
+Overview, directly below the Study Snapshot strip and above Assessment Tool
+Status. This did not exist before this pass - a prior request assumed it
+already existed ("the banner we just discussed"); a codebase-wide search
+found no such element, so the user was asked and confirmed creating a new
+banner (not restyling something existing) was the right scope.
+
+- **Data**: both `{N}` occurrences read the same live `overview.
+  total_registered` every other figure on this page already uses - not a
+  new number, not hardcoded. No calculation, denominator, or the 222/212
+  distinction documented in the "STUDY ENROLLMENT HEADLINE" section above
+  was touched by this banner - it is a display of the existing live 212,
+  same as the Snapshot card's own support line.
+- **Visual treatment**: a soft, diffused, **static** glow (no animation)
+  using the dashboard's existing blue accent (`--series-1`, the same color
+  as the live badge/links/section-header dots) - a slightly brighter
+  1px border plus a two-layer `box-shadow` (a tight 1px accent ring + a
+  wider soft blur), and a very subtle background tint, all via rgba
+  literals matching `--series-1`'s hex (same precedent as `.kpi-tone-*`/
+  `.registry-result-context`, which do the same since CSS custom
+  properties can't carry alpha without `color-mix()`). A separate
+  `:root[data-theme="dark"] .active-cases-banner` override brightens the
+  tint/border/glow proportionally for the dark theme's own `--series-1`
+  hex, matching the app's existing dark-theme-override pattern. Explicitly
+  **not** a `--status-warning`/`--status-critical` tone, so it never reads
+  as an alert.
+- **New CSS**: `.active-cases-banner`/`-title`/`-text` in `app.css`
+  (inserted just before the existing "Assessment Tool Status card" CSS
+  block). **New JSX**: a small `<div className="active-cases-banner">`
+  block in `Overview.tsx`, between the `.snapshot-strip` and the
+  `assessmentToolStatus &&` block. Deliberately not a `KpiCard`/
+  `SnapshotMetricCard` - a plain two-line text block, per instruction not
+  to make it a large KPI card.
+No REDCap mapping, calculation, denominator, API contract, or Data Quality
+section changed - purely additive presentation on `Overview.tsx`/`app.css`.
+Frontend `tsc --noEmit` and `npm run build` both succeed. Live-verified via
+the same cached local Playwright install against real REDCap data at
+1400px (light and dark theme) and 390px: banner renders "CURRENT ACTIVE
+CASES: 212" / "...212 active cases.", glow is visibly present but subtle
+in both themes, text wraps cleanly at 390px with zero horizontal overflow,
+and every other Overview figure (Assessment Tool Status, Sex/Age
+Distribution, SES) is unaffected.
+
+**Breathing glow animation added (2026-09-17, same day):** the banner's
+glow now slowly expands and contracts (~3.6s, `ease-in-out`, infinite) -
+the banner itself (position, size, border, text) stays completely
+stationary, since only the `box-shadow` property is animated, never
+`transform`/`border`/`padding`/`margin`. Two new `@keyframes`
+(`active-cases-banner-glow` light, `active-cases-banner-glow-dark`) each
+interpolate between the existing resting box-shadow (unchanged, still the
+base/fallback value) and a slightly larger-blur/higher-opacity peak, using
+the same `--series-1`-matching rgba literals already established - no new
+colors. The `animation` itself is declared only inside `@media
+(prefers-reduced-motion: no-preference)`, so a reduced-motion preference
+leaves the plain static resting glow in place (verified:
+`getComputedStyle(...).animationName === "none"` under
+`reducedMotion: 'reduce'`, falling back to the unchanged base box-shadow,
+not a frozen mid-animation frame). Frontend `tsc --noEmit` and `npm run
+build` both succeed. Live-verified via the same cached local Playwright
+install: sampled the banner's computed `box-shadow` and
+`getBoundingClientRect()` three times across one full cycle - box-shadow
+values changed between samples (confirming the animation runs) while `x`/
+`y`/`width`/`height` were identical across all three (confirming zero
+layout movement); screenshots ~1.8s apart show a visibly wider/softer glow
+vs. a tighter/dimmer one with text, border, and position unchanged.
+
+**Light Mode contrast strengthened (2026-09-17, same day - Dark Mode
+untouched):** the banner read as "washed out" in Light Mode. Fixed by
+raising only the Light-Mode-scoped rgba alpha values in `app.css` (all
+still the same `--series-1`-matching blue, no new colors):
+- Background: `rgba(42, 120, 214, 0.05)` → `0.12` (clearly visible tint,
+  was near-white).
+- Border: `rgba(42, 120, 214, 0.35)` → `0.55`.
+- Resting glow: `0.08`/`0.14` → `0.12`/`0.22`; breathing peak (in
+  `@keyframes active-cases-banner-glow`): `0.12`/`0.2` → `0.22`/`0.32`.
+- `.active-cases-banner-text` color: `var(--text-secondary)` (muted
+  gray-blue, the reported complaint) → `var(--text-primary)` (near-black,
+  high contrast). `.active-cases-banner-title` stays `var(--series-1)`,
+  already bold/accent-colored per the original request.
+Dark Mode's own `:root[data-theme="dark"] .active-cases-banner` block and
+its `active-cases-banner-glow-dark` keyframes are **completely unchanged**
+- a new `:root[data-theme="dark"] .active-cases-banner-text { color: var(
+--text-secondary); }` override was added specifically so Dark Mode's text
+color (which the base-rule change would otherwise have altered too, since
+Dark Mode never previously needed its own text-color override) stays
+exactly as it was. Frontend `tsc --noEmit` and `npm run build` both
+succeed. Live-verified via the same cached local Playwright install
+against real REDCap data, reading actual computed styles (not just
+screenshots): Light Mode now computes `background: rgba(42, 120, 214,
+0.12)`, `border-color: rgba(42, 120, 214, 0.55)`, `title color: rgb(42,
+120, 214)`, `text color: rgb(16, 24, 43)`; Dark Mode (toggled live via the
+theme button) computes `background: rgba(57, 135, 229, 0.08)`, `border-
+color: rgba(57, 135, 229, 0.4)`, `title color: rgb(57, 135, 229)`, `text
+color: rgb(169, 178, 198)` - byte-for-byte identical to before this
+change, confirming Dark Mode is unaffected. Reduced-motion re-checked:
+`animationName: "none"`, falling back to the new (stronger) Light Mode
+resting box-shadow. Screenshots confirmed at 1400px and 390px, both
+themes - no horizontal overflow either width, banner clearly more
+prominent in Light Mode without looking like an alert.
+
+**Dark Mode brought to equal visual prominence (2026-09-17, same day - Light
+Mode is the reference, its values untouched):** Dark Mode's alphas were
+lower than Light Mode's (background 0.08 vs Light's 0.12, border 0.4 vs
+0.55), so the banner read noticeably weaker in Dark Mode despite the prior
+pass. Fixed by raising ONLY Dark Mode's `:root[data-theme="dark"] .active-
+cases-banner` block and its `active-cases-banner-glow-dark` keyframes -
+deliberately to *higher* alpha values than Light Mode's, not copies of
+them:
+- Background: `rgba(57, 135, 229, 0.08)` → `0.18`.
+- Border: `rgba(57, 135, 229, 0.4)` → `0.55` (now matches Light Mode's
+  border alpha exactly).
+- Resting glow: `0.12`/`0.18` → `0.18`/`0.3`.
+- Breathing peak (`@keyframes active-cases-banner-glow-dark`): `0.16`/`0.3`
+  → `0.28`/`0.42`.
+The higher Dark Mode alpha is intentional, not an oversight: the exact same
+alpha value composited over Dark Mode's near-black page background
+(`--surface-0` `#0c1220`) reads far more subdued than the same alpha over
+Light Mode's white canvas, so matching Light Mode's *alpha numbers* would
+NOT have matched its *visual weight* - matching the weight required going
+higher. `.active-cases-banner-text`'s Dark Mode override (`--text-
+secondary`) and the title's `--series-1` color in both themes were already
+correct from the prior pass and are unchanged. No new colors were
+introduced in either theme - both still resolve through `--series-1`'s own
+per-theme hex (`#2a78d6` light / `#3987e5` dark).
+No REDCap mapping, calculation, denominator, API contract, Data Quality
+section, or banner wording changed - purely `app.css` alpha-value tuning.
+Frontend `tsc --noEmit` and `npm run build` both succeed. Live-verified via
+the same cached local Playwright install against real REDCap data, reading
+actual computed styles at 1400px and 390px in both themes (toggled live via
+the theme button): Light Mode `background: rgba(42,120,214,0.12)`, `border:
+rgba(42,120,214,0.55)`; Dark Mode `background: rgba(57,135,229,0.18)`,
+`border: rgba(57,135,229,0.55)` - border alpha now identical across themes,
+background/glow deliberately stronger in Dark Mode as designed;
+`animationName` correctly resolves to `active-cases-banner-glow` (light) /
+`active-cases-banner-glow-dark` (dark) with motion enabled, and `"none"`
+in both themes under `prefers-reduced-motion: reduce`. Screenshots at both
+widths in both themes confirm comparable visual prominence, clean
+single-column mobile stacking, and zero horizontal overflow.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)

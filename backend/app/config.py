@@ -19,7 +19,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # --- CORS ---
-    cors_allow_origins: str = "http://localhost:5173"
+    # Comma-separated. Includes both common local Vite dev ports (5173 is
+    # Vite's default; 5174 is what Vite picks instead when 5173 is already
+    # in use by another process) so local dev works regardless of which
+    # port the frontend happens to start on. Overridden via the
+    # CORS_ALLOW_ORIGINS env var for production (see .env.example).
+    cors_allow_origins: str = "http://localhost:5173,http://localhost:5174"
 
     # --- REDCap (live source of truth - REDCap API -> FastAPI -> in-memory processing) ---
     redcap_api_url: str = Field(default="", description="REDCap API endpoint. Must be supplied via env.")
