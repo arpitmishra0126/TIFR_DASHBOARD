@@ -233,6 +233,15 @@ export function IconCalendar(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconSettings(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3.5v2.3M12 18.2v2.3M20.5 12h-2.3M5.8 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3" />
+    </Svg>
+  );
+}
+
 export function IconFlag(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>

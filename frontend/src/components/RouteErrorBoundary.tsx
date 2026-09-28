@@ -12,7 +12,7 @@ interface RouteErrorBoundaryState {
 
 /**
  * Contains a render-time crash to the routed content area instead of
- * unmounting the whole app (sidebar/topbar/theme survive). React error
+ * unmounting the whole app (header/theme survive). React error
  * boundaries must be class components - there is no hook equivalent.
  *
  * Layout.tsx remounts this per-route (key={location.pathname}), so

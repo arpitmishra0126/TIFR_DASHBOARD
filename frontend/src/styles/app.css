@@ -77,186 +77,163 @@ a, button {
   font-family: inherit;
 }
 
-/* --- App shell --- */
+/* --- App shell: single full-width main column. The left sidebar nav was
+   removed (2026-09-26) to make room for a compact clinical-monitoring
+   shell to be designed next - routes/pages themselves are unchanged and
+   still reachable by URL/PageBackNav; only the persistent nav chrome was
+   taken out. --- */
 .app-shell {
   display: flex;
-  flex-direction: column;
   min-height: 100vh;
 }
 
-/* --- Top navigation (replaces the former left sidebar) --- */
-.app-topnav {
+.app-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* --- Shell header (2026-09-26 rebuild) - a fixed dark "study masthead"
+   band, independent of the light/dark theme toggle (the same permanent-
+   navy precedent already established by FullScreenLoader's #0c1220), with
+   a compact nav-tabs row beneath it - not a plain light toolbar with an
+   isolated page heading. `.app-header-inner` shares the exact same
+   max-width/horizontal padding as `.app-content` below it, so the eyebrow/
+   title/tabs and the page content line up on one shared alignment grid. */
+.app-header {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: var(--surface-1);
-  border-bottom: 1px solid var(--border-hairline);
-  box-shadow: var(--shadow-xs);
+  background: #0c1220;
+  border-bottom: 3px solid var(--series-3);
 }
 
-.topnav-header-row {
+.app-header-inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6) 0;
+}
+
+.app-header-top-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: var(--space-4);
-  /* Top-biased padding (vs. the shared .topnav-links row below, which gave
-     up the matching amount from its own bottom padding - see that rule) so
-     this row's content, including the right-side status/control group,
-     sits genuinely lower with balanced space above/below it, centered via
-     align-items: center (no position/pixel hack) rather than being pinned
-     close to the row's top edge. .app-topnav's total height is unchanged -
-     this only redistributes padding already spent between the two rows. */
-  padding: 1rem var(--space-6) 0.6rem;
-}
-
-.topnav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.topnav-brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: var(--tone-accent-soft, rgba(42, 120, 214, 0.12));
-  color: var(--series-1);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
-
-.topnav-brand-text {
-  min-width: 0;
-}
-
-.topnav-brand-title {
-  color: var(--text-primary);
-  font-size: 0.92rem;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.006em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Topbar (last-updated / refresh / theme toggle) now lives inside the
-   header row instead of floating as its own bar at the top of every page's
-   content - one cohesive header instead of a separate application shell. */
-.topnav-header-row .app-topbar {
-  margin-bottom: 0;
-  flex-wrap: nowrap;
-  flex-shrink: 0;
-}
-
-.topnav-links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-wrap: wrap;
-  gap: 2px;
-  /* Bottom padding reduced by exactly the amount .topnav-header-row's own
-     padding grew by (see that rule) - nav links themselves (size, gap,
-     position relative to each other) are unchanged; only the outer
-     whitespace this row contributes below the header is smaller, keeping
-     .app-topnav's combined height identical to before. */
-  padding: 0.15rem var(--space-6) 0.2rem;
 }
 
-.topnav-link {
-  display: inline-flex;
+.app-header-text {
+  min-width: 0;
+}
+
+.app-header-eyebrow {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--series-3);
+}
+
+.app-header-title {
+  margin-top: 2px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.app-header-subtitle {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  color: #a9b2c6;
+}
+
+.app-header-controls {
+  display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 0.42rem 0.7rem;
-  border-radius: var(--radius-control);
-  text-decoration: none;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
+  gap: var(--space-3);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* Header controls sit on the dark masthead, not the light `--surface-1`
+   card context these components render in elsewhere (e.g. `.refresh-button`
+   is reused as-is by DataLoadError's inline "Retry" button) - scoped
+   overrides here, the base rules further below are unchanged. */
+.app-header .live-badge {
+  background: rgba(53, 209, 88, 0.16);
+  border-color: rgba(53, 209, 88, 0.4);
+  color: #6be08a;
+}
+
+.app-header .last-updated {
+  color: #a9b2c6;
+}
+
+.app-header .refresh-error {
+  color: #f0a5a5;
+}
+
+.app-header .refresh-button,
+.app-header .theme-toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #eef1f7;
+  box-shadow: none;
+}
+
+.app-header .refresh-button:hover:not(:disabled),
+.app-header .theme-toggle:hover {
+  border-color: var(--series-3);
+  color: var(--series-3);
+  box-shadow: none;
+}
+
+/* Compact nav tabs beneath the title area - replaces the removed left
+   sidebar's navigation. Active tab reads as a solid light pill against the
+   dark masthead; inactive tabs are plain muted text. */
+.app-header-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: var(--space-3);
+  overflow-x: auto;
+}
+
+.app-header-tab {
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sharp);
   font-size: 0.82rem;
   font-weight: 600;
+  color: #a9b2c6;
+  text-decoration: none;
   white-space: nowrap;
-  cursor: pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
-.topnav-link:hover {
-  background: var(--surface-2);
-  color: var(--text-primary);
+.app-header-tab:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.topnav-link.active {
-  background: var(--tone-accent-soft, rgba(42, 120, 214, 0.12));
-  color: var(--series-1);
+.app-header-tab.active {
+  background: #ffffff;
+  color: #0c1220;
 }
 
-.topnav-dropdown {
-  position: relative;
+.app-content {
+  flex: 1;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-6) var(--space-7);
 }
 
-.topnav-dropdown-trigger {
-  font-family: inherit;
-}
-
-.topnav-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  min-width: 200px;
-  background: var(--surface-1);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card-hover);
-  padding: var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 35;
-}
-
-.topnav-dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 0.44rem 0.6rem;
-  border-radius: 7px;
-  text-decoration: none;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.topnav-dropdown-item:hover {
-  background: var(--surface-2);
-  color: var(--text-primary);
-}
-
-.topnav-dropdown-item.active {
-  background: var(--tone-accent-soft, rgba(42, 120, 214, 0.12));
-  color: var(--series-1);
-  font-weight: 600;
-}
-
-.topnav-status {
-  flex-shrink: 0;
-}
-
-.mobile-menu-button {
-  display: none;
-}
-
-.topnav-mobile-menu {
-  display: none;
-}
-
-/* --- Live status pill --- */
+/* --- Live status pill (used inside the shell header) --- */
 .live-badge {
   display: inline-flex;
   align-items: center;
@@ -295,53 +272,17 @@ a, button {
   100% { transform: scale(1.6); opacity: 0; }
 }
 
-.app-content {
-  flex: 1;
-  width: 100%;
-  max-width: 1180px;
-  margin: 0 auto;
-  /* Top padding only is reduced (~40%, from --space-6/32px to ~19px) to
-     close the gap between the global nav and page content; side/bottom
-     padding are unchanged. Applies to every route through this one shared
-     rule. */
-  padding: calc(var(--space-6) * 0.6) var(--space-7) var(--space-6) var(--space-7);
-}
-
-/* --- Top bar: refresh control + theme toggle (present on every page) --- */
-.app-topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  row-gap: var(--space-2);
-  margin-bottom: var(--space-5);
-}
-
-.app-topbar-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-right: auto;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
 .last-updated {
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   font-weight: 600;
+  font-size: 0.8rem;
 }
 
 .refresh-error {
   color: var(--status-critical);
   font-weight: 600;
-}
-
-.app-topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  font-size: 0.8rem;
 }
 
 .refresh-button {
@@ -503,6 +444,33 @@ a, button {
   margin-bottom: var(--space-4);
 }
 
+/* `.page-header-row`/`-main` are structural only (flex row + main content
+   column) - with no `right` content passed, this renders identically to
+   the old single-div markup for every existing caller. `-right` (opt-in,
+   currently only Overview's date) sits at the row's far end, vertically
+   aligned with the title block. */
+.page-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-header-main {
+  min-width: 0;
+}
+
+.page-header-right {
+  flex-shrink: 0;
+  padding-top: 2px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .page-header-eyebrow {
   display: flex;
   align-items: center;
@@ -536,15 +504,6 @@ a, button {
   margin-top: 3px;
   max-width: 640px;
   line-height: 1.5;
-}
-
-/* The section header right after the Snapshot strip ("Study profile")
-   would otherwise inherit .section-header's full space-7 (44px) top
-   margin - tighten just that one gap so Overview flows straight from the
-   strip into the next section. Kept page-specific since only Overview has
-   a .snapshot-strip. */
-.overview-page .snapshot-strip + .section-header {
-  margin-top: var(--space-5);
 }
 
 /* --- Section header --- */
@@ -799,384 +758,628 @@ a, button {
   }
 }
 
-/* --- Study Snapshot: one cohesive information strip, not four separate
-   boxed cards. A single frame (border/shadow) holds all four metrics,
-   each an equal-width column separated by a hairline divider. Live REDCap
-   status / last-updated is intentionally NOT repeated here - it lives only
-   in the global top header (Topbar.tsx / Layout.tsx). --- */
-.snapshot-strip {
+/* --- Full dashboard visual rebuild (2026-09-25) - compact clinical/
+   research monitoring interface, replacing the prior large tone-tinted
+   KPI-card system. Very small corner radius (0-4px, `--radius-sharp`),
+   thin hairline borders, `--shadow-xs` at most, restrained colour used
+   only for accents/progress lines/selected states - never a heavily
+   tinted panel. Tone custom properties (`--tone-accent`/`-soft`/
+   `-surface`/`-border`) are still resolved through the same
+   `--series-1`/`-3`/`-violet`/`-4` tokens used dashboard-wide. --- */
+.monitor-tone-blue {
+  --tone-accent: var(--series-1);
+  --tone-accent-soft: rgba(42, 120, 214, 0.16);
+}
+.monitor-tone-teal {
+  --tone-accent: var(--series-3);
+  --tone-accent-soft: rgba(27, 175, 122, 0.16);
+}
+.monitor-tone-violet {
+  --tone-accent: var(--series-violet);
+  --tone-accent-soft: rgba(74, 58, 167, 0.15);
+}
+.monitor-tone-amber {
+  --tone-accent: var(--series-4);
+  --tone-accent-soft: rgba(237, 161, 0, 0.19);
+}
+:root[data-theme="dark"] .monitor-tone-blue {
+  --tone-accent: var(--series-1);
+  --tone-accent-soft: rgba(57, 135, 229, 0.22);
+}
+:root[data-theme="dark"] .monitor-tone-teal {
+  --tone-accent: var(--series-3);
+  --tone-accent-soft: rgba(25, 158, 112, 0.24);
+}
+:root[data-theme="dark"] .monitor-tone-violet {
+  --tone-accent: var(--series-violet);
+  --tone-accent-soft: rgba(144, 133, 233, 0.24);
+}
+:root[data-theme="dark"] .monitor-tone-amber {
+  --tone-accent: var(--series-4);
+  --tone-accent-soft: rgba(201, 133, 0, 0.26);
+}
+
+/* Compact top study-summary strip - one thin-bordered sharp-cornered frame,
+   metric blocks separated by hairline dividers (no individual cards). */
+.stat-strip {
   display: flex;
-  align-items: stretch;
-  background: var(--surface-1);
+  flex-wrap: wrap;
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  transition: box-shadow var(--transition), border-color var(--transition);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: var(--space-5);
 }
 
-.snapshot-strip:hover {
-  box-shadow: var(--shadow-card-hover);
-  border-color: var(--border-hairline-strong);
-}
-
-.snapshot-strip-item {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-4);
-}
-
-.snapshot-strip-item + .snapshot-strip-item {
-  border-left: 1px solid var(--border-hairline);
-}
-
-.snapshot-strip-item::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--tone-accent);
-  opacity: 0.7;
-}
-
-@media (max-width: 760px) {
-  .snapshot-strip {
-    flex-wrap: wrap;
-  }
-
-  .snapshot-strip-item {
-    flex: 1 1 100%;
-    border-left: none !important;
-  }
-
-  .snapshot-strip-item + .snapshot-strip-item {
-    border-top: 1px solid var(--border-hairline);
-  }
-}
-
-.snapshot-tone-blue { --tone-accent: var(--series-1); --tone-accent-soft: rgba(42, 120, 214, 0.16); }
-.snapshot-tone-aqua { --tone-accent: var(--series-3); --tone-accent-soft: rgba(27, 175, 122, 0.16); }
-.snapshot-tone-amber { --tone-accent: var(--series-4); --tone-accent-soft: rgba(237, 161, 0, 0.19); }
-.snapshot-tone-violet { --tone-accent: var(--series-violet); --tone-accent-soft: rgba(74, 58, 167, 0.15); }
-
-.snapshot-card-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 4px;
-}
-
-.snapshot-card-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--tone-accent-soft);
-  color: var(--tone-accent);
-  flex-shrink: 0;
-}
-
-.snapshot-card-title {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  line-height: 1.25;
-}
-
-.snapshot-card-value {
-  font-size: 1.55rem;
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-}
-
-.snapshot-card-support {
-  margin-top: 1px;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* --- SSRS strip item: Parent/Child/Teacher as compact label/value lines,
-   not three separate columns --- */
-.snapshot-ssrs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.snapshot-ssrs-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.snapshot-ssrs-row-label {
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.snapshot-ssrs-row-value {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.snapshot-ssrs-row-muted {
-  color: var(--text-muted);
-  font-weight: 500;
-  font-style: italic;
-}
-
-:root[data-theme="dark"] .snapshot-tone-blue { --tone-accent-soft: rgba(57, 135, 229, 0.26); }
-:root[data-theme="dark"] .snapshot-tone-aqua { --tone-accent-soft: rgba(25, 158, 112, 0.28); }
-:root[data-theme="dark"] .snapshot-tone-amber { --tone-accent-soft: rgba(201, 133, 0, 0.32); }
-:root[data-theme="dark"] .snapshot-tone-violet { --tone-accent-soft: rgba(144, 133, 233, 0.3); }
-
-/* --- Overview: "Current Active Cases" info banner (2026-09-17, glow made
-   "breathing" same day; Light Mode contrast strengthened same day;
-   Dark Mode brought to equal prominence same day) - a small, non-card
-   informational strip directly below Study Snapshot, restating the live
-   current/active count (reads `overview.total_registered`, the same live
-   value every other figure on this page uses - never a second number).
-   Visually distinguished from surrounding content with a soft, diffused
-   glow using the dashboard's existing blue accent (`--series-1`, the same
-   color used by the live badge, links, and section-header dots) - not a
-   new color, not a status/alert tone (`--status-warning`/`--status-
-   critical`), so it never reads as a warning. rgba literals (not
-   var()-based alpha) match the existing precedent set by `.kpi-tone-*`/
-   `.registry-result-context`, which do the same for the same reason (CSS
-   custom properties can't carry an alpha channel on their own without
-   color-mix()).
-
-   Both themes are tuned to the SAME visual weight (Light Mode is the
-   reference), each via its own `--series-1` hex so the accent color still
-   matches each theme's own palette:
-     - Light Mode: background 0.12, border 0.55, resting glow 0.12/0.22,
-       breathing peak 0.22/0.32 - against the page's white canvas.
-     - Dark Mode: background 0.18, border 0.55, resting glow 0.18/0.3,
-       breathing peak 0.28/0.42 - deliberately a *higher* background/glow
-       alpha than Light Mode (not a reused/copied value), since the same
-       alpha over Dark Mode's near-black page (`--surface-0` #0c1220)
-       reads far more subdued than over white - this is what makes the
-       banner "a noticeably darker blue-tinted surface" that still clearly
-       separates from the surrounding dark background, not the page's
-       normal `--surface-1`/`--surface-2` card tone.
-   `.active-cases-banner-text` is `--text-primary` (near-black) in Light
-   Mode and explicitly overridden to `--text-secondary` (light slate) in
-   Dark Mode - each theme's own high-contrast-but-secondary text token,
-   never one color reused unreadably in the other theme.
-
-   The base `box-shadow` below is the resting/fallback glow - always
-   present. A separate `animation` (declared further down, inside its own
-   `prefers-reduced-motion: no-preference` block) slowly grows and shrinks
-   ONLY that box-shadow's blur/spread/opacity between two keyframes (one
-   per theme); it never touches `transform`, `border`, `padding`,
-   `margin`, or any layout property, so the banner itself - its position,
-   size, border, and text - stays completely stationary in both themes. A
-   reduced-motion preference simply leaves the static resting glow in
-   place (no animation applied at all, not a frozen mid-animation
-   frame). */
-.active-cases-banner {
+.stat-block {
+  flex: 1 1 200px;
+  min-width: 180px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: var(--space-4) 0 var(--space-6);
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-control);
-  background: rgba(42, 120, 214, 0.12);
-  border: 1px solid rgba(42, 120, 214, 0.55);
-  box-shadow:
-    0 0 0 1px rgba(42, 120, 214, 0.12),
-    0 0 22px 2px rgba(42, 120, 214, 0.22);
+  padding: var(--space-4) var(--space-5);
+  border-left: 1px solid var(--border-hairline);
 }
 
-.active-cases-banner-title {
-  font-size: 0.82rem;
+.stat-block:first-child {
+  border-left: none;
+}
+
+button.stat-block {
+  width: auto;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+
+.stat-block-clickable:hover {
+  background: var(--surface-2);
+}
+
+.stat-block-label {
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.stat-block-value {
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-block-footnote {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+@media (max-width: 900px) {
+  .stat-block {
+    flex: 1 1 50%;
+  }
+  .stat-block:nth-child(odd) {
+    border-left: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-block {
+    flex: 1 1 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-hairline);
+  }
+  .stat-block:first-child {
+    border-top: none;
+  }
+}
+
+/* Thin (3px, sharp) progress line - used everywhere a donut/large chart
+   would otherwise have been, per the new density/restraint direction. */
+.monitor-bar {
+  height: 4px;
+  margin-top: 4px;
+  background: var(--gridline);
+  border-radius: 0;
+}
+
+.monitor-bar-fill {
+  height: 100%;
+}
+
+.monitor-bar-tone-blue .monitor-bar-fill {
+  background: var(--series-1);
+}
+.monitor-bar-tone-teal .monitor-bar-fill {
+  background: var(--series-3);
+}
+.monitor-bar-tone-violet .monitor-bar-fill {
+  background: var(--series-violet);
+}
+.monitor-bar-tone-amber .monitor-bar-fill {
+  background: var(--series-4);
+}
+
+/* Two-column monitoring layout: left = main study information (compact
+   metric-row sections), right = a sticky contextual detail panel that
+   updates on row selection. Collapses to a single column - detail panel
+   below main content - on tablet/mobile, per the responsiveness spec. */
+.monitor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.monitor-quick-actions {
+  margin-top: var(--space-5);
+}
+
+.monitor-quick-actions-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.monitor-quick-action {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  margin-bottom: 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.monitor-quick-action:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--series-1);
   color: var(--series-1);
 }
 
-.active-cases-banner-text {
-  font-size: 0.82rem;
-  color: var(--text-primary);
+.monitor-quick-action:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
-:root[data-theme="dark"] .active-cases-banner {
-  background: rgba(57, 135, 229, 0.18);
-  border-color: rgba(57, 135, 229, 0.55);
-  box-shadow:
-    0 0 0 1px rgba(57, 135, 229, 0.18),
-    0 0 26px 3px rgba(57, 135, 229, 0.3);
+.monitor-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
-:root[data-theme="dark"] .active-cases-banner-text {
-  color: var(--text-secondary);
+.monitor-detail {
+  position: sticky;
+  top: calc(var(--space-4));
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .active-cases-banner {
-    animation: active-cases-banner-glow 3.6s ease-in-out infinite;
+@media (max-width: 980px) {
+  .monitor-layout {
+    grid-template-columns: 1fr;
   }
-
-  :root[data-theme="dark"] .active-cases-banner {
-    animation-name: active-cases-banner-glow-dark;
-  }
-}
-
-@keyframes active-cases-banner-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(42, 120, 214, 0.12),
-      0 0 22px 2px rgba(42, 120, 214, 0.22);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(42, 120, 214, 0.22),
-      0 0 36px 7px rgba(42, 120, 214, 0.32);
+  .monitor-detail {
+    position: static;
   }
 }
 
-@keyframes active-cases-banner-glow-dark {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 1px rgba(57, 135, 229, 0.18),
-      0 0 26px 3px rgba(57, 135, 229, 0.3);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1px rgba(57, 135, 229, 0.28),
-      0 0 40px 8px rgba(57, 135, 229, 0.42);
-  }
-}
-
-/* --- Overview: Assessment Tool Status card (2026-09-11) - one overall
-   figure on top, four equal, clearly separate test columns below, in a
-   single cohesive container matching Study Snapshot's strip language but
-   with almost-square corners (--radius-sharp) instead of --radius-card. --- */
-.ats-card {
-  background: var(--surface-1);
+.monitor-section {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-sharp);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-4) var(--space-5);
 }
 
-.ats-overall {
+.monitor-section-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-1);
   border-bottom: 1px solid var(--border-hairline);
 }
 
-.ats-overall-label {
+.monitor-section-title {
   font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.monitor-section-note {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.monitor-section-footnote {
+  margin: var(--space-2) 0 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.monitor-subgroup-label {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Study Profile - three compact columns (Sex/Age/SES) instead of one long
+   vertically-stacked list, separated by a hairline divider on desktop and
+   collapsing to a single column on narrow screens. */
+.study-profile-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: var(--space-6);
+}
+
+.study-profile-col {
+  min-width: 0;
+}
+
+.study-profile-col + .study-profile-col {
+  border-left: 1px solid var(--border-hairline);
+  padding-left: var(--space-5);
+}
+
+.study-profile-col .monitor-subgroup-label {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* Narrower columns still get a real (if shorter) bar/value column - long
+   enough to read as a genuine progress indicator, short enough that the
+   row label (e.g. "Lower-middle") never gets crowded out. */
+.study-profile-col .monitor-row {
+  grid-template-columns: 1fr auto 64px;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+}
+
+.study-profile-col .monitor-row-selected {
+  padding-left: calc(0.3rem - 2px);
+}
+
+/* Below ~1150px, three side-by-side columns don't leave enough room for
+   label + value + bar on one line (this triggers well before the 3-column
+   layout itself needs to collapse to 1, since .monitor-layout may already
+   be single-column here, giving each of the 3 columns less width than the
+   desktop 2-column case). Stack the bar under the label/value instead of
+   collapsing the columns - same graceful-degradation pattern already used
+   at the true mobile breakpoint further down. */
+@media (max-width: 1150px) {
+  .study-profile-col .monitor-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 3px;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+  }
+  .study-profile-col .monitor-row .monitor-bar {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+}
+
+@media (max-width: 760px) {
+  .study-profile-columns {
+    grid-template-columns: 1fr;
+    row-gap: var(--space-2);
+  }
+  .study-profile-col + .study-profile-col {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--border-hairline);
+    padding-top: var(--space-2);
+  }
+}
+
+/* One metric row - a small tone dot + label, a grouped count/percent value,
+   and a short fixed-width progress indicator, all inline in one compact
+   row (never a full-width bar spanning the row below the text). Rendered
+   as a <button> so the right-hand detail panel can react to a click; rows
+   with no `onSelect` render disabled (plain, non-interactive) rows. */
+.monitor-row {
+  display: grid;
+  grid-template-columns: 1fr auto 120px;
+  align-items: center;
+  column-gap: var(--space-4);
+  width: 100%;
+  padding: 0.6rem 0.5rem;
+  border: none;
+  border-bottom: 1px solid var(--border-hairline);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.monitor-row:last-of-type {
+  border-bottom: none;
+}
+
+.monitor-row:disabled {
+  cursor: default;
+}
+
+.monitor-row:not(:disabled):hover {
+  background: var(--surface-2);
+}
+
+.monitor-row-selected {
+  background: var(--tone-accent-soft, var(--surface-2));
+  border-left: 2px solid var(--tone-accent, var(--series-1));
+  padding-left: calc(0.5rem - 2px);
+}
+
+.monitor-row-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  grid-column: 1;
+  min-width: 0;
+}
+
+.monitor-row-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--tone-accent, var(--series-1));
+}
+
+.monitor-row-value {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  grid-column: 2;
+  white-space: nowrap;
+}
+
+/* The progress indicator sits in its own short, fixed-width third column -
+   a tertiary supporting cue, never the visually dominant element. */
+.monitor-row .monitor-bar {
+  grid-column: 3;
+  margin-top: 0;
+  width: 100%;
+}
+
+/* Below ~480px there isn't room for label + value + a 120px bar on one
+   line without crowding/wrapping - drop to two rows instead (label+value
+   on top, the bar spanning full width below), same layout every row on
+   this page used before the inline-bar redesign. */
+@media (max-width: 480px) {
+  .monitor-row,
+  .study-profile-col .monitor-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+  }
+
+  .monitor-row .monitor-bar {
+    grid-column: 1 / -1;
+    margin-top: 2px;
+  }
+}
+
+/* A non-interactive row (e.g. Data Quality's "Not currently available"
+   checks) - same layout as `.monitor-row`, no hover/pointer affordance. */
+.monitor-row-static {
+  cursor: default;
+}
+
+.monitor-row-static:hover {
+  background: none;
+}
+
+.monitor-row-value-muted {
+  grid-column: 2 / -1;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.74rem;
+  white-space: normal;
+  text-align: right;
+}
+
+/* --- Data Quality page --- */
+.dq-reconciliation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-2) 0.3rem 0;
+  border-top: 1px dashed var(--border-hairline);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.dq-id-scroll {
+  margin-top: var(--space-2);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.dq-id-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dq-id-chip {
+  padding: 2px 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.dq-check-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.dq-check-row {
+  display: grid;
+  grid-template-columns: 1fr auto 40px;
+  align-items: center;
+  column-gap: var(--space-3);
+  padding: 0.5rem 0.3rem;
+  border-bottom: 1px solid var(--border-hairline);
+  cursor: pointer;
+}
+
+.dq-check-row:last-child {
+  border-bottom: none;
+}
+
+.dq-check-row:hover {
+  background: var(--surface-2);
+}
+
+.dq-check-row-static {
+  cursor: default;
+}
+
+.dq-check-row-static:hover {
+  background: none;
+}
+
+.dq-check-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dq-check-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dq-issue-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.dq-issue-table th:nth-child(3),
+.dq-issue-table td:nth-child(3) {
+  width: 14%;
+}
+
+.dq-issue-table th:nth-child(4),
+.dq-issue-table td:nth-child(4) {
+  white-space: normal;
+}
+
+/* Right-hand contextual detail panel content. */
+.monitor-detail-panel {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-xs);
+  padding: var(--space-4) var(--space-5);
+}
+
+.monitor-detail-empty {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.monitor-detail-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.monitor-detail-subtitle {
+  margin-top: 3px;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.monitor-detail-rows {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.monitor-detail-row {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.monitor-detail-row:last-child {
+  border-bottom: none;
+}
+
+.monitor-detail-row-label {
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--text-secondary);
 }
 
-.ats-overall-value {
-  font-size: 1.15rem;
-  font-weight: 750;
+.monitor-detail-row-value {
+  float: right;
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.ats-overall-percent {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.ats-tests {
-  display: flex;
-  align-items: stretch;
-}
-
-.ats-test-col {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-}
-
-.ats-test-col + .ats-test-col {
-  border-left: 1px solid var(--border-hairline);
-}
-
-.ats-test-col::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--tone-accent);
-  opacity: 0.7;
-}
-
-.ats-test-label {
+.monitor-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-3);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 2px;
+  color: var(--series-1);
+  text-decoration: none;
 }
 
-.ats-test-value {
-  font-size: 1.1rem;
-  font-weight: 750;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.15;
+.monitor-detail-link:hover {
+  text-decoration: underline;
 }
 
-.ats-test-percent {
-  margin-top: 1px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 760px) {
-  .ats-tests {
-    flex-wrap: wrap;
-  }
-
-  .ats-test-col {
-    flex: 1 1 50%;
-    border-left: none !important;
-  }
-
-  .ats-test-col:nth-child(odd) {
-    border-right: 1px solid var(--border-hairline);
-  }
-
-  .ats-test-col:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--border-hairline);
-  }
+/* Edge-to-edge "View Participant Assessment Status" footer bar inside a
+   .monitor-section (which has its own padding) - same negation precedent
+   used dashboard-wide for an inset panel that should read as a footer. */
+.monitor-section .ats-pstatus {
+  margin: var(--space-3) calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
 }
 
 /* --- "Participant Assessment Status" expandable mini-section
@@ -1192,16 +1395,17 @@ a, button {
   border: none;
   border-top: 1px solid var(--border-hairline);
   background: var(--surface-2);
-  color: var(--text-secondary);
+  color: var(--series-1);
   font: inherit;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   text-align: left;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .ats-common-toggle:hover {
-  color: var(--text-primary);
+  color: var(--series-1);
   background: var(--surface-2-strong, var(--surface-2));
 }
 
@@ -2000,25 +2204,6 @@ a, button {
   margin-bottom: var(--space-4);
 }
 
-.chart-card-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--gridline);
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--series-1);
-  text-decoration: none;
-  width: fit-content;
-  transition: gap var(--transition-fast);
-}
-
-.chart-card-link:hover {
-  gap: 7px;
-}
-
 .chart-card-note {
   color: var(--text-muted);
   font-size: 0.74rem;
@@ -2811,69 +2996,6 @@ table.data-table tbody tr:hover {
   }
 }
 
-/* --- Data Collection & Quality Status panel --- */
-.status-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: var(--space-5);
-}
-
-@media (max-width: 760px) {
-  .status-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.status-stat-value {
-  font-size: 1.5rem;
-  font-weight: 750;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-.status-stat-label {
-  margin-top: 2px;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
-
-.status-flag-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-hairline);
-}
-
-.status-flag-row {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-
-.status-flag-tag {
-  display: inline-block;
-  margin-right: var(--space-2);
-  padding: 0.15rem 0.5rem;
-  border-radius: var(--radius-pill);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.status-flag-tag-warning {
-  color: var(--status-warning);
-  background: var(--status-warning-bg);
-}
-
-.status-flag-tag-neutral {
-  color: var(--status-neutral);
-  background: var(--status-neutral-bg);
-}
-
 .data-load-error {
   display: flex;
   flex-direction: column;
@@ -2979,102 +3101,32 @@ table.data-table tbody tr:hover {
   color: #eef1f7;
 }
 
-/* --- Responsive top navigation (small screens) --- */
+/* --- Responsive shell (small screens) --- */
 @media (max-width: 900px) {
-  .topnav-header-row {
-    padding: 0.6rem var(--space-4);
-    gap: var(--space-3);
+  .app-header-inner {
+    padding: var(--space-3) var(--space-4) 0;
   }
 
-  .topnav-links,
-  .topnav-status {
+  .app-header-title {
+    font-size: 1.15rem;
+  }
+
+  .app-header-subtitle {
     display: none;
   }
 
-  .topnav-brand-title {
-    font-size: 0.8rem;
-  }
-
-  /* Keep the header row's controls usable but compact: drop the
-     last-updated text and the refresh button's label, icon-only buttons. */
-  .topnav-header-row .app-topbar-status {
+  .app-header-controls .live-badge,
+  .app-header-controls .last-updated,
+  .app-header-controls .refresh-button-label {
     display: none;
   }
 
-  .topnav-header-row .refresh-button-label {
-    display: none;
-  }
-
-  .topnav-header-row .refresh-button {
+  .app-header-controls .refresh-button {
     padding: 0.42rem;
   }
 
-  .mobile-menu-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-control);
-    border: 1px solid var(--border-hairline);
-    background: var(--surface-1);
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: background-color var(--transition-fast);
-  }
-
-  .mobile-menu-button:hover {
-    background: var(--surface-2);
-  }
-
-  .topnav-mobile-menu {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--space-2) var(--space-4) var(--space-4);
-    border-top: 1px solid var(--border-hairline);
-    animation: fade-in 0.15s ease;
-  }
-
-  .topnav-mobile-link {
-    display: block;
-    padding: 0.55rem 0.7rem;
-    border-radius: var(--radius-control);
-    text-decoration: none;
-    color: var(--text-secondary);
-    font-size: 0.86rem;
-    font-weight: 600;
-  }
-
-  .topnav-mobile-link:hover {
-    background: var(--surface-2);
-    color: var(--text-primary);
-  }
-
-  .topnav-mobile-link.active {
-    background: var(--tone-accent-soft, rgba(42, 120, 214, 0.12));
-    color: var(--series-1);
-  }
-
-  .topnav-mobile-link-indent {
-    padding-left: var(--space-5);
-    font-weight: 500;
-  }
-
-  .topnav-mobile-section-label {
-    margin: var(--space-2) 0 0;
-    padding: 0 0.7rem;
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-  }
-
-  @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  .app-content {
+    padding: var(--space-4);
   }
 }
 
@@ -3156,7 +3208,6 @@ table.data-table tbody tr:hover {
   background: rgba(57, 135, 229, 0.16);
 }
 
-:root[data-theme="dark"] .mobile-menu-button,
 :root[data-theme="dark"] .refresh-button,
 :root[data-theme="dark"] .theme-toggle {
   background: var(--surface-1);
@@ -3620,5 +3671,288 @@ th.registry-instrument-col-highlighted {
 
 :root[data-theme="dark"] .query-control-panel {
   background: var(--surface-2);
+}
+
+/* --- Core Assessment Completion "View remaining" drawer (Overview) -
+   same right-side slide-over visual language as Registry's own
+   `.registry-detail-overlay`/`.registry-detail-panel` (new class names
+   since the content/semantics differ), just wider to fit the participant
+   table; search/filter/table styling reuses the existing `.ats-pstatus-*`
+   rules as-is, no duplicated table CSS. --- */
+.core-remaining-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 24, 43, 0.32);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 60;
+}
+
+.core-remaining-panel {
+  width: min(640px, 100%);
+  height: 100%;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-card-hover);
+  padding: var(--space-4) var(--space-5);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.core-remaining-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--gridline);
+}
+
+.core-remaining-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.core-remaining-summary {
+  margin-top: 3px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.core-remaining-forms-cell {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.core-remaining-table th:last-child,
+.core-remaining-table td:last-child {
+  text-align: left;
+}
+
+/* --- Study Questionnaires page (2026-09-26 rebuild) - a balanced 2-column
+   layout with inline per-row expansion instead of a separate sticky detail
+   column - the previous 3-col-list + 1-lonely-detail-panel layout read as
+   two disconnected "hemispheres" and is not reused here.
+   CSS multi-column ("masonry"), not CSS Grid: a 2-col Grid row-locks to
+   its tallest cell in each row, which produced large empty gaps below a
+   shorter card (e.g. SES) before the next row could start - multi-column
+   instead packs cards top-to-bottom per column, so a short card is
+   immediately followed by the next card with no dead space. The final
+   full-width Neurodevelopment card is rendered as its own `.monitor-
+   section` outside this columns container (see StudyQuestionnaires.tsx),
+   not via `column-span`, to keep the ordering/behaviour simple. */
+.sq-domain-columns {
+  column-count: 2;
+  column-gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+@media (max-width: 860px) {
+  .sq-domain-columns {
+    column-count: 1;
+  }
+}
+
+.sq-domain-panel {
+  display: flex;
+  flex-direction: column;
+  break-inside: avoid;
+  margin-bottom: var(--space-5);
+}
+
+.sq-domain-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.sq-domain-number {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sharp);
+  background: var(--tone-accent-soft, var(--surface-2));
+  color: var(--tone-accent, var(--series-1));
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sq-domain-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--tone-accent, var(--series-1));
+}
+
+.sq-domain-title {
+  margin-top: 2px;
+  font-size: 0.98rem;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+
+.sq-domain-description {
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.sq-group-band {
+  margin: var(--space-3) 0 var(--space-1);
+  padding: 0.32rem var(--space-2);
+  border-radius: var(--radius-sharp);
+  background: var(--tone-accent-soft, var(--surface-2));
+  color: var(--tone-accent, var(--series-3));
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sq-row-wrap + .sq-row-wrap {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.sq-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto 16px;
+  align-items: center;
+  column-gap: var(--space-3);
+  width: 100%;
+  padding: 0.6rem 0.2rem;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sq-row:hover {
+  background: var(--surface-2);
+}
+
+.sq-row-expanded {
+  background: var(--tone-accent-soft, var(--surface-2));
+}
+
+.sq-row-id {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--tone-accent, var(--series-1));
+  font-variant-numeric: tabular-nums;
+}
+
+.sq-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sq-row-name {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sq-row-descriptor {
+  margin-top: 1px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.sq-row-bar {
+  max-width: 160px;
+  margin-top: 6px;
+}
+
+.sq-row-value {
+  flex-shrink: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sq-row-value-count {
+  font-size: 0.86rem;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+
+.sq-row-value-percent {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sq-row-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.sq-row-chevron-open {
+  transform: rotate(90deg);
+  color: var(--tone-accent, var(--series-1));
+}
+
+/* Inline expansion - replaces the previous separate sticky right-hand
+   detail column entirely; detail renders directly beneath the row that
+   was clicked, within the same domain card. */
+.sq-row-detail {
+  padding: var(--space-2) var(--space-3) var(--space-3) 2.4rem;
+  background: var(--surface-2);
+}
+
+.sq-row-detail-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.sq-row-detail-subtitle {
+  margin-top: 2px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.sq-row-detail-rows {
+  margin-top: var(--space-1);
+  display: flex;
+  flex-direction: column;
+}
+
+.sq-row-detail-item {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.sq-row-detail-item:last-child {
+  border-bottom: none;
+}
+
+.sq-row-detail-label {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.sq-row-detail-value {
+  float: right;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
 }
 

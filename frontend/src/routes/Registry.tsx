@@ -18,7 +18,7 @@ const PAGE_SIZE = 25;
 // in the same pipeline order as ALL_INSTRUMENTS/CORE_BATTERY_INSTRUMENTS
 // (backend/app/ingestion/live_field_map.py) - registration is not repeated
 // here since it already has its own dedicated column.
-const INSTRUMENT_COLUMNS: { key: string; short: string; label: string }[] = [
+export const INSTRUMENT_COLUMNS: { key: string; short: string; label: string }[] = [
   { key: "ses", short: "SES", label: "SES" },
   { key: "dseq", short: "DSEQ", label: "DSEQ" },
   { key: "child_illness_history", short: "CHH", label: "Child Illness History" },

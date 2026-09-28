@@ -3411,6 +3411,482 @@ single-column mobile stacking, and zero horizontal overflow.
 
 ---
 
+## DASHBOARD REDESIGN - SECTION 1 (header + KPI row) - complete on
+`feature/dashboard_redesign` (2026-09-23, not on `main`; supersedes an
+earlier same-day pass on this branch that reused `SnapshotMetricCard` and
+was explicitly rejected by the user as "too conservative... mostly changed
+labels/values while reusing the old SnapshotMetricCard visual system")
+
+A multi-section frontend-only visual redesign is underway on the
+**`feature/dashboard_redesign`** branch - `main` is untouched. Section 1
+(Overview's header + top KPI row) is implemented as a genuinely new
+"monitoring system" card design, not a reskin of the existing
+`SnapshotMetricCard`/`.snapshot-strip` system. Later sections are not yet
+started. No REDCap integration, API contract, backend calculation, or
+data-fetching logic was touched - presentation-only, and no backend file
+was changed (confirmed via `git status --short`/`git diff --stat` - only
+`CLAUDE.md` and 4 frontend files touched).
+
+**Header** (`Overview.tsx`, same shared `PageHeader` component, extended
+- not replaced): `eyebrow` "Study Monitoring Dashboard", `title` "ICMR
+Neurodevelopment Study", `subtitle` "Live study overview and participant
+assessment monitoring". `PageHeader.tsx` gained a new optional `right?:
+ReactNode` prop (backward-compatible - every other page that omits it
+renders exactly as before) wrapped in new `.page-header-row`/
+`.page-header-main`/`.page-header-right` CSS (a flex row, `justify-
+content: space-between`, wraps on narrow screens); Overview passes the
+current dashboard date there, formatted from the **existing** `useRefresh
+().lastUpdated` value (the same live-REDCap-fetch timestamp `Topbar.tsx`
+already shows as "Last updated: HH:MM:SS") via `.toLocaleDateString("en-
+GB", { day: "2-digit", month: "long", year: "numeric" })` - deliberately
+a date, not a duplicate of Topbar's own time-of-day text. No new date
+source was introduced.
+
+**KPI row - new component, not the old one**: `SnapshotMetricCard.tsx`
+was deleted outright (confirmed via grep to have no other consumers) and
+replaced by a new, purpose-built `frontend/src/components/
+MonitoringKpiCard.tsx` (`icon`, `label`, `value`, `support`, `tone: "blue"
+| "teal" | "violet" | "amber"`, optional `percent?: number`). Rendered in
+a new `.monitoring-kpi-grid` (CSS grid, 4 equal columns desktop → 2×2 at
+≤980px → 1 column at ≤520px, replacing `.snapshot-strip`'s old flex-strip
+layout) holding 4 cards, same underlying data sources as the prior pass -
+none invented, none recalculated:
+- **Total Cohort** - `STUDY_ORIGINAL_ENROLLMENT` (222, the unchanged
+  senior-confirmed static constant, see "STUDY ENROLLMENT HEADLINE"
+  above), support "Original enrolled cohort". Tone `blue`, no `percent`
+  (a plain full-width tone-colored bar, not a fabricated 100%).
+- **Current Active Cases** - `overview.total_registered` (live 212),
+  support "Current analytical population". Tone `teal`, no `percent`.
+- **Assessment Progress** - `assessmentToolStatus.overall_participant.
+  done_count`/`.total`/`.percent` (the same existing participant-level
+  Assessment Tool Status metric as the prior pass, unchanged calculation),
+  value formatted `"N / 212"` (spaced, matching this redesign's mockup).
+  Tone `violet`, **real** `percent={...overall_participant.percent}` -
+  the bar is genuinely filled to that percentage, not decorative.
+- **Core Assessment Completion** - `overview.core_assessment_count`/
+  `overview.core_assessment_percent` (unchanged "Core REDCap Instruments
+  Completed" six-instrument-intersection metric). Tone `amber`, real
+  `percent={overview.core_assessment_percent}`.
+Each card: a 34px circular icon chip, an uppercase tone-colored label, a
+large tabular-nums value, secondary support text, and a 5px pill progress
+bar at the bottom - and, critically, a **soft tone-tinted card surface**
+(`background`/`border` resolved through new `--tone-surface`/`--tone-
+border`/`--tone-accent`/`--tone-accent-soft` custom properties per tone
+class, themselves resolved through the app's existing `--series-1`
+(blue)/`--series-3` (teal)/`--series-violet`/`--series-4` (amber) design
+tokens via rgba literals - no new colors introduced), not a plain white
+card with only a colored icon. A `:hover` lift (`translateY(-2px)` +
+stronger shadow + accent-colored border) was added, new for this card
+type. **Dark mode is a deliberate second treatment, not an inversion**:
+each tone has its own `:root[data-theme="dark"] .monitoring-kpi-tone-*`
+override using different (generally higher-opacity) rgba values than
+light mode - verified live: light-mode blue card background/border
+`rgba(42,120,214,0.06)`/`rgba(42,120,214,0.22)` vs. dark-mode
+`rgba(57,135,229,0.1)`/`rgba(57,135,229,0.32)`, and likewise for all
+three other tones.
+**Removed**: the "Study snapshot" `SectionHeader` (the new grid needs no
+extra section label, it sits directly under the page header); the
+`.snapshot-strip`/`.snapshot-tone-*`/`.snapshot-card-*`/`.snapshot-ssrs-*`
+CSS block (fully dead after the component swap, replaced in place by the
+new `.monitoring-kpi-*` rules, not left alongside it); the standalone
+"Current Active Cases" info banner and `SsrsSummaryCard`/`SsrsRow`/
+`sesCoverage` (removed in the prior, now-superseded pass - unchanged
+here, still absent, still correctly non-duplicative with the Assessment
+Coverage instrument grid further down the page). The `.active-cases-
+banner*` CSS (breathing-glow keyframes) remains in `app.css`, still
+unused - flag as dead CSS if a later section doesn't reclaim it.
+
+Verified: `tsc --noEmit` clean; `npm run build` succeeds. Live-verified via
+a cached local Playwright install against a real backend (port 8001) and
+a live frontend dev server, both themes, at 1400px (desktop, 4-column),
+800px (tablet, 2×2), and 390px (mobile, 1-column): zero horizontal
+overflow at every width (`scrollWidth === clientWidth`), zero browser
+console errors, all 4 card values read live from `overview`/
+`assessmentToolStatus` (spot-checked: Total Cohort 222, Current Active
+Cases 212, Assessment Progress 12/212 (5.7%), Core Assessment Completion
+56/212 (26.42%)), computed `background-color`/`border-color` on every
+card confirmed genuinely tone-tinted (not white) in both themes with
+distinct light/dark alpha values as designed, header date rendered
+correctly ("23 September 2026"). Nothing was committed - working tree
+changes only, per instruction. Do not proceed to further Overview
+sections (Assessment Tool Status, Study Profile, etc.) under this task -
+they are explicitly out of scope and unchanged.
+
+**Global shell redesign - sidebar + header (2026-09-23, same branch, same
+day - supersedes the horizontal top-nav shell described earlier in this
+file; Section 1's KPI grid above is unchanged, still `MonitoringKpiCard`/
+`.monitoring-kpi-grid`):** the former sticky top nav bar (`Overview |
+Registry | Assessments` links + a plain brand-text bar) was replaced with
+a persistent **left sidebar** + a slimmer **shell header**, per an explicit
+follow-up request for "a clearly visible transformation," scoped to the
+shell only - no lower page content, calculation, REDCap mapping, or API
+contract touched.
+
+- **`frontend/src/components/Sidebar.tsx`** (new) - a ~246px fixed-width
+  panel: brand block (icon chip + "ICMR / Neurodevelopment / Study"
+  stacked text) at top, then 4 grouped nav sections built from a local
+  `SECTIONS` array - **Main** (Dashboard → `/`), **Study** (Participants →
+  `/registry`, Assessments → `/assessments`, with `matchAlso` keeping it
+  active on `/physical-activity`/`/screen-time`/`/dietary-intake`/
+  `/assessment-tool-status`, same "parent section stays highlighted on a
+  child route" precedent the old `ASSESSMENT_ROUTES` array used), **Clinical**
+  (Health → `/health-screening`, Development → `/neurodevelopment`),
+  **Analysis** (Analysis → `/demographics` - previously reachable only via
+  the Assessments hub's SES card; now also has a direct sidebar entry, no
+  new route). A 5th **System** section renders a static, non-interactive
+  "Settings" row (`aria-disabled`, no `NavLink`, no route) - per explicit
+  instruction not to fabricate functionality, since no settings page/route
+  exists. At the bottom, a **REDCap Live** status chip reuses the exact
+  same `useRefresh().error` state the old top nav's live badge never
+  actually surfaced - a genuine (if minor) behavior addition using only
+  already-existing state, not a new connection mechanism: normally shows a
+  green dot / "REDCap Live" / "Connected"; if the last refresh failed, it
+  switches to an amber dot / "REDCap Issue" / "Refresh failed" via a new
+  `.sidebar-status-warning` modifier class.
+- **`frontend/src/components/Layout.tsx`** (rewritten): `.app-shell` is now
+  a flex row (`Sidebar` + a `.app-main` column); the column's own `.app-header`
+  carries the masthead (eyebrow "Study Monitoring Dashboard" / title "ICMR
+  Neurodevelopment Study" / subtitle "Live study overview and participant
+  assessment monitoring" - the exact same text Overview's own `PageHeader`
+  showed in the prior pass) plus the right-side controls - live badge,
+  last-updated date (`lastUpdated.toLocaleDateString(...)`, unchanged
+  source), the refresh button, and the theme toggle. These controls'
+  logic (`useRefresh()`/`useTheme()`) was inlined directly into `Layout.tsx`
+  from the now-deleted `Topbar.tsx` (confirmed via grep to have no other
+  consumer) - same behavior, not reimplemented. A hamburger button toggles
+  a `mobileOpen` state that adds `.sidebar-open` to `.app-shell` and renders
+  a click-to-close `.sidebar-scrim` overlay below ~900px, where the sidebar
+  becomes an off-canvas drawer (`position: fixed; transform: translateX(-100%)`,
+  slides in on open) instead of the old flattened mobile link list -
+  `PageBackNav`/`RouteErrorBoundary` render exactly as before, unaffected.
+- **`Overview.tsx`**: its own `<PageHeader eyebrow=... title=... subtitle=.../>`
+  call (added in the prior same-day Section 1 pass) was removed - the new
+  global shell header now shows this exact text on every page, so keeping
+  it would have duplicated the masthead only on Overview. The page now
+  opens directly with `.monitoring-kpi-grid`, unchanged from Section 1.
+  `PageHeader` import and the no-longer-used `lastUpdated` destructure
+  were removed (`PageHeader.tsx` itself, including its optional `right`
+  prop added in Section 1, is unchanged and still used by every other
+  page's own in-page title).
+- **`icons.tsx`**: added `IconSettings` (a plain gear glyph, same `Svg`
+  wrapper convention as every other icon in this file) for the sidebar's
+  Settings row - no new icon library.
+- **CSS** (`app.css`): the entire `.app-topnav`/`.topnav-*`/`.app-topbar*`
+  rule set was replaced with `.app-shell`/`.app-sidebar`/`.sidebar-*`/
+  `.app-header`/`.app-header-*` - sidebar background is `--surface-2`
+  (light: soft neutral `#f5f7fb`, distinct from the page's pure-white
+  canvas; dark: already a proper deep navy via the existing theme-token
+  redefinition, no extra dark-mode CSS needed for the base surface) with
+  one deliberate dark-only addition, a brighter `.sidebar-link.active`
+  background (`rgba(57,135,229,0.22)` vs. light mode's `rgba(42,120,214,0.14)`
+  fallback), same "higher alpha needed for equal visual weight against a
+  dark background" precedent already used for the Active Cases banner
+  elsewhere in this file. `.last-updated`/`.refresh-error` were kept
+  (still used by the header controls); `.app-topbar`/`.app-topbar-status`/
+  `.app-topbar-actions` were deleted as dead CSS now that `Topbar.tsx` is
+  gone. The old `@media (max-width: 900px)` top-nav block was replaced with
+  a sidebar-off-canvas-drawer block at the same breakpoint.
+- **Bug caught during live verification and fixed before completing**: the
+  mobile drawer's `.sidebar-scrim` (`z-index: 45`) was initially placed
+  *above* `.app-sidebar` (`z-index: 40`), so opening the drawer would have
+  visually shown the sidebar but silently intercepted every click on its
+  nav links with the scrim underneath a taller z-index - confirmed via
+  `document.elementFromPoint()` resolving to `sidebar-scrim` instead of
+  `sidebar-link` at a sidebar coordinate. Fixed by raising `.app-sidebar`
+  to `z-index: 50` (above the scrim's 45); re-verified
+  `elementFromPoint()` now resolves to `sidebar-link` at the same
+  coordinate.
+No REDCap mapping, calculation, denominator, API contract, or any lower
+page section (Assessment Tool Status card, Study Profile charts, Registry
+table/filters/export, or any other route's own content) was touched -
+confirmed via `git diff --stat` (`Sidebar.tsx`/`MonitoringKpiCard.tsx` new,
+`SnapshotMetricCard.tsx`/`Topbar.tsx` deleted, `Layout.tsx`/`PageHeader.tsx`/
+`icons.tsx`/`Overview.tsx`/`app.css` modified, no backend file). Verified:
+`tsc --noEmit` clean; `npm run build` succeeds. Live-verified via the same
+cached local Playwright pattern against a real backend (port 8001) and a
+live frontend dev server, both themes, at 1440px (desktop - sidebar +
+4-column KPI grid), 800px (tablet - sidebar hidden, hamburger visible,
+2×2 KPI grid), and 390px (mobile - 1-column KPI grid, drawer open/closed):
+zero horizontal overflow at every width, zero console errors, sidebar
+`background-color` confirmed genuinely distinct from the white page canvas
+in light mode (`rgb(245,247,251)`) and a proper dark navy in dark mode
+(`rgb(26,35,56)`), active-link highlighting correct on both `/` (Dashboard)
+and `/registry` (Participants), Registry's own page (Quick Queries, filter
+bar, export buttons, participant table with live data) renders completely
+unaffected under the new shell. Nothing was committed - working tree
+changes only, per instruction. Do not proceed to redesigning any lower
+dashboard section under this task, per explicit instruction.
+
+**Section 2 - Assessment Progress monitoring panel (2026-09-23, same
+branch, same day - supersedes the `.ats-card`/`.ats-test-col` four-equal-
+column strip described in the Section 1/prior "Assessment Tool Status"
+history above; the Section 1 sidebar/header/KPI cards themselves are
+untouched):** the plain four-column rectangular strip was replaced with a
+purpose-built two-column monitoring panel, same underlying data - no new
+calculation, no backend/API/REDCap change.
+
+- **`AssessmentToolStatusCard` rewritten** (`Overview.tsx`) - `.ats-panel`
+  (one bordered/shadowed container, `--radius-card`, matching Section 1's
+  card language) now opens with a subtitle ("Assessment completion across
+  the active cohort"), then a `.ats-panel-grid` two-column layout (stacks
+  to one column ≤760px): **left** - `.ats-overall-panel`, reusing the
+  existing `DonutChart` component (already used for Sex Distribution) fed
+  `[{label:"Completed",count:done_count},{label:"Remaining",count:total-
+  done_count}]` from `status.overall_participant` - centre shows the
+  percent, the donut's own legend rows surface the "Remaining" count as
+  genuine extra context the KPI row above doesn't show, not a duplicate of
+  it, per instruction; **right** - `.ats-tools-panel`, four
+  `.ats-tool-row`s (SANGIAN/VWM/DCCS/CD, unchanged `*_participant`
+  done_count/total/percent values), each a tinted icon chip (`IconGraduationCap`/
+  `IconBrain`/`IconClipboardCheck`/`IconMonitor`) + label + value/percent on
+  one line, a thin progress bar below filled to the real percent. The
+  `SectionHeader` title was renamed from "Assessment Tool Status" to
+  **"Assessment Progress"** (the `note="Administration status only - not
+  outcome data"` disclaimer is unchanged, still present, still literal per
+  the explicit "do not label this performance/outcome/score" instruction).
+- **Colour reuse, not a new system**: `.ats-tool-row` is given the exact
+  same `monitoring-kpi-tone-{blue,teal,violet,amber}` classes Section 1's
+  KPI cards already define (custom properties only - `--tone-accent`/
+  `--tone-accent-soft`/`--tone-surface`/`--tone-border`, including their
+  existing dark-mode overrides) - so the icon chip/percent text/progress
+  bar pick up each tool's tone automatically, with **no new colour
+  tokens**. Per an explicit design self-correction during this pass: the
+  first draft tinted each row's *entire* background with `--tone-surface`,
+  which read as "the entire row strongly coloured" - the instruction's own
+  called-out anti-pattern. Fixed by giving `.ats-tool-row` a neutral
+  `--surface-2` background at rest, with the tone tint appearing only
+  `:hover` (also satisfying the separate "subtle hover state" requirement
+  in one change) - only the icon chip and the bar/percent text stay
+  tone-coloured at rest, matching "tinted icon/background areas rather
+  than the entire row strongly coloured" literally.
+- **Participant Assessment Status preserved, not rebuilt**: the existing
+  `ParticipantAssessmentStatusPanel` component (search/filter/common-
+  participants toggle + the full per-child SANGIAN/VWM/DCCS/CD/Status
+  table) is unchanged internally - same state, same filtering logic, same
+  `.ats-pstatus-*` CSS. Only its toggle button's visible text changed from
+  "Participant Assessment Status" to **"View Participant Assessment
+  Status"** (matching this task's own example wording) and its placement -
+  it now renders as the panel's own full-width footer bar (a new
+  `.ats-panel .ats-pstatus { margin: ... }` rule negates `.ats-panel`'s
+  padding just for this child, restoring the edge-to-edge bar look it had
+  before, with `.ats-panel`'s `overflow: hidden` keeping it clipped to the
+  panel's rounded corners).
+No REDCap mapping, calculation, denominator, API contract, sidebar, header,
+KPI card, or any section below Assessment Progress (Study Profile onward)
+was touched - confirmed via `git diff --stat` (only `Overview.tsx` and
+`app.css` changed for this pass; `Sidebar.tsx`/`MonitoringKpiCard.tsx`/
+`Layout.tsx` untouched since Section 1). Verified: `tsc --noEmit` clean;
+`npm run build` succeeds. Live-verified via the same Playwright pattern
+against a real backend/live frontend dev server, both themes, at 1440px
+(two-column) and 390px (stacked single column): zero horizontal overflow,
+zero console errors, all values read live (spot-checked at time of
+verification: SANGIAN/VWM 70/212 (33%), DCCS 68/212 (32.1%), CD/Overall
+14/212 (6.6%) - moved from the task brief's own 12/212 figures purely from
+REDCap data continuing to grow, confirming liveness); clicking "View
+Participant Assessment Status" correctly expands the full 212-row table
+with working search/filter/common-participants controls, confirming no
+regression to that existing functionality. Nothing was committed - working
+tree changes only. Do not proceed to Study Profile or any other section
+under this task, per explicit instruction.
+
+**Section 3 - Study Profile cohort snapshot (2026-09-23, same branch, same
+day - supersedes the three plain `ChartCard`-wrapped charts described in
+earlier Overview history above; the sidebar, header, KPI cards, and
+Assessment Progress panel from Sections 1-2 are untouched):** the generic
+`ChartCard`-wrapped Sex/Age/SES trio was replaced with a purpose-built
+"cohort profile" card system - same live `sex_distribution`/
+`age_distribution`/`udai_pareek_category_distribution` values, no new
+calculation, backend, or API change.
+
+- **New `.profile-grid` (2-col, collapsing to 1 col ≤900px)** replaces the
+  old `chart-grid two-col` for the Sex/Age pair; the SES panel stays full
+  width below it, unchanged positioning from before.
+- **New shared `ProfileCardHeader`** (`Overview.tsx`) - a tone-tinted icon
+  chip + uppercase title/subtitle, reusing the exact same
+  `monitoring-kpi-tone-{blue,teal,violet,amber}` custom properties Section
+  1's KPI cards and Section 2's tool rows already define - no new colour
+  tokens introduced for this pass either.
+- **`SexDistributionCard`** - the existing `DonutChart` component still
+  renders the ring (`sex_distribution`, unchanged data), but its own
+  built-in legend is hidden in this card's context only
+  (`.profile-sex-ring .donut-legend { display: none; }` - `DonutChart`
+  itself and every other page using it are untouched) in favour of a
+  bespoke two-column Male/Female stat block below the ring (dot + count +
+  percent + mini proportion bar each), matching this task's own mockup.
+  Colour mapping is literal: Male → `--series-1` (blue), Female →
+  `--series-2` (orange/coral) - already DonutChart's own default first-two
+  category colours, so no override was needed.
+- **`AgeDistributionCard`** - reuses the existing `CategoryBarChart`
+  as-is (`mode="sequential"`, already blue/`--series-1`-family rounded-top
+  bars with opacity scaled by count) with `showPercent` newly enabled so
+  each bar's label reads "181 (85.4%)" instead of a bare count - only the
+  surrounding card chrome (icon header) is new; no age category was added
+  or removed, still exactly 8/9/10 years + any non-zero Other/Unknown
+  buckets the API already returns.
+- **`SesCategoryPanel`** - same `udai_pareek_category_distribution`
+  categories/counts, but **re-sorted by count descending** (Lower-middle →
+  Middle → Lower) instead of the numeric-code order used elsewhere in the
+  app, specifically so the dominant 76% category renders as the first,
+  longest bar - a display-only reordering of the same 3 real categories,
+  never inventing or hiding one. Built as bespoke proportional rows (not
+  the shared `HorizontalBarChart`) so each row shows Category / proportional
+  bar / Count / Percent as genuinely separate columns, per this panel's own
+  specified table shape - bar width is proportional to the **row's own
+  share of the largest category's count** (so the top row reaches 100% of
+  the track width), not a percent-of-total fill, making the dominant group
+  immediately visible at a glance. Colour is a single restrained hue,
+  `--series-violet` (already used elsewhere in the app, e.g. Assessment
+  Progress's DCCS tone) - deliberately not a multi-hue "good/bad" spectrum
+  across Lower/Middle/Upper, per the explicit instruction not to encode
+  socioeconomic hierarchy as good/bad colours.
+- **CSS**: new `.profile-card`/`.profile-card-header`/`.profile-card-icon`/
+  `.profile-sex-*`/`.profile-ses-*` rules in `app.css`, inserted just
+  before the existing `.chart-grid` rules (which remain unchanged and
+  still used by every other Overview/page section, e.g. Current Data
+  Signals, Assessment Coverage below Study Profile - unaffected). The
+  now-fully-unused `HorizontalBarChart` import was removed from
+  `Overview.tsx` (confirmed via grep no other usage in this file) - the
+  component itself is untouched and still used by Demographics/Dietary
+  Intake/other pages.
+No REDCap mapping, calculation, denominator, API contract, sidebar, header,
+KPI card, Assessment Progress panel, or any section below Study Profile
+(Assessment Coverage onward) was touched - confirmed via `git diff --stat`
+(only `Overview.tsx`/`app.css` changed for this pass; `Sidebar.tsx`/
+`MonitoringKpiCard.tsx`/`Layout.tsx` untouched since Sections 1-2).
+Verified: `tsc --noEmit` clean; `npm run build` succeeds. Live-verified via
+the same Playwright pattern against a real backend/live frontend dev
+server, both themes, at 1440px (2-col), 800px (tablet, still 2-col per
+900px breakpoint), and 390px (mobile, fully stacked): zero horizontal
+overflow, zero console errors, every displayed value read live and
+exactly matching the task's own stated figures at time of verification
+(Male 110/51.9%, Female 102/48.1%, 212 total; 9 years 181 (85.4%), 10
+years 31 (14.6%), 8 years 0; Lower-middle 57/76%, Middle 17/22.7%, Lower
+1/1.3%); donut legend confirmed hidden via computed `display: none`;
+sidebar/KPI grid/Assessment Progress panel all confirmed still present and
+unchanged on the same page. Nothing was committed - working tree changes
+only. Do not proceed to Health, Development, Activity, Anthropometry, or
+Participant Monitoring under this task, per explicit instruction.
+
+**Section 3 "dial down the tiles" refinement (2026-09-23, same branch, same
+day - supersedes the rounded/shadowed `.profile-card` tile system from the
+immediately preceding pass above; sidebar/header/KPI cards/Assessment
+Progress untouched, same as before):** a follow-up correction judged the
+prior Study Profile redesign "too tile/card/infographic-heavy" and asked
+for a sharp, low-ornament research-dashboard look instead. Same live
+`sex_distribution`/`age_distribution`/`udai_pareek_category_distribution`
+values throughout - no calculation, backend, or API change.
+
+- **Sharp panel language**: `.profile-card` (`--radius-card`/18px,
+  `--shadow-card`, generous padding) replaced by `.profile-panel`
+  (`--radius-sharp`/3px, `--shadow-xs` only, tighter `--space-3`/`--space-4`
+  padding, a plain hairline-bordered head instead of an icon-chip header
+  row) - live-verified computed `border-radius: 3px` and a single-layer
+  `box-shadow` in both themes.
+- **No icon chips**: `ProfileCardHeader` (icon + tone-tinted circular chip)
+  was replaced by a plain `ProfilePanelHead` (title + subtitle text only,
+  the title's colour still resolved from the existing
+  `monitoring-kpi-tone-*` custom properties applied to the panel wrapper -
+  colour reused, but no chip/pill/box renders it). `IconCalendar` was
+  removed from `Overview.tsx`'s imports as a result (no longer referenced
+  anywhere in this file).
+- **Sex Distribution**: the donut ring is kept (only two real categories,
+  still the efficient read this instruction explicitly asked to preserve),
+  but the boxed/bordered `.profile-sex-stat` tiles below it were replaced
+  by two plain text columns (`.profile-sex-col`) separated by a single
+  vertical hairline, each with a label + small dot, a large count, a
+  percent, and a thin 3px rule (not a pill-shaped bar) - no background,
+  no border, no radius on the columns themselves.
+- **Age Distribution**: the `CategoryBarChart` bar-chart card was removed
+  entirely per explicit instruction ("do NOT use a conventional bar-chart
+  card") and replaced with a plain 3-column figure table
+  (`.profile-age-cols`) - 8/9/10 years as three text columns (uppercase
+  label, a large number, a percent), separated by hairlines, each with a
+  thin proportional scale rule underneath (not an axis/gridline chart) so
+  9 years' dominance (181, 85.4%) is still visually obvious without
+  looking like a plotted chart.
+- **SES Category**: kept as proportional rows but thinned and flattened -
+  the 14px rounded bar-track became a 4px flat rule
+  (`.profile-ses-row-rule`), rows are separated by hairlines instead of a
+  gap, and category/count/percent are three aligned text columns with the
+  rule now visually secondary (matching "the category, count and
+  percentage should be more important than the graphic"). **New**: a
+  `SesCategoryPanel` `totalRegistered` prop and a `.profile-ses-note` line
+  - "`{classified}` of `{totalRegistered}` registered children have an SES
+  classification" (live: "75 of 212...") - added directly below the rows so
+  the 76%/22.7%/1.3% figures can never be misread as shares of the full
+  212-child cohort; `classified` is the same live `udaiData` sum already
+  used as the percent denominator, not a new/hardcoded number.
+- Colour stayed intentionally sparse and unchanged in hue from the prior
+  pass: Male blue (`--series-1`)/Female orange (`--series-2`) on the donut
+  and its two columns; Age's scale rules use the panel's own blue tone;
+  SES's rule/title use `--series-violet` (via the existing
+  `monitoring-kpi-tone-violet` custom properties) - a single restrained
+  hue, not a good/bad gradient across categories.
+No REDCap mapping, calculation, denominator, API contract, sidebar,
+header, KPI card, Assessment Progress panel, or any section below Study
+Profile was touched - confirmed via `git diff --stat` (only
+`Overview.tsx`/`app.css` changed for this pass). Verified: `tsc --noEmit`
+clean; `npm run build` succeeds. Live-verified via the same Playwright
+pattern against a real backend/live frontend dev server, both themes, at
+1440px and 390px: zero horizontal overflow, zero console errors, every
+displayed value matched exactly (212 total; Male 110/51.9%, Female
+102/48.1%; 8y 0/0%, 9y 181/85.4%, 10y 31/14.6%; Lower-middle 57/76%,
+Middle 17/22.7%, Lower 1/1.3%; SES note "75 of 212..."); computed panel
+`border-radius` confirmed 3px in both themes; sidebar/KPI grid/Assessment
+Progress panel all confirmed still present and pixel-unchanged. Nothing
+was committed - working tree changes only. Do not proceed to any section
+below Study Profile under this task, per explicit instruction.
+
+**"Current Data Signals" + "Data Collection & Quality Status" removed
+outright (2026-09-23, same branch, same day - a straight removal, not a
+redesign; sidebar/header/KPI cards/Assessment Progress/Study Profile all
+untouched):** these two sections previously sat between Assessment
+Coverage and the end of Overview - a compact Child Illness History "most
+reported condition" signal + a DSEQ "dominant screen time" signal, then a
+3-stat "Data Collection & Quality Status" panel with Partial/No-Data
+instrument flag lists. Per explicit product direction ("these do not
+belong on the new main monitoring dashboard... add noise"), both were
+deleted completely, with no replacement content - the page now ends at
+Assessment Coverage.
+
+- **`Overview.tsx`**: removed both `SectionHeader`/`ChartCard` JSX blocks,
+  the `topHealthSignals`/`dseqAnswered`/`dseqDominant` computed values,
+  the `partialCoverage`/`noDataCoverage`/`highCoverage`/`totalDataPoints`
+  computed values, and the now-fully-orphaned `topReportedItems()` helper
+  function (its only caller was the removed Child Illness History signal
+  card). Also removed the now-unused imports this left behind:
+  `ChartCard`, `ProportionBar`, `Link` (react-router-dom), and the
+  `ConditionIndicator` type (all confirmed via grep to have zero remaining
+  references anywhere else in this file). `percentOf` stayed - still used
+  by Study Profile's own panels.
+- **`app.css`**: removed the now-fully-orphaned `.status-stat-grid`/
+  `.status-stat-value`/`.status-stat-label`/`.status-flag-list`/
+  `.status-flag-row`/`.status-flag-tag`/`.status-flag-tag-warning`/
+  `.status-flag-tag-neutral`/`.chart-card-link` rules - each confirmed via
+  a codebase-wide grep to have no other consumer (unlike `.response-list`/
+  `.response-item`/`.chart-card-note`, which are still actively used by
+  `HealthScreening.tsx`/`ScreenTime.tsx`/`Neurodevelopment.tsx`/
+  `DietaryIntake.tsx` and were left completely untouched). `ChartCard.tsx`
+  and `ProportionBar.tsx` themselves are untouched and still used by other
+  pages - only their now-unused imports in `Overview.tsx` were removed.
+No REDCap mapping, calculation, denominator, API contract, sidebar,
+header, KPI card, Assessment Progress panel, or Study Profile was touched
+- confirmed via `git diff --stat` (only `Overview.tsx`/`app.css` changed
+for this pass). Verified: `tsc --noEmit` clean; `npm run build` succeeds
+(JS bundle shrank slightly, consistent with the removed code). Live-
+verified via the same Playwright pattern against a real backend/live
+frontend dev server: a full-page screenshot confirms the page now flows
+directly from Assessment Coverage to the end with no trailing gap or
+blank container; `document.body.innerText` confirmed containing none of
+"Current data signals", "Data Collection & Quality Status", "View full
+Child Illness History analysis", or "View full Screen Time (DSEQ)
+analysis"; zero horizontal overflow; zero console errors; sidebar/KPI
+grid/Assessment Progress/Study Profile all confirmed still present and
+visually unchanged on the same page. Nothing was committed - working tree
+changes only.
+
+---
+
 ## FRONTEND ERROR ISOLATION (2026-08-26)
 
 **Bug fixed:** all 4 assessment-module routes (`/health-screening`, `/physical-activity`, `/screen-time`, `/neurodevelopment`) white-screened. **Root cause:** those pages destructure/`.map()` the new analytics response shape with no defensive checks (e.g. `data.named_conditions.map(...)`); if the API ever returns something else - the immediate trigger was a stale local backend process still serving the old pre-refactor `UnavailableModule` shape (`available`/`reason`/`unavailable_fields`) on port 8000 - the resulting `TypeError` had no React error boundary anywhere in the tree, so it unmounted the entire app (sidebar and all), not just the broken route.

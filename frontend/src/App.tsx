@@ -6,6 +6,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import AssessmentProgress from "./routes/AssessmentProgress";
 import AssessmentsHub from "./routes/AssessmentsHub";
 import AssessmentToolStatus from "./routes/AssessmentToolStatus";
+import DataQuality from "./routes/DataQuality";
 import Demographics from "./routes/Demographics";
 import DietaryIntake from "./routes/DietaryIntake";
 import HealthScreening from "./routes/HealthScreening";
@@ -14,6 +15,7 @@ import Overview from "./routes/Overview";
 import PhysicalActivity from "./routes/PhysicalActivity";
 import Registry from "./routes/Registry";
 import ScreenTime from "./routes/ScreenTime";
+import StudyQuestionnaires from "./routes/StudyQuestionnaires";
 
 export default function App() {
   return (
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="/assessment-tool-status" element={<AssessmentToolStatus />} />
             <Route path="/neurodevelopment" element={<Neurodevelopment />} />
             <Route path="/progress" element={<AssessmentProgress />} />
+            <Route path="/data-quality" element={<DataQuality />} />
+            <Route path="/study-questionnaires" element={<StudyQuestionnaires />} />
           </Route>
         </Routes>
       </RefreshProvider>
