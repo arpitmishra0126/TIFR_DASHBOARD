@@ -26,6 +26,7 @@
   --series-4: #eda100;
   --series-5: #e87ba4;
   --series-violet: #4a3aa7;
+  --series-cyan: #0e88a3;
 
   --status-good: #0ca30c;
   --status-good-bg: #d9f2d9;
@@ -766,37 +767,88 @@ a, button {
    tinted panel. Tone custom properties (`--tone-accent`/`-soft`/
    `-surface`/`-border`) are still resolved through the same
    `--series-1`/`-3`/`-violet`/`-4` tokens used dashboard-wide. --- */
+/* `--tone-surface`/`--tone-border` (2026-09-28 refinement) - previously
+   undefined, so every tone-tinted card fell back to a plain neutral
+   surface/border and the only visible colour was a bright top-border
+   strip (read as "white card + neon stripe", not a clinical dashboard).
+   Now each tone carries its own very low-alpha tinted surface and a
+   slightly-more-visible low-alpha tinted border - both intentionally
+   close to the base page/card colour, not a bright panel - so a card's
+   identity comes from a whisper of colour across its whole surface
+   instead of one loud stripe. `--tone-accent` itself is unchanged and
+   still used only for small elements (icons, progress bars, link text,
+   the `:hover`/`-complete` states). */
 .monitor-tone-blue {
   --tone-accent: var(--series-1);
   --tone-accent-soft: rgba(42, 120, 214, 0.16);
+  --tone-surface: rgba(42, 120, 214, 0.05);
+  --tone-border: rgba(42, 120, 214, 0.22);
 }
 .monitor-tone-teal {
   --tone-accent: var(--series-3);
   --tone-accent-soft: rgba(27, 175, 122, 0.16);
+  --tone-surface: rgba(27, 175, 122, 0.05);
+  --tone-border: rgba(27, 175, 122, 0.22);
 }
 .monitor-tone-violet {
   --tone-accent: var(--series-violet);
   --tone-accent-soft: rgba(74, 58, 167, 0.15);
+  --tone-surface: rgba(74, 58, 167, 0.05);
+  --tone-border: rgba(74, 58, 167, 0.2);
 }
 .monitor-tone-amber {
   --tone-accent: var(--series-4);
   --tone-accent-soft: rgba(237, 161, 0, 0.19);
+  --tone-surface: rgba(237, 161, 0, 0.06);
+  --tone-border: rgba(237, 161, 0, 0.24);
+}
+.monitor-tone-cyan {
+  --tone-accent: var(--series-cyan);
+  --tone-accent-soft: rgba(14, 136, 163, 0.16);
+  --tone-surface: rgba(14, 136, 163, 0.05);
+  --tone-border: rgba(14, 136, 163, 0.22);
+}
+.monitor-tone-pink {
+  --tone-accent: var(--series-5);
+  --tone-accent-soft: rgba(232, 123, 164, 0.18);
+  --tone-surface: rgba(232, 123, 164, 0.06);
+  --tone-border: rgba(232, 123, 164, 0.24);
 }
 :root[data-theme="dark"] .monitor-tone-blue {
   --tone-accent: var(--series-1);
   --tone-accent-soft: rgba(57, 135, 229, 0.22);
+  --tone-surface: rgba(57, 135, 229, 0.09);
+  --tone-border: rgba(57, 135, 229, 0.3);
 }
 :root[data-theme="dark"] .monitor-tone-teal {
   --tone-accent: var(--series-3);
   --tone-accent-soft: rgba(25, 158, 112, 0.24);
+  --tone-surface: rgba(25, 158, 112, 0.1);
+  --tone-border: rgba(25, 158, 112, 0.3);
 }
 :root[data-theme="dark"] .monitor-tone-violet {
   --tone-accent: var(--series-violet);
   --tone-accent-soft: rgba(144, 133, 233, 0.24);
+  --tone-surface: rgba(144, 133, 233, 0.1);
+  --tone-border: rgba(144, 133, 233, 0.3);
 }
 :root[data-theme="dark"] .monitor-tone-amber {
   --tone-accent: var(--series-4);
   --tone-accent-soft: rgba(201, 133, 0, 0.26);
+  --tone-surface: rgba(201, 133, 0, 0.1);
+  --tone-border: rgba(201, 133, 0, 0.32);
+}
+:root[data-theme="dark"] .monitor-tone-cyan {
+  --tone-accent: var(--series-cyan);
+  --tone-accent-soft: rgba(34, 211, 238, 0.22);
+  --tone-surface: rgba(34, 211, 238, 0.09);
+  --tone-border: rgba(34, 211, 238, 0.3);
+}
+:root[data-theme="dark"] .monitor-tone-pink {
+  --tone-accent: var(--series-5);
+  --tone-accent-soft: rgba(213, 81, 129, 0.26);
+  --tone-surface: rgba(213, 81, 129, 0.1);
+  --tone-border: rgba(213, 81, 129, 0.32);
 }
 
 /* Compact top study-summary strip - one thin-bordered sharp-cornered frame,
@@ -806,7 +858,11 @@ a, button {
   flex-wrap: wrap;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-sharp);
-  background: var(--surface-1);
+  /* A very light tint (the same subtle off-white/blue-gray surface token
+     used elsewhere for secondary regions, e.g. the sidebar) so the whole
+     strip reads as one cohesive information block rather than a plain
+     white card - deliberately not a new color. */
+  background: var(--surface-2);
   box-shadow: var(--shadow-xs);
   margin-bottom: var(--space-5);
 }
@@ -862,6 +918,38 @@ button.stat-block {
   line-height: 1.3;
 }
 
+/* Migrated/deceased shown as small status chips (Original Cohort card)
+   instead of plain text, so the cohort-reconciliation detail is
+   immediately noticeable - subdued clinical status colors reused from
+   the existing --status-* tokens, not new/bright colors. */
+.stat-block-footnote-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 1px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-sharp);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.stat-chip-migrated {
+  color: var(--status-neutral);
+  background: var(--status-neutral-bg);
+}
+
+.stat-chip-deceased {
+  color: var(--status-critical);
+  background: var(--status-critical-bg);
+}
+
 @media (max-width: 900px) {
   .stat-block {
     flex: 1 1 50%;
@@ -906,6 +994,12 @@ button.stat-block {
 }
 .monitor-bar-tone-amber .monitor-bar-fill {
   background: var(--series-4);
+}
+.monitor-bar-tone-cyan .monitor-bar-fill {
+  background: var(--series-cyan);
+}
+.monitor-bar-tone-pink .monitor-bar-fill {
+  background: var(--series-5);
 }
 
 /* Two-column monitoring layout: left = main study information (compact
@@ -3162,6 +3256,7 @@ table.data-table tbody tr:hover {
   --series-4: #c98500;
   --series-5: #d55181;
   --series-violet: #9085e9;
+  --series-cyan: #22d3ee;
 
   --status-good: #0ca30c;
   --status-good-bg: rgba(12, 163, 12, 0.2);
@@ -3956,3 +4051,640 @@ th.registry-instrument-col-highlighted {
   font-variant-numeric: tabular-nums;
 }
 
+
+/* --- Dashboard hub redesign (2026-09-28) --- */
+
+/* Study Progress - proper layout hierarchy (2026-09-28, third pass -
+   supersedes the absolutely-positioned SVG tree/bus-line overlay above,
+   which the user rejected as overlapping the cards with no intentional
+   layout). Everything here is normal document flow, top to bottom:
+   Registration anchor -> a dedicated vertical connector -> a bordered
+   "Core Data Collection" section (its own heading row + a CSS Grid of the
+   8 parallel module cards) -> another dedicated vertical connector ->
+   Assessment Tools anchor. No element is absolutely positioned across the
+   whole component, so a connector can never overlap a card - each
+   connector occupies its own row in the flex column and nothing else
+   shares that space. */
+.pipeline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: var(--space-2) 0;
+}
+
+.pipeline-anchor {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Dedicated connector element between sections - a short vertical line
+   with a small arrowhead, occupying its own fixed-height row. Static by
+   design (see the heading-rule animation below for the one place motion
+   is applied) - a vertical connector is never given the horizontal
+   scrolling treatment, per explicit instruction. */
+.pipeline-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 30px;
+}
+
+.pipeline-connector-line {
+  width: 2px;
+  flex: 1;
+  background: var(--border-strong, #c7cdd9);
+}
+
+:root[data-theme="dark"] .pipeline-connector-line {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+.pipeline-connector-arrow {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--border-strong, #c7cdd9);
+}
+
+:root[data-theme="dark"] .pipeline-connector-arrow {
+  border-top-color: rgba(148, 163, 184, 0.4);
+}
+
+.pipeline-node {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 190px;
+  padding: 0.5rem 0.65rem;
+  /* Per-module identity (2026-09-28, refined) - previously a bright
+     coloured top-border strip on an otherwise plain grey card (read as
+     "white card + neon stripe"). Replaced with a very subtle, uniformly
+     tinted card surface/border in the module's own tone
+     (`--tone-surface`/`--tone-border`, both low-alpha so the card stays
+     close to the base surface colour) - the accent colour now shows up
+     only in small elements (the progress bar, link text, icon), never as
+     a loud full-width stripe or a brightly tinted whole card. */
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  background: var(--tone-surface, var(--surface-2));
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.pipeline-anchor .pipeline-node {
+  align-items: center;
+  text-align: center;
+}
+
+.pipeline-node-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.pipeline-node-value {
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* `.pipeline-node` uses `align-items: flex-start`, so a bare `.monitor-bar`
+   (no explicit width) would otherwise shrink to near-zero instead of
+   spanning the card - force it full width here. Sharp/square ends
+   (`.monitor-bar` already sets `border-radius: 0`), no pill shape. */
+.pipeline-node .monitor-bar {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.pipeline-node-percent {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* SSRS consolidated module (2026-09-28) - Parent/Child/Teacher shown as
+   stacked breakdown lines inside one card instead of three separate
+   cards. Same typography scale as `.pipeline-node-value`, just stacked. */
+.pipeline-node-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.pipeline-node-breakdown-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.pipeline-node-breakdown-text {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pipeline-node-complete {
+  border-color: var(--tone-accent, var(--series-3));
+  box-shadow: 0 0 0 1px var(--tone-accent-soft, transparent);
+}
+
+:root[data-theme="dark"] .pipeline-node-complete {
+  box-shadow: 0 0 10px rgba(94, 234, 212, 0.18);
+}
+
+.pipeline-node-clickable {
+  cursor: pointer;
+}
+
+.pipeline-node:hover,
+.pipeline-node-clickable:hover {
+  transform: translateY(-1px);
+  border-color: var(--tone-accent, var(--series-1));
+  box-shadow: var(--shadow-xs);
+}
+
+/* Core Data Collection - a clearly separated bordered section, distinct
+   from the two standalone anchor nodes above/below it. Its own heading row
+   carries the one animated element on this whole component: two short
+   horizontal rule segments flanking the label, exactly matching "animate
+   only the connector line, and only horizontal connectors get the
+   scrolling dashed treatment." */
+.pipeline-core-section {
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+}
+
+.pipeline-core-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.pipeline-core-heading-label {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.pipeline-core-heading-line {
+  flex: 1 1 auto;
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--series-3, #1f9e8f) 0,
+    var(--series-3, #1f9e8f) 3px,
+    transparent 3px,
+    transparent 13px
+  );
+  background-size: 13px 100%;
+  opacity: 0.85;
+}
+
+:root[data-theme="dark"] .pipeline-core-heading-line {
+  background-image: repeating-linear-gradient(to right, #5eead4 0, #5eead4 3px, transparent 3px, transparent 13px);
+  filter: drop-shadow(0 0 2px rgba(94, 234, 212, 0.55));
+}
+
+@keyframes pipeline-core-heading-flow {
+  from {
+    background-position-x: 0;
+  }
+  to {
+    background-position-x: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pipeline-core-heading-line {
+    animation: pipeline-core-heading-flow 1.1s linear infinite;
+  }
+}
+
+.pipeline-core-grid {
+  display: grid;
+  /* 6 modules (SES, Child Health History, DSEQ, PAQ, Dietary Intake, SSRS
+     consolidated) since the 2026-09-28 SSRS consolidation - 3 columns
+     gives a clean 2-row fit with no ragged trailing row. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.pipeline-core-grid .pipeline-node {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .pipeline-core-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .pipeline-core-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Lower-Dashboard infographic redesign (2026-09-28) - Key Study Modules,
+   Assessment Progress, and Study Snapshot rebuilt as compact infographic
+   blocks instead of full-width text-row lists/tables. Same live data
+   throughout - only the visual density/layout changed. */
+
+/* Key Study Modules - two featured infographic cards (DSEQ, Child Health
+   History), each led by a large dominant completion figure, capped at 2-3
+   named indicators (each with its own real thin progress bar) plus one
+   small comparison visual, and a "View X ->" link. Balanced 2-column grid,
+   collapsing to 1 column on narrow screens. */
+.key-module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 760px) {
+  .key-module-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.key-module-card {
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  background: var(--tone-surface, var(--surface-1));
+  padding: var(--space-4);
+}
+
+.featured-module-card {
+  display: flex;
+  flex-direction: column;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.featured-module-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+.featured-module-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.featured-module-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sharp);
+  background: var(--tone-accent-soft, var(--surface-2));
+  color: var(--tone-accent, var(--text-secondary));
+}
+
+.key-module-name {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--tone-accent, var(--text-primary));
+}
+
+.featured-module-headline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.featured-module-headline-value {
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.featured-module-headline-percent {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.featured-module-card .monitor-bar {
+  margin-top: 6px;
+}
+
+.key-module-description {
+  margin: var(--space-3) 0 var(--space-2);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.module-indicator {
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--border-hairline);
+  font-size: 0.8rem;
+}
+
+.module-indicator-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.module-indicator-label {
+  color: var(--text-secondary);
+}
+
+.module-indicator-value {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.module-indicator .monitor-bar {
+  margin-top: 4px;
+}
+
+/* "Chronic / neurological"-style combined indicator - two real sub-figures
+   under one label, each with its own thin bar, instead of one concatenated
+   text line. */
+.module-indicator-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.module-indicator-row-sub {
+  font-size: 0.74rem;
+}
+
+.module-indicator-sublabel {
+  color: var(--text-muted);
+}
+
+.module-indicator-subvalue {
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Two-value real-data comparison (e.g. School-day vs Weekend screen time) -
+   bars scaled against each other's own magnitude, not independent 0-100%
+   bars. */
+.dual-metric-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-hairline);
+}
+
+/* --- Assessment Progress infographic: one dominant "Overall Assessment"
+   block, then the four tools as a compact comparative grid underneath. --- */
+.assessment-infographic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.assessment-overall-block {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  background: var(--tone-surface, var(--surface-1));
+}
+
+.assessment-overall-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.assessment-overall-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 1.55rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.assessment-overall-block .monitor-bar {
+  margin-top: 8px;
+}
+
+.assessment-overall-percent {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.assessment-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .assessment-tool-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .assessment-tool-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.assessment-tool-block {
+  padding: var(--space-3);
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  background: var(--tone-surface, var(--surface-1));
+}
+
+.assessment-tool-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-sharp);
+  background: var(--tone-accent-soft, var(--surface-2));
+  color: var(--tone-accent, var(--text-secondary));
+}
+
+.assessment-tool-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.assessment-tool-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.9rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.assessment-tool-block .monitor-bar {
+  margin-top: 6px;
+}
+
+.assessment-tool-percent {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* --- Study Snapshot infographic: 3 compact blocks (Sex/Age/SES) instead
+   of a stacked full-width text list. --- */
+.snapshot-infographic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+@media (max-width: 900px) {
+  .snapshot-infographic-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.snapshot-block {
+  padding: var(--space-4);
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  background: var(--tone-surface, var(--surface-1));
+}
+
+.snapshot-block-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-3);
+  color: var(--tone-accent, var(--text-secondary));
+}
+
+.snapshot-block-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Thin, square-ended split bar (Sex Distribution) - never a pill/rounded
+   shape; each segment is a real percent share, not decorative. */
+.split-bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  background: var(--gridline);
+  overflow: hidden;
+}
+
+.split-bar-segment {
+  height: 100%;
+  background: var(--tone-accent);
+}
+
+.split-bar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.split-bar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.split-bar-legend-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--tone-accent);
+}
+
+.snapshot-age-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.snapshot-age-label-dominant {
+  color: var(--text-primary);
+  font-weight: 750;
+}
+
+.snapshot-ses-value {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 750;
+  line-height: 1.2;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.snapshot-block .monitor-bar {
+  margin-top: 8px;
+}
+
+.snapshot-ses-percent {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}

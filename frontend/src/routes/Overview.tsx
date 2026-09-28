@@ -1,60 +1,53 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { exportActiveCases, exportActiveCasesCsv, getAssessmentToolStatus, getOverview, getRegistry } from "../api/dashboard";
+import { getAssessmentToolStatus, getHealthScreening, getOverview, getRegistry, getScreenTime } from "../api/dashboard";
 import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import FullScreenLoader from "../components/FullScreenLoader";
-import { IconChevron } from "../components/icons";
+import {
+  IconBrain,
+  IconCalendar,
+  IconChart,
+  IconClipboardCheck,
+  IconGraduationCap,
+  IconHeart,
+  IconMonitor,
+  IconUsers,
+} from "../components/icons";
 import { useRefresh } from "../context/RefreshContext";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import type {
-  AssessmentToolParticipantStatus,
   AssessmentToolStatusResponse,
+  HealthScreeningResponse,
   OverviewResponse,
   RegistryChild,
+  ScreenTimeResponse,
 } from "../types/liveDashboard";
-import { STUDY_DECEASED_COUNT, STUDY_MIGRATED_COUNT, STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
-import { GROUPS } from "./AssessmentsHub";
 import { INSTRUMENT_COLUMNS } from "./Registry";
 
-// The 8 currently-mapped assessment instruments (excludes Registration/
-// Baseline, which is already its own strip figure) - reuses the same
-// instrument metadata (name/purpose/route) as the Assessments hub so the
-// two pages can never drift apart on what an instrument is called.
-const OVERVIEW_INSTRUMENTS = GROUPS.flatMap((g) => g.available).filter((i) => i.key !== "registration");
+/** Dashboard rebuilt as a central STUDY INFORMATION HUB (2026-09-28) -
+ * a quick, one-screen overview of the whole study flow and an entry point
+ * into deeper module pages, not a second analytics page. The previous
+ * version's large detailed Assessment Progress table, full 3-column Study
+ * Profile breakdown, 8-row Assessment Coverage list, right-hand detail
+ * panel, and Quick Actions list were all removed from this page per
+ * explicit instruction - none of the underlying data/calculations were
+ * deleted, they were either condensed into a one-line summary here (Study
+ * Snapshot) or relocated to their proper dedicated page (the participant-
+ * level Assessment Tool Status table now lives on `/assessment-tool-
+ * status`; the Excel/CSV exports already lived on `/registry`
+ * independently, so nothing was lost by removing the duplicate Quick
+ * Actions buttons here).
+ *
+ * Every figure on this page is read from the existing `/dashboard/overview`,
+ * `/dashboard/assessment-tool-status`, `/dashboard/screen-time`, and
+ * `/dashboard/health` responses - no new backend endpoint, field, or
+ * calculation was added; the last two were already-existing endpoints,
+ * simply not previously fetched by this page. */
 
-/** The six Core Assessment Battery instruments, in the same order/labels as
- * backend `CORE_BATTERY_INSTRUMENTS` (backend/app/ingestion/live_field_map.py)
- * and Registry's own `INSTRUMENT_COLUMNS` (frontend/src/routes/Registry.tsx)
- * - filtered from that single shared label source rather than a second
- * hardcoded key/label map, so the two can never drift apart. Used only to
- * read each child's own `instrument_status` booleans for these six keys -
- * the "core battery complete" definition itself is still computed
- * exclusively by the backend, never recomputed here. */
-const CORE_BATTERY_KEYS = ["ses", "dseq", "child_illness_history", "paq_a", "dietary_intake", "ssrs_parent"];
-const CORE_BATTERY_COLUMNS = INSTRUMENT_COLUMNS.filter((col) => CORE_BATTERY_KEYS.includes(col.key));
+type Tone = "blue" | "teal" | "violet" | "amber" | "cyan" | "pink";
 
-type Tone = "blue" | "teal" | "violet" | "amber";
-
-/** One row of the right-hand detail panel - a plain label/value pair,
- * optionally with its own percent (renders a thin bar) or a tone accent. */
-interface DetailRow {
-  label: string;
-  value: string;
-  percent?: number;
-  tone?: Tone;
-}
-
-interface DetailContent {
-  title: string;
-  subtitle?: string;
-  rows: DetailRow[];
-  linkTo?: string;
-  linkLabel?: string;
-}
-
-/** Thin, sharp-cornered progress line - the compact-row equivalent used
- * throughout this redesigned page instead of a donut/large chart. */
 function MonitorBar({ percent, tone = "blue" }: { percent: number; tone?: Tone }) {
   return (
     <div className={`monitor-bar monitor-bar-tone-${tone}`}>
@@ -63,248 +56,229 @@ function MonitorBar({ percent, tone = "blue" }: { percent: number; tone?: Tone }
   );
 }
 
-/** One clickable metric row: label, thin bar, count/percent - the base unit
- * of every compact section on this page. Selecting a row updates the
- * right-hand detail panel via `onSelect`. */
-function MetricRow({
-  label,
-  valueText,
-  percent,
-  tone = "blue",
-  selected,
-  onSelect,
-}: {
+/** "Study Progress" pipeline - a proper document-flow layout (2026-09-28,
+ * third pass): Registration (standalone anchor) -> a dedicated static
+ * connector -> a clearly bordered "Core Data Collection" section (its own
+ * heading + a CSS Grid of the 8 parallel module cards, no sequential order
+ * implied among them) -> another dedicated static connector -> Assessment
+ * Tools (standalone anchor). Nothing is absolutely positioned across the
+ * whole component, so a connector can never overlap a card - every
+ * connector is a normal flex child occupying its own row. Every count/
+ * percent is a direct read of `overview.all_instrument_coverage` /
+ * `assessmentToolStatus.overall_participant` - no new calculation. The
+ * only animated element is the pair of short horizontal rule segments in
+ * the Core Data Collection heading (a scrolling dashed highlight, CSS
+ * only) - both dedicated vertical connectors stay static, since a vertical
+ * connector must never receive the horizontal scrolling treatment. */
+interface PipelineNodeData {
+  key: string;
   label: string;
-  valueText: string;
-  percent?: number;
-  tone?: Tone;
-  selected?: boolean;
-  onSelect?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      className={`monitor-row monitor-tone-${tone}${selected ? " monitor-row-selected" : ""}`}
-      onClick={onSelect}
-      disabled={!onSelect}
-    >
-      <span className="monitor-row-label">
-        <span className="monitor-row-dot" />
-        {label}
-      </span>
-      <span className="monitor-row-value">{valueText}</span>
-      {percent !== undefined && <MonitorBar percent={percent} tone={tone} />}
-    </button>
+  count: number;
+  total: number;
+  tone: Tone;
+  linkTo?: string;
+  /** SSRS-only (2026-09-28 senior requirement): Parent/Child/Teacher shown
+   * as one consolidated module rather than three separate cards. When
+   * present, the card renders these lines instead of a single count/total
+   * line - each still denominated by the same `total` (222, the overall
+   * study cohort) as the rest of the Study Progress visualization. */
+  breakdown?: { label: string; count: number }[];
+}
+
+function PipelineNode({ node }: { node: PipelineNodeData }) {
+  const hasBreakdown = !!node.breakdown && node.breakdown.length > 0;
+  const percent = percentOf(node.count, node.total);
+  const complete = !hasBreakdown && percent >= 100;
+  const className = `pipeline-node monitor-tone-${node.tone}${complete ? " pipeline-node-complete" : ""}${
+    node.linkTo ? " pipeline-node-clickable" : ""
+  }`;
+  const content = (
+    <>
+      <span className="pipeline-node-label">{node.label}</span>
+      {hasBreakdown ? (
+        <span className="pipeline-node-breakdown">
+          {node.breakdown!.map((item) => {
+            const itemPercent = percentOf(item.count, node.total);
+            return (
+              <span key={item.label} className="pipeline-node-breakdown-item">
+                <span className="pipeline-node-breakdown-text">
+                  {item.label} {item.count}/{node.total} <span className="pipeline-node-percent">({itemPercent}%)</span>
+                </span>
+                <MonitorBar percent={itemPercent} tone={node.tone} />
+              </span>
+            );
+          })}
+        </span>
+      ) : (
+        <>
+          <span className="pipeline-node-value">
+            {node.count}/{node.total} <span className="pipeline-node-percent">({percent}%)</span>
+          </span>
+          <MonitorBar percent={percent} tone={node.tone} />
+        </>
+      )}
+    </>
+  );
+  return node.linkTo ? (
+    <Link to={node.linkTo} className={className}>
+      {content}
+    </Link>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
-function DetailPanel({ content }: { content: DetailContent | null }) {
-  if (!content) {
-    return (
-      <div className="monitor-detail-panel">
-        <p className="monitor-detail-empty">Select a metric row for its breakdown.</p>
-      </div>
-    );
-  }
+function PipelineConnector() {
   return (
-    <div className="monitor-detail-panel">
-      <div className="monitor-detail-title">{content.title}</div>
-      {content.subtitle && <div className="monitor-detail-subtitle">{content.subtitle}</div>}
-      <div className="monitor-detail-rows">
-        {content.rows.map((row) => (
-          <div className="monitor-detail-row" key={row.label}>
-            <span className="monitor-detail-row-label">{row.label}</span>
-            <span className="monitor-detail-row-value">{row.value}</span>
-            {row.percent !== undefined && <MonitorBar percent={row.percent} tone={row.tone ?? "blue"} />}
-          </div>
-        ))}
+    <div className="pipeline-connector" aria-hidden="true">
+      <span className="pipeline-connector-line" />
+      <span className="pipeline-connector-arrow" />
+    </div>
+  );
+}
+
+function StudyProgressPipeline({
+  registration,
+  coreModules,
+  assessmentTools,
+}: {
+  registration: PipelineNodeData;
+  coreModules: PipelineNodeData[];
+  assessmentTools: PipelineNodeData | null;
+}) {
+  return (
+    <div className="pipeline">
+      <div className="pipeline-anchor">
+        <PipelineNode node={registration} />
       </div>
-      {content.linkTo && (
-        <Link to={content.linkTo} className="monitor-detail-link">
-          {content.linkLabel ?? "View full analysis"} <IconChevron width={10} height={10} />
-        </Link>
+
+      <PipelineConnector />
+
+      <div className="pipeline-core-section">
+        <div className="pipeline-core-heading">
+          <span className="pipeline-core-heading-line" />
+          <span className="pipeline-core-heading-label">Core Data Collection</span>
+          <span className="pipeline-core-heading-line" />
+        </div>
+        <div className="pipeline-core-grid">
+          {coreModules.map((node) => (
+            <PipelineNode key={node.key} node={node} />
+          ))}
+        </div>
+      </div>
+
+      {assessmentTools && (
+        <>
+          <PipelineConnector />
+          <div className="pipeline-anchor">
+            <PipelineNode node={assessmentTools} />
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-type AtsToolKey = "sangian" | "vwm" | "dccs" | "cd";
-const ATS_TOOL_COLUMNS: { key: AtsToolKey; label: string; tone: Tone }[] = [
-  { key: "sangian", label: "SANGIAN", tone: "blue" },
-  { key: "vwm", label: "VWM", tone: "teal" },
-  { key: "dccs", label: "DCCS", tone: "violet" },
-  { key: "cd", label: "CD", tone: "amber" },
-];
-
-/** Typed accessor for each tool's own `*_participant` field on
- * `AssessmentToolStatusResponse` - avoids a dynamic string-keyed index
- * (which does not type-check) while still reading the exact same
- * already-computed field, never a recalculation. */
-function participantStatus(status: AssessmentToolStatusResponse, key: AtsToolKey) {
-  switch (key) {
-    case "sangian":
-      return status.sangian_participant;
-    case "vwm":
-      return status.vwm_participant;
-    case "dccs":
-      return status.dccs_participant;
-    case "cd":
-      return status.cd_participant;
-  }
-}
-
-type AtsCompletionFilter = "all" | "4" | "3" | "2" | "1" | "0";
-const ATS_COMPLETION_FILTERS: { value: AtsCompletionFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "4", label: "4/4 Complete" },
-  { value: "3", label: "3/4 Complete" },
-  { value: "2", label: "2/4 Complete" },
-  { value: "1", label: "1/4 Complete" },
-  { value: "0", label: "0/4 Complete" },
-];
-
-/** Count of the four tools marked Done for one participant row - a pure
- * re-derivation from the row's own booleans (themselves the identical
- * predicate behind the existing *_participant aggregates), never a second
- * completion definition. */
-function atsDoneCount(row: AssessmentToolParticipantStatus): number {
-  return ATS_TOOL_COLUMNS.reduce((sum, col) => sum + (row[col.key] ? 1 : 0), 0);
-}
-
-function atsStatusText(row: AssessmentToolParticipantStatus): string {
-  const doneCount = atsDoneCount(row);
-  if (doneCount === 4) return "4/4 Complete";
-  const pending = ATS_TOOL_COLUMNS.filter((col) => !row[col.key]).map((col) => col.label);
-  return `${doneCount}/4 Complete — Pending: ${pending.join(", ")}`;
-}
-
-/** Compact "Participant Assessment Status" mini-section - collapsed by
- * default, search + completion-count filter + a Child ID/SANGIAN/VWM/DCCS/
- * CD/Status table over the whole registered cohort. Every value is read
- * directly from the existing per-participant done booleans - no new
- * completion definition, no recalculation. */
-function ParticipantAssessmentStatusPanel({
-  status,
-  expanded,
-  onExpandedChange,
+/** Key Study Module / infographic indicator row (2026-09-28 infographic
+ * redesign) - a label/value line with an optional thin progress bar
+ * visualising that same already-displayed number (never a second, invented
+ * metric), and an optional `breakdown` for a single named indicator that
+ * is itself made of two real sub-figures (e.g. "Chronic / neurological" -
+ * two existing composite indicators shown as two small bars under one
+ * label, instead of concatenated into one line of text). */
+function ModuleIndicator({
+  label,
+  value,
+  percent,
+  tone = "blue",
+  breakdown,
 }: {
-  status: AssessmentToolStatusResponse;
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
+  label: string;
+  value?: string;
+  percent?: number;
+  tone?: Tone;
+  breakdown?: { label: string; value: string; percent: number; tone?: Tone }[];
 }) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<AtsCompletionFilter>("all");
-  const [commonOnly, setCommonOnly] = useState(false);
-
-  const commonIdSet = useMemo(() => new Set(status.common_participant_ids), [status.common_participant_ids]);
-
-  const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return status.participant_statuses.filter((row) => {
-      if (commonOnly && !commonIdSet.has(row.child_id)) return false;
-      if (q && !row.child_id.toLowerCase().includes(q)) return false;
-      if (filter !== "all" && atsDoneCount(row) !== Number(filter)) return false;
-      return true;
-    });
-  }, [status.participant_statuses, query, filter, commonOnly, commonIdSet]);
-
   return (
-    <div className="ats-pstatus">
-      <button type="button" className="ats-common-toggle" onClick={() => onExpandedChange(!expanded)} aria-expanded={expanded}>
-        <IconChevron width={11} height={11} className={`ats-common-toggle-chevron${expanded ? " ats-common-toggle-chevron-open" : ""}`} />
-        <span>View Participant Assessment Status</span>
-      </button>
-
-      {expanded && (
-        <div className="ats-pstatus-panel">
-          <div className="ats-pstatus-controls">
-            <input
-              type="text"
-              className="ats-pstatus-search"
-              placeholder="Search Child ID"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search Child ID"
-            />
-            <select
-              className="ats-pstatus-filter"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value as AtsCompletionFilter)}
-              aria-label="Filter by completion status"
-            >
-              {ATS_COMPLETION_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              className={`ats-pstatus-common-toggle${commonOnly ? " ats-pstatus-common-toggle-active" : ""}`}
-              onClick={() => setCommonOnly((v) => !v)}
-              aria-pressed={commonOnly}
-            >
-              Common Participants · {status.common_participant_ids.length}
-            </button>
-          </div>
-
-          <div className="ats-pstatus-table-wrap">
-            <table className="ats-pstatus-table">
-              <colgroup>
-                <col className="ats-pstatus-id-col" />
-                {ATS_TOOL_COLUMNS.map((col) => (
-                  <col key={col.key} className="ats-pstatus-tool-col" />
-                ))}
-                <col className="ats-pstatus-status-col" />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th className="ats-pstatus-id-col">Child ID</th>
-                  {ATS_TOOL_COLUMNS.map((col) => (
-                    <th key={col.key} className="ats-pstatus-tool-col">
-                      {col.label}
-                    </th>
-                  ))}
-                  <th className="ats-pstatus-status-col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => (
-                  <tr key={row.child_id}>
-                    <td className="ats-pstatus-id-cell">{row.child_id}</td>
-                    {ATS_TOOL_COLUMNS.map((col) => (
-                      <td key={col.key} className={`ats-pstatus-tool-col ${row[col.key] ? "ats-pstatus-done" : "ats-pstatus-not-done"}`}>
-                        <span className="ats-pstatus-mark">{row[col.key] ? "✓" : "—"}</span>
-                      </td>
-                    ))}
-                    <td className="ats-pstatus-status-cell">{atsStatusText(row)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredRows.length === 0 && <p className="ats-pstatus-empty">No participants match this search/filter.</p>}
-          </div>
+    <div className="module-indicator">
+      <div className="module-indicator-row">
+        <span className="module-indicator-label">{label}</span>
+        {value !== undefined && <span className="module-indicator-value">{value}</span>}
+      </div>
+      {percent !== undefined && <MonitorBar percent={percent} tone={tone} />}
+      {breakdown && (
+        <div className="module-indicator-breakdown">
+          {breakdown.map((item) => (
+            <div key={item.label} className="module-indicator-breakdown-item">
+              <div className="module-indicator-row module-indicator-row-sub">
+                <span className="module-indicator-sublabel">{item.label}</span>
+                <span className="module-indicator-subvalue">{item.value}</span>
+              </div>
+              <MonitorBar percent={item.percent} tone={item.tone ?? tone} />
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-/** For one incomplete-core-battery child, the labels of the CORE_BATTERY_KEYS
- * instruments that child has NOT completed - reads only the existing
- * `instrument_status` booleans already on `RegistryChild`, no new status
- * computation. */
-function remainingCoreLabels(child: RegistryChild): string[] {
-  return CORE_BATTERY_COLUMNS.filter((col) => !child.instrument_status[col.key]).map((col) => col.label);
+/** A small two-value horizontal comparison (e.g. School-day vs Weekend
+ * screen time) - each bar's length is scaled against the larger of the two
+ * `magnitude` values, so the pair is a genuine visual comparison, not two
+ * independent 0-100% bars. Used only where the underlying values are a
+ * real, already-displayed pair of numbers - never invented. */
+function DualMetricBars({ tone, items }: { tone: Tone; items: { label: string; value: string; magnitude: number }[] }) {
+  const max = Math.max(...items.map((item) => item.magnitude), 1);
+  return (
+    <div className="dual-metric-bars">
+      {items.map((item) => (
+        <div key={item.label} className="dual-metric-item">
+          <div className="module-indicator-row">
+            <span className="module-indicator-label">{item.label}</span>
+            <span className="module-indicator-value">{item.value}</span>
+          </div>
+          <MonitorBar percent={(item.magnitude / max) * 100} tone={tone} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
+/** Fixed colour mapping for the Study Snapshot Sex Distribution split bar -
+ * a presentation choice only, not a new data field. */
+function sexTone(label: string): Tone {
+  if (label === "Male") return "blue";
+  if (label === "Female") return "pink";
+  return "amber";
+}
+
+/** A thin, square-ended horizontal split bar (e.g. Male/Female proportion)
+ * - segments sized directly by their own real percent share, never a
+ * rounded/pill shape. */
+function SplitBar({ segments }: { segments: { tone: Tone; percent: number }[] }) {
+  return (
+    <div className="split-bar">
+      {segments.map((segment, index) => (
+        <div key={index} className={`split-bar-segment monitor-tone-${segment.tone}`} style={{ width: `${segment.percent}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function remainingCoreLabels(child: RegistryChild, coreBatteryColumns: { key: string; label: string }[]): string[] {
+  return coreBatteryColumns.filter((col) => !child.instrument_status[col.key]).map((col) => col.label);
+}
+
+const CORE_BATTERY_KEYS = ["ses", "dseq", "child_illness_history", "paq_a", "dietary_intake", "ssrs_parent"];
+const CORE_BATTERY_COLUMNS = INSTRUMENT_COLUMNS.filter((col) => CORE_BATTERY_KEYS.includes(col.key));
+
 /** "Remaining Core Assessments" drawer - opened from the Core Assessment
- * Completion strip figure. Fetches the same Registry data the Participants
- * page already uses (`core_battery_complete=false`, i.e. exactly the
- * population NOT counted in `overview.core_assessment_count`), then reads
- * each child's own `instrument_status` for the 6 core instruments to show
- * what's still missing - no new backend endpoint, no new completion
- * definition. */
+ * Completion strip figure. Unchanged from the prior version: fetches the
+ * same Registry data the Participants page already uses
+ * (`core_battery_complete=false`), then reads each child's own
+ * `instrument_status` for the 6 core instruments - no new backend
+ * endpoint, no new completion definition. */
 function CoreRemainingDrawer({
   isOpen,
   onClose,
@@ -330,24 +304,19 @@ function CoreRemainingDrawer({
       .catch((err: Error) => setLoadError(err.message));
   }, [isOpen, retryToken]);
 
-  const rows = useMemo(() => {
-    if (!children) return [];
-    return children
-      .map((child) => ({ child, remaining: remainingCoreLabels(child) }))
-      .filter((row) => row.remaining.length > 0);
-  }, [children]);
+  const rows = (children ?? [])
+    .map((child) => ({ child, remaining: remainingCoreLabels(child, CORE_BATTERY_COLUMNS) }))
+    .filter((row) => row.remaining.length > 0);
 
-  const filteredRows = useMemo(() => {
+  const filteredRows = rows.filter(({ child, remaining }) => {
     const q = query.trim().toLowerCase();
-    return rows.filter(({ child, remaining }) => {
-      if (q && !child.redcap_child_id.toLowerCase().includes(q)) return false;
-      if (instrumentFilter !== "all") {
-        const col = CORE_BATTERY_COLUMNS.find((c) => c.key === instrumentFilter);
-        if (!col || !remaining.includes(col.label)) return false;
-      }
-      return true;
-    });
-  }, [rows, query, instrumentFilter]);
+    if (q && !child.redcap_child_id.toLowerCase().includes(q)) return false;
+    if (instrumentFilter !== "all") {
+      const col = CORE_BATTERY_COLUMNS.find((c) => c.key === instrumentFilter);
+      if (!col || !remaining.includes(col.label)) return false;
+    }
+    return true;
+  });
 
   if (!isOpen) return null;
 
@@ -423,337 +392,405 @@ function CoreRemainingDrawer({
 export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [assessmentToolStatus, setAssessmentToolStatus] = useState<AssessmentToolStatusResponse | null>(null);
+  const [screenTime, setScreenTime] = useState<ScreenTimeResponse | null>(null);
+  const [health, setHealth] = useState<HealthScreeningResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [remainingOpen, setRemainingOpen] = useState(false);
-  const [detailKey, setDetailKey] = useState<string>("progress-overall");
-  const [pstatusExpanded, setPstatusExpanded] = useState(false);
-  const [exportMessage, setExportMessage] = useState<string | null>(null);
-  const [exportingCsv, setExportingCsv] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const pstatusRef = useRef<HTMLDivElement | null>(null);
   const { version } = useRefresh();
-
-  function openParticipantStatus() {
-    setPstatusExpanded(true);
-    requestAnimationFrame(() => pstatusRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }));
-  }
-
-  async function handleExportExcel() {
-    setExporting(true);
-    setExportMessage(null);
-    try {
-      await exportActiveCases();
-      setExportMessage("Excel export downloaded.");
-    } catch (err) {
-      setExportMessage(`Export failed: ${(err as Error).message}`);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  async function handleExportCsv() {
-    setExportingCsv(true);
-    setExportMessage(null);
-    try {
-      await exportActiveCasesCsv();
-      setExportMessage("CSV export downloaded.");
-    } catch (err) {
-      setExportMessage(`CSV export failed: ${(err as Error).message}`);
-    } finally {
-      setExportingCsv(false);
-    }
-  }
 
   useEffect(() => {
     setError(null);
     getOverview()
       .then(setOverview)
       .catch((err: Error) => setError(err.message));
-    // Secondary section - a failure here must not block or break the rest
-    // of the Overview page (the strip/coverage sections are unaffected
-    // either way).
+    // Secondary sections - a failure on any of these must not block or
+    // break the rest of the hub page, so each is fetched/caught
+    // independently and simply doesn't render its card if unavailable.
     getAssessmentToolStatus()
       .then(setAssessmentToolStatus)
       .catch(() => setAssessmentToolStatus(null));
+    getScreenTime()
+      .then(setScreenTime)
+      .catch(() => setScreenTime(null));
+    getHealthScreening()
+      .then(setHealth)
+      .catch(() => setHealth(null));
   }, [version, retryCount]);
 
   if (error) return <DataLoadError message={error} onRetry={() => setRetryCount((c) => c + 1)} />;
   if (!overview) return <FullScreenLoader message="Loading ICMR Neurodevelopment Study Dashboard..." />;
 
-  const sexData = [
-    { label: "Male", count: overview.sex_distribution.male, tone: "blue" as Tone },
-    { label: "Female", count: overview.sex_distribution.female, tone: "amber" as Tone },
-    { label: "Unknown", count: overview.sex_distribution.unknown, tone: "teal" as Tone },
-  ].filter((d) => d.count > 0);
-  const sexTotal = sexData.reduce((sum, d) => sum + d.count, 0);
+  const findCoverage = (key: string) => overview.all_instrument_coverage.find((c) => c.key === key);
 
-  const ageData = overview.age_distribution.map((b) => ({ label: b.label, count: b.count }));
-  const ageTotal = ageData.reduce((sum, d) => sum + d.count, 0);
+  /* 2026-09-28 senior requirement, corrected same day: every number/percent
+   * displayed anywhere on this Dashboard now uses the overall study cohort
+   * (222, `STUDY_ORIGINAL_ENROLLMENT`) as its denominator - not
+   * `overview.total_registered` (212, the current live-REDCap registered/
+   * active population), which is intentionally never read or shown on
+   * this page anymore. This is a display-only change: every numerator
+   * (completed_count, done_count, etc.) is still the real, live REDCap
+   * value; only which number it's divided/shown against changed. Other
+   * pages (Registry, Data Quality, the dedicated Assessment Tool Status
+   * page, Demographics, etc.) are untouched and still correctly show the
+   * real 212 registered/active population where that is the relevant
+   * figure for their own purpose. */
+  const studyDenominator = STUDY_ORIGINAL_ENROLLMENT;
 
-  const udaiData = overview.udai_pareek_category_distribution
-    .map((c) => ({ label: c.code, count: c.count }))
-    .sort((a, b) => b.count - a.count);
-  const udaiClassified = udaiData.reduce((sum, d) => sum + d.count, 0);
+  const simpleCoreModuleDefs: { key: string; label: string; tone: Tone; linkTo?: string }[] = [
+    { key: "ses", label: "SES", tone: "teal" },
+    { key: "child_illness_history", label: "Child Health History", tone: "blue", linkTo: "/health-screening" },
+    { key: "dseq", label: "DSEQ / Screen Time", tone: "violet", linkTo: "/screen-time" },
+    { key: "paq_a", label: "PAQ / Physical Activity", tone: "cyan" },
+    { key: "dietary_intake", label: "Dietary Intake", tone: "amber" },
+  ];
+  const simpleCoreModules: PipelineNodeData[] = simpleCoreModuleDefs.map((def) => {
+    const coverage = findCoverage(def.key);
+    return { key: def.key, label: def.label, count: coverage?.completed_count ?? 0, total: studyDenominator, tone: def.tone, linkTo: def.linkTo };
+  });
 
-  // --- Right-hand detail panel content, keyed by whichever row was last
-  // selected in the left column. Every figure below is a direct re-read of
-  // an already-computed value (overview.*, assessmentToolStatus.*) - no new
-  // calculation is introduced for the detail view.
-  const detailContent: Record<string, DetailContent> = {
-    "progress-overall": assessmentToolStatus
-      ? {
-          title: "Overall Assessment Progress",
-          subtitle: "Administration status only - not outcome data",
-          rows: [
-            {
-              label: "Completed",
-              value: `${assessmentToolStatus.overall_participant.done_count} / ${assessmentToolStatus.overall_participant.total}`,
-              percent: assessmentToolStatus.overall_participant.percent,
-              tone: "blue",
-            },
-            {
-              label: "Remaining",
-              value: (assessmentToolStatus.overall_participant.total - assessmentToolStatus.overall_participant.done_count).toLocaleString(),
-            },
-            { label: "Completion", value: `${assessmentToolStatus.overall_participant.percent}%` },
-          ],
-          linkTo: "/assessment-tool-status",
-          linkLabel: "View Remaining Assessments →",
-        }
-      : { title: "Overall Assessment Progress", rows: [] },
-    "study-profile": {
-      title: "Study Profile",
-      subtitle: `${overview.total_registered} registered children`,
-      rows: [
-        ...sexData.map((d) => ({ label: `Sex: ${d.label}`, value: `${d.count} (${percentOf(d.count, sexTotal)}%)`, percent: percentOf(d.count, sexTotal), tone: d.tone })),
-        ...ageData.map((d) => ({ label: `Age: ${d.label}`, value: `${d.count} (${percentOf(d.count, ageTotal)}%)`, percent: percentOf(d.count, ageTotal), tone: "teal" as Tone })),
-      ],
-    },
-    "ses-category": {
-      title: "SES Category (Udai Pareek)",
-      subtitle: `${udaiClassified} of ${overview.total_registered} registered children have an SES classification`,
-      rows: udaiData.map((d) => ({ label: d.label, value: `${d.count} (${percentOf(d.count, udaiClassified)}%)`, percent: percentOf(d.count, udaiClassified), tone: "violet" as Tone })),
-    },
+  /* SSRS consolidated into one module (2026-09-28) - Parent/Child/Teacher
+   * are shown as a breakdown inside a single card, never as three separate
+   * grid cells, per explicit instruction. */
+  const ssrsModule: PipelineNodeData = {
+    key: "ssrs",
+    label: "SSRS",
+    count: findCoverage("ssrs_parent")?.completed_count ?? 0,
+    total: studyDenominator,
+    tone: "pink",
+    breakdown: [
+      { label: "Parent", count: findCoverage("ssrs_parent")?.completed_count ?? 0 },
+      { label: "Child", count: findCoverage("ssrs_child")?.completed_count ?? 0 },
+      { label: "Teacher", count: findCoverage("ssrs_teacher")?.completed_count ?? 0 },
+    ],
   };
 
-  ATS_TOOL_COLUMNS.forEach((col) => {
-    if (!assessmentToolStatus) return;
-    const s = participantStatus(assessmentToolStatus, col.key);
-    detailContent[`progress-${col.key}`] = {
-      title: col.label,
-      subtitle: "Administration status only - not outcome data",
-      rows: [
-        { label: "Completed", value: `${s.done_count} / ${s.total}`, percent: s.percent, tone: col.tone },
-        { label: "Remaining", value: (s.total - s.done_count).toLocaleString() },
-        { label: "Completion", value: `${s.percent}%` },
-      ],
-      linkTo: "/assessment-tool-status",
-      linkLabel: "View participants →",
-    };
-  });
+  const coreModules: PipelineNodeData[] = [...simpleCoreModules, ssrsModule];
 
-  OVERVIEW_INSTRUMENTS.forEach((instrument) => {
-    const coverage = overview.all_instrument_coverage.find((c) => c.key === instrument.key);
-    const completed = coverage?.completed_count ?? 0;
-    const percent = coverage?.percent_of_registered ?? 0;
-    detailContent[`coverage-${instrument.key}`] = {
-      title: instrument.name,
-      subtitle: instrument.purpose,
-      rows: [{ label: "Completed", value: `${completed}/${overview.total_registered} (${percent}%)`, percent, tone: "blue" }],
-      linkTo: instrument.route,
-      linkLabel: "View full analysis",
-    };
-  });
+  const sexData = [
+    { label: "Male", count: overview.sex_distribution.male },
+    { label: "Female", count: overview.sex_distribution.female },
+    { label: "Unknown", count: overview.sex_distribution.unknown },
+  ].filter((d) => d.count > 0);
+  const sexTotal = sexData.reduce((s, d) => s + d.count, 0);
+
+  const ageData = overview.age_distribution.filter((b) => b.count > 0);
+  const dominantAge = [...ageData].sort((a, b) => b.count - a.count)[0];
+  const ageTotal = ageData.reduce((s, d) => s + d.count, 0);
+
+  const sesCoverage = findCoverage("ses");
 
   return (
     <section className="overview-page">
-      <div className="stat-strip" title={`Original enrolled cohort: ${STUDY_ORIGINAL_ENROLLMENT}`}>
+      {/* --- 1. Top KPI strip (2026-09-28: "Original Cohort" card removed;
+          2026-09-28 correction (same day): every displayed number/percent
+          on this Dashboard now uses the overall study cohort (222,
+          `studyDenominator`) as its denominator - `overview.total_
+          registered` (212) is intentionally never read on this page
+          anymore. Percentages that the API computed against 212
+          (`assessmentToolStatus.overall_participant.percent`, `overview
+          .core_assessment_percent`) are recomputed here with
+          `percentOf(count, studyDenominator)` rather than used as-is, so
+          no 212-denominated percent survives either. --- */}
+      <div className="stat-strip">
         <div className="stat-block">
           <span className="stat-block-label">Current Active Cases</span>
-          <span className="stat-block-value">{overview.total_registered.toLocaleString()}</span>
-          <span className="stat-block-footnote">Children in analytical population</span>
-        </div>
-        <div className="stat-block">
-          <span className="stat-block-label">Original Cohort</span>
-          <span className="stat-block-value">{STUDY_ORIGINAL_ENROLLMENT.toLocaleString()}</span>
-          <span className="stat-block-footnote">
-            {STUDY_MIGRATED_COUNT} migrated · {STUDY_DECEASED_COUNT} deceased
-          </span>
+          <span className="stat-block-value">{studyDenominator.toLocaleString()}</span>
+          <span className="stat-block-footnote">Overall study cohort</span>
         </div>
         <div className="stat-block">
           <span className="stat-block-label">Assessment Progress</span>
           <span className="stat-block-value">
-            {assessmentToolStatus ? `${assessmentToolStatus.overall_participant.done_count} / ${assessmentToolStatus.overall_participant.total}` : "—"}
+            {assessmentToolStatus ? `${assessmentToolStatus.overall_participant.done_count} / ${studyDenominator}` : "—"}
           </span>
-          {assessmentToolStatus && <MonitorBar percent={assessmentToolStatus.overall_participant.percent} tone="violet" />}
-          {assessmentToolStatus && <span className="stat-block-footnote">{assessmentToolStatus.overall_participant.percent}%</span>}
-        </div>
-        <div className="stat-block">
-          <span className="stat-block-label">Remaining Assessments</span>
-          <span className="stat-block-value">
-            {assessmentToolStatus
-              ? (assessmentToolStatus.overall_participant.total - assessmentToolStatus.overall_participant.done_count).toLocaleString()
-              : "—"}
-          </span>
-          <span className="stat-block-footnote">Children pending completion</span>
+          {assessmentToolStatus && (
+            <MonitorBar percent={percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)} tone="violet" />
+          )}
+          {assessmentToolStatus && (
+            <span className="stat-block-footnote">{percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)}%</span>
+          )}
         </div>
         <button type="button" className="stat-block stat-block-clickable" onClick={() => setRemainingOpen(true)}>
           <span className="stat-block-label">Core Assessment Completion</span>
           <span className="stat-block-value">
-            {overview.core_assessment_count} / {overview.total_registered}
+            {overview.core_assessment_count} / {studyDenominator}
           </span>
-          <MonitorBar percent={overview.core_assessment_percent} tone="amber" />
-          <span className="stat-block-footnote">{overview.core_assessment_percent}% · View remaining →</span>
+          <MonitorBar percent={percentOf(overview.core_assessment_count, studyDenominator)} tone="amber" />
+          <span className="stat-block-footnote">{percentOf(overview.core_assessment_count, studyDenominator)}% · View remaining →</span>
         </button>
       </div>
 
       <CoreRemainingDrawer
         isOpen={remainingOpen}
         onClose={() => setRemainingOpen(false)}
-        totalRegistered={overview.total_registered}
+        totalRegistered={studyDenominator}
         coreCompleteCount={overview.core_assessment_count}
       />
 
-      <div className="monitor-layout">
-        <div className="monitor-main">
-          {assessmentToolStatus && (
-            <div className="monitor-section">
-              <div className="monitor-section-head">
-                <span className="monitor-section-title">Assessment Progress</span>
-                <span className="monitor-section-note">Administration status only - not outcome data</span>
-              </div>
-              <MetricRow
-                label="Overall Assessment"
-                valueText={`${assessmentToolStatus.overall_participant.done_count} / ${assessmentToolStatus.overall_participant.total} · ${assessmentToolStatus.overall_participant.percent}%`}
-                percent={assessmentToolStatus.overall_participant.percent}
-                tone="blue"
-                selected={detailKey === "progress-overall"}
-                onSelect={() => setDetailKey("progress-overall")}
-              />
-              {ATS_TOOL_COLUMNS.map((col) => {
-                const s = participantStatus(assessmentToolStatus, col.key);
-                return (
-                  <MetricRow
-                    key={col.key}
-                    label={col.label}
-                    valueText={`${s.done_count} / ${s.total} · ${s.percent}%`}
-                    percent={s.percent}
-                    tone={col.tone}
-                    selected={detailKey === `progress-${col.key}`}
-                    onSelect={() => setDetailKey(`progress-${col.key}`)}
+      {/* --- 2. Study Progress - animated connected pipeline --- */}
+      <div className="monitor-section">
+        <div className="monitor-section-head">
+          <span className="monitor-section-title">Study Progress</span>
+          <span className="monitor-section-note">Registration → parallel core modules → assessment tools</span>
+        </div>
+        <StudyProgressPipeline
+          registration={{
+            key: "registration",
+            label: "Registration / Cohort",
+            /* Per the explicit senior example ("Registration / Cohort →
+             * 222/222"), this node represents whole-cohort enrollment
+             * itself, so its count is the same overall-cohort figure as
+             * its denominator - not the live registration-form completion
+             * count (212), which would otherwise reintroduce a visible
+             * "212" here. */
+            count: studyDenominator,
+            total: studyDenominator,
+            tone: "blue",
+          }}
+          coreModules={coreModules}
+          assessmentTools={
+            assessmentToolStatus
+              ? {
+                  key: "assessment_tools",
+                  label: "Assessment Tools",
+                  count: assessmentToolStatus.overall_participant.done_count,
+                  total: studyDenominator,
+                  tone: "cyan",
+                }
+              : null
+          }
+        />
+      </div>
+
+      {/* --- 3. Key Study Modules - two featured infographic cards, DSEQ and
+          Child Health History (2026-09-28 infographic redesign - a
+          balanced 2-column layout, each card led by a large dominant
+          completion figure and a small real-data visual comparison, not a
+          plain full-width text row). --- */}
+      <div className="monitor-section">
+        <div className="monitor-section-head">
+          <span className="monitor-section-title">Key Study Modules</span>
+          <span className="monitor-section-note">Featured modules - full analysis on their own page</span>
+        </div>
+        <div className="key-module-grid">
+          <Link to="/screen-time" className="key-module-card featured-module-card monitor-tone-violet">
+            <div className="featured-module-head">
+              <span className="featured-module-icon">
+                <IconMonitor width={15} height={15} />
+              </span>
+              <span className="key-module-name">DSEQ / Screen Time</span>
+            </div>
+            {screenTime ? (
+              <>
+                <div className="featured-module-headline">
+                  <span className="featured-module-headline-value">
+                    {screenTime.completion.completed} / {studyDenominator}
+                  </span>
+                  <span className="featured-module-headline-percent">
+                    {percentOf(screenTime.completion.completed, studyDenominator)}% instrument completion
+                  </span>
+                </div>
+                <MonitorBar percent={percentOf(screenTime.completion.completed, studyDenominator)} tone="violet" />
+                <p className="key-module-description">Digital Screen Exposure Questionnaire - screen time, physical activity, media behaviour.</p>
+                <ModuleIndicator
+                  label="Avg daily screen time"
+                  value={screenTime.average_daily_summary.mean !== null ? `${Math.round(screenTime.average_daily_summary.mean)} min (est.)` : "No data"}
+                />
+                {screenTime.school_day_summary.mean !== null && screenTime.weekend_summary.mean !== null && (
+                  <DualMetricBars
+                    tone="violet"
+                    items={[
+                      { label: "School-day", value: `${Math.round(screenTime.school_day_summary.mean)} min`, magnitude: screenTime.school_day_summary.mean },
+                      { label: "Weekend", value: `${Math.round(screenTime.weekend_summary.mean)} min`, magnitude: screenTime.weekend_summary.mean },
+                    ]}
                   />
+                )}
+              </>
+            ) : (
+              <p className="module-indicator">Data unavailable</p>
+            )}
+            <span className="monitor-detail-link">View DSEQ →</span>
+          </Link>
+
+          <Link to="/health-screening" className="key-module-card featured-module-card monitor-tone-blue">
+            <div className="featured-module-head">
+              <span className="featured-module-icon">
+                <IconHeart width={15} height={15} />
+              </span>
+              <span className="key-module-name">Child Health History</span>
+            </div>
+            {health ? (
+              <>
+                <div className="featured-module-headline">
+                  <span className="featured-module-headline-value">
+                    {health.completion.completed} / {studyDenominator}
+                  </span>
+                  <span className="featured-module-headline-percent">{percentOf(health.completion.completed, studyDenominator)}% instrument completion</span>
+                </div>
+                <MonitorBar percent={percentOf(health.completion.completed, studyDenominator)} tone="blue" />
+                <p className="key-module-description">Baseline health and illness history - current health, chronic/neurological history, assessment readiness.</p>
+                <ModuleIndicator
+                  label="Current illness"
+                  value={`${health.chh.current_health.currently_ill.yes_count}/${health.chh.current_health.currently_ill.valid_n}`}
+                  percent={health.chh.current_health.currently_ill.percent_yes}
+                  tone="blue"
+                />
+                <ModuleIndicator
+                  label="Chronic / neurological"
+                  tone="pink"
+                  breakdown={[
+                    {
+                      label: "Chronic condition",
+                      value: `${health.chh.chronic_illness.any_listed_condition.yes_count}/${health.chh.chronic_illness.any_listed_condition.valid_n}`,
+                      percent: health.chh.chronic_illness.any_listed_condition.percent_yes,
+                      tone: "amber",
+                    },
+                    {
+                      label: "Neurological history",
+                      value: `${health.chh.neurological.any_neurological_history.yes_count}/${health.chh.neurological.any_neurological_history.valid_n}`,
+                      percent: health.chh.neurological.any_neurological_history.percent_yes,
+                      tone: "pink",
+                    },
+                  ]}
+                />
+                <ModuleIndicator
+                  label="Assessment readiness concern"
+                  value={`${health.chh.assessment_day.any_assessment_day_concern_count}/${health.chh.assessment_day.any_assessment_day_concern_total}`}
+                  percent={percentOf(health.chh.assessment_day.any_assessment_day_concern_count, health.chh.assessment_day.any_assessment_day_concern_total)}
+                  tone="cyan"
+                />
+              </>
+            ) : (
+              <p className="module-indicator">Data unavailable</p>
+            )}
+            <span className="monitor-detail-link">View Child Health →</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* --- 4. Assessment Progress - compact infographic (2026-09-28
+          redesign): one visually dominant "Overall Assessment" block, then
+          the four tools as a compact comparative grid underneath, not a
+          stack of full-width table-like rows. --- */}
+      {assessmentToolStatus && (
+        <div className="monitor-section">
+          <div className="monitor-section-head">
+            <span className="monitor-section-title">Assessment Progress</span>
+            <span className="monitor-section-note">Administration status only - not outcome data</span>
+          </div>
+          <div className="assessment-infographic">
+            <div className="assessment-overall-block monitor-tone-blue">
+              <span className="assessment-overall-label">Overall Assessment</span>
+              <span className="assessment-overall-value">
+                {assessmentToolStatus.overall_participant.done_count} / {studyDenominator}
+              </span>
+              <MonitorBar percent={percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)} tone="blue" />
+              <span className="assessment-overall-percent">
+                {percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)}%
+              </span>
+            </div>
+            <div className="assessment-tool-grid">
+              {(
+                [
+                  { key: "sangian", label: "SANGIAN", icon: IconGraduationCap, tone: "teal", count: assessmentToolStatus.sangian_participant.done_count },
+                  { key: "vwm", label: "VWM", icon: IconBrain, tone: "violet", count: assessmentToolStatus.vwm_participant.done_count },
+                  { key: "dccs", label: "DCCS", icon: IconClipboardCheck, tone: "cyan", count: assessmentToolStatus.dccs_participant.done_count },
+                  { key: "cd", label: "CD", icon: IconMonitor, tone: "amber", count: assessmentToolStatus.cd_participant.done_count },
+                ] as { key: string; label: string; icon: typeof IconBrain; tone: Tone; count: number }[]
+              ).map((tool) => {
+                const percent = percentOf(tool.count, studyDenominator);
+                const Icon = tool.icon;
+                return (
+                  <div key={tool.key} className={`assessment-tool-block monitor-tone-${tool.tone}`}>
+                    <span className="assessment-tool-icon">
+                      <Icon width={13} height={13} />
+                    </span>
+                    <span className="assessment-tool-label">{tool.label}</span>
+                    <span className="assessment-tool-value">
+                      {tool.count} / {studyDenominator}
+                    </span>
+                    <MonitorBar percent={percent} tone={tool.tone} />
+                    <span className="assessment-tool-percent">{percent}%</span>
+                  </div>
                 );
               })}
-              <div ref={pstatusRef}>
-                <ParticipantAssessmentStatusPanel status={assessmentToolStatus} expanded={pstatusExpanded} onExpandedChange={setPstatusExpanded} />
-              </div>
-            </div>
-          )}
-
-          <div className="monitor-section">
-            <div className="monitor-section-head">
-              <span className="monitor-section-title">Study Profile</span>
-              <span className="monitor-section-note">Who is registered in the study</span>
-            </div>
-
-            <div className="study-profile-columns">
-              <div className="study-profile-col">
-                <div className="monitor-subgroup-label">Sex</div>
-                {sexData.map((d) => (
-                  <MetricRow
-                    key={d.label}
-                    label={d.label}
-                    valueText={`${d.count.toLocaleString()} (${percentOf(d.count, sexTotal)}%)`}
-                    percent={percentOf(d.count, sexTotal)}
-                    tone={d.tone}
-                    selected={detailKey === "study-profile"}
-                    onSelect={() => setDetailKey("study-profile")}
-                  />
-                ))}
-              </div>
-
-              <div className="study-profile-col">
-                <div className="monitor-subgroup-label">Age</div>
-                {ageData.map((d) => (
-                  <MetricRow
-                    key={d.label}
-                    label={d.label}
-                    valueText={`${d.count.toLocaleString()} (${percentOf(d.count, ageTotal)}%)`}
-                    percent={percentOf(d.count, ageTotal)}
-                    tone="teal"
-                    selected={detailKey === "study-profile"}
-                    onSelect={() => setDetailKey("study-profile")}
-                  />
-                ))}
-              </div>
-
-              <div className="study-profile-col">
-                <div className="monitor-subgroup-label">SES Category</div>
-                {udaiData.map((d) => (
-                  <MetricRow
-                    key={d.label}
-                    label={d.label}
-                    valueText={`${d.count.toLocaleString()} (${percentOf(d.count, udaiClassified)}%)`}
-                    percent={percentOf(d.count, udaiClassified)}
-                    tone="violet"
-                    selected={detailKey === "ses-category"}
-                    onSelect={() => setDetailKey("ses-category")}
-                  />
-                ))}
-                <p className="monitor-section-footnote">
-                  {udaiClassified} of {overview.total_registered} classified
-                </p>
-              </div>
             </div>
           </div>
-
-          <div className="monitor-section">
-            <div className="monitor-section-head">
-              <span className="monitor-section-title">Assessment Coverage</span>
-              <span className="monitor-section-note">Each of the 8 currently-mapped study instruments, independently calculated</span>
-            </div>
-            {OVERVIEW_INSTRUMENTS.map((instrument) => {
-              const coverage = overview.all_instrument_coverage.find((c) => c.key === instrument.key);
-              const completed = coverage?.completed_count ?? 0;
-              const percent = coverage?.percent_of_registered ?? 0;
-              return (
-                <MetricRow
-                  key={instrument.key}
-                  label={instrument.name}
-                  valueText={`${completed}/${overview.total_registered} (${percent}%)`}
-                  percent={percent}
-                  tone="blue"
-                  selected={detailKey === `coverage-${instrument.key}`}
-                  onSelect={() => setDetailKey(`coverage-${instrument.key}`)}
-                />
-              );
-            })}
-          </div>
+          <Link to="/assessment-tool-status" className="monitor-detail-link">
+            View Assessment Details →
+          </Link>
         </div>
+      )}
 
-        <div className="monitor-detail">
-          <DetailPanel content={detailContent[detailKey] ?? null} />
+      {/* --- 5. Study Snapshot - three compact infographic blocks
+          (2026-09-28 redesign): Sex Distribution (split bar), Age Profile
+          (per-bucket mini bars), SES Coverage (dominant figure + bar) - a
+          3-column layout instead of a stacked full-width text list. --- */}
+      <div className="monitor-section">
+        <div className="monitor-section-head">
+          <span className="monitor-section-title">Study Snapshot</span>
+          <span className="monitor-section-note">Who is registered in the study</span>
+        </div>
+        <div className="snapshot-infographic-grid">
+          <div className="snapshot-block monitor-tone-blue">
+            <div className="snapshot-block-head">
+              <IconUsers width={14} height={14} />
+              <span className="snapshot-block-title">Sex Distribution</span>
+            </div>
+            <SplitBar segments={sexData.map((d) => ({ tone: sexTone(d.label), percent: percentOf(d.count, sexTotal) }))} />
+            <div className="split-bar-legend">
+              {sexData.map((d) => (
+                <span key={d.label} className="split-bar-legend-item">
+                  <span className={`split-bar-legend-dot monitor-tone-${sexTone(d.label)}`} />
+                  {d.label} {percentOf(d.count, sexTotal)}%
+                </span>
+              ))}
+            </div>
+          </div>
 
-          <div className="monitor-quick-actions">
-            <div className="monitor-quick-actions-title">Quick Actions</div>
-            {assessmentToolStatus && (
-              <button type="button" className="monitor-quick-action" onClick={openParticipantStatus}>
-                View Participant Assessment Status
-              </button>
+          <div className="snapshot-block monitor-tone-violet">
+            <div className="snapshot-block-head">
+              <IconCalendar width={14} height={14} />
+              <span className="snapshot-block-title">Age Profile</span>
+            </div>
+            <div className="snapshot-age-list">
+              {ageData.map((bucket) => {
+                const percent = percentOf(bucket.count, ageTotal);
+                const isDominant = dominantAge?.label === bucket.label;
+                return (
+                  <div key={bucket.label} className="snapshot-age-row">
+                    <div className="module-indicator-row">
+                      <span className={`module-indicator-label${isDominant ? " snapshot-age-label-dominant" : ""}`}>{bucket.label}</span>
+                      <span className="module-indicator-value">{percent}%</span>
+                    </div>
+                    <MonitorBar percent={percent} tone={isDominant ? "violet" : "blue"} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="snapshot-block monitor-tone-teal">
+            <div className="snapshot-block-head">
+              <IconChart width={14} height={14} />
+              <span className="snapshot-block-title">SES Coverage</span>
+            </div>
+            {sesCoverage ? (
+              <>
+                <span className="snapshot-ses-value">
+                  {sesCoverage.completed_count} / {studyDenominator}
+                </span>
+                <MonitorBar percent={percentOf(sesCoverage.completed_count, studyDenominator)} tone="teal" />
+                <span className="snapshot-ses-percent">{percentOf(sesCoverage.completed_count, studyDenominator)}% instrument completion</span>
+              </>
+            ) : (
+              <p className="module-indicator">No data</p>
             )}
-            <button type="button" className="monitor-quick-action" onClick={() => void handleExportExcel()} disabled={exporting}>
-              {exporting ? "Exporting…" : "Export Active Cases (Excel)"}
-            </button>
-            <button type="button" className="monitor-quick-action" onClick={() => void handleExportCsv()} disabled={exportingCsv}>
-              {exportingCsv ? "Exporting…" : "Export Active Cases (CSV)"}
-            </button>
-            <button type="button" className="monitor-quick-action" onClick={() => setRemainingOpen(true)}>
-              View Remaining Assessments
-            </button>
-            {exportMessage && <p className="monitor-section-footnote">{exportMessage}</p>}
           </div>
         </div>
+        <Link to="/demographics" className="monitor-detail-link">
+          View Demographics →
+        </Link>
       </div>
     </section>
   );

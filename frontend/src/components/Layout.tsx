@@ -15,20 +15,19 @@ interface HeaderTab {
   matchAlso?: string[];
 }
 
-// Assessments/Health/Development/Analysis tabs were removed 2026-09-26
-// pending a later navigation-structure brainstorm - their routes/pages/
-// components are untouched and still fully reachable by direct URL (same
-// "reachable by URL, not nav-linked" precedent already used elsewhere in
-// this app), only these header tabs were taken out. Do not reintroduce
-// them here without an explicit instruction on the finalized structure.
-//
-// "Participants" was swapped for "Data Quality" the same day (explicit
-// instruction) - the Participant Registry page/route (/registry) is
-// completely unchanged and still fully functional, just no longer linked
-// from this header; it remains reachable by direct URL, same precedent as
-// the tabs above.
+// Nav updated 2026-09-28 for the Dashboard-as-hub redesign: DSEQ / Screen
+// Time and Child Health History are now featured as their own top-level
+// tabs (they're the two "Key Study Modules" prominently linked from the
+// Dashboard hub) alongside the existing Study Questionnaires/Data Quality
+// tabs. Every other route (Participants/Registry, Assessments hub,
+// Physical Activity, Dietary Intake, Neurodevelopment, etc.) is unchanged
+// and still fully reachable by direct URL, same "reachable by URL, not
+// nav-linked" precedent already used throughout this app - do not
+// reintroduce those tabs here without an explicit instruction.
 const HEADER_TABS: HeaderTab[] = [
   { label: "Dashboard", to: "/" },
+  { label: "DSEQ / Screen Time", to: "/screen-time" },
+  { label: "Child Health History", to: "/health-screening" },
   { label: "Study Questionnaires", to: "/study-questionnaires" },
   { label: "Data Quality", to: "/data-quality" },
 ];

@@ -3887,6 +3887,495 @@ changes only.
 
 ---
 
+## DASHBOARD-AS-HUB REDESIGN + STUDY PROGRESS PIPELINE (2026-09-28)
+
+A further round of frontend-only redesign, all on top of the Section 1-3
+"monitoring system" work above. No backend/API/REDCap logic was touched at
+any point in this round - every number below is read from the same
+existing live endpoints (`/dashboard/overview`, `/dashboard/registry`,
+`/dashboard/assessment-tool-status`, `/dashboard/health`,
+`/dashboard/screen-time`).
+
+**Navigation shell replaced again**: the left `Sidebar.tsx` (Section 1
+above) was replaced with a top-tab header (`Layout.tsx` rewritten again -
+`Sidebar.tsx` deleted). `HEADER_TABS` is now `Dashboard (/) | DSEQ / Screen
+Time (/screen-time) | Child Health History (/health-screening) | Study
+Questionnaires (/study-questionnaires) | Data Quality (/data-quality)` -
+DSEQ and Child Health History are featured as top-level tabs because
+they're the two "Key Study Modules" the redesigned Dashboard links to
+prominently; every other route (Registry, Assessments hub, Physical
+Activity, Dietary Intake, Neurodevelopment, Demographics, Progress, etc.)
+is unchanged and still reachable by direct URL only, same long-standing
+"nav-hidden but not deleted" precedent used throughout this app.
+
+**New page - Data Quality** (`frontend/src/routes/DataQuality.tsx`, route
+`/data-quality`): a QC/governance page, not a clinical analytics page.
+Reads `/dashboard/registry` (`limit=500`) + `/dashboard/assessment-tool-
+status` and computes, entirely client-side from real live rows (nothing
+invented, no fabricated thresholds): record/ID integrity, cohort
+reconciliation, per-instrument completeness (with a pending-child-ID chip
+list per instrument), critical-field completeness, cross-form consistency
+checks (core-battery-flag vs. per-instrument mismatch, ATS-detail vs.
+participant-status mismatch, registered-with-a-visit-but-no-data,
+visit-date-missing-despite-progress, future-dated visit date), and a
+searchable/filterable "Issues Requiring Review" master table pooling every
+flagged row from the checks above.
+
+**New page - Study Questionnaires** (`frontend/src/routes
+/StudyQuestionnaires.tsx`, route `/study-questionnaires`): a questionnaire-
+domain explorer over 7 real domains (SES, Health/Child Illness History,
+DSEQ, PAQ-C/Physical Activity, Anthropometry, Dietary Intake,
+Neurodevelopment/SSRS Parent-Child-Teacher), each domain a card with
+indicator rows that expand inline on click for detail - deliberately built
+using **only** fields already present in the live JSON API responses (an
+explicit audit ruled out SES sub-items that exist only in the Excel export
+- those were not added here). Layout uses CSS multi-column
+(`.sq-domain-columns { column-count: 2 }` + `break-inside: avoid`) rather
+than CSS Grid for 6 of the 7 domain cards, specifically because Grid
+row-locks every card in a row to the tallest sibling, which left large
+dead gaps below shorter cards (e.g. SES) - multi-column packs cards
+top-to-bottom per column instead, like masonry. Neurodevelopment (SSRS)
+renders as its own full-width `.monitor-section` outside the columns
+container, not squeezed into the 2-column masonry.
+
+**Assessment Tool Status page regained its detail table**: `Participant
+AssessmentStatusPanel` (search/filter/common-participants-toggle over the
+full 212-row SANGIAN/VWM/DCCS/CD table) was moved from `Overview.tsx` into
+`AssessmentToolStatus.tsx` itself (own `expanded` state, no longer
+controlled by a Dashboard Quick Action) - the feature was relocated, not
+deleted, since this detailed per-participant drilldown belongs on its own
+dedicated page now that Dashboard itself was trimmed down (see below).
+
+**Dashboard (`Overview.tsx`) redesigned into a "Central Study Information
+Hub"** - condensed from a detailed analytics page into an at-a-glance
+overview that links out to the dedicated pages above for depth. Kept: the
+KPI strip (Total Cohort/Current Active Cases/Assessment Progress/Core
+Assessment Completion, unchanged calculation - card order swapped so
+"Original Cohort" (`STUDY_ORIGINAL_ENROLLMENT`, extracted to `frontend/src
+/lib/studyCohort.ts` with its documented non-REDCap-derived caveat) leads,
+migrated/deceased shown as small clinical-toned status chips instead of
+plain support text, KPI strip container given a subtle pale `--surface-2`
+tint). **Removed** from Dashboard: the detailed Assessment Progress table,
+the large Study Profile breakdown, the large Assessment Coverage table,
+the Quick Actions list, and repetitive per-instrument completion rows -
+none of this data was deleted from the app, it now lives on Study
+Questionnaires/Registry/the dedicated assessment pages. **Added**:
+- **Key Study Modules** (`.key-module-grid`, 2 equal columns) - two
+  featured cards, DSEQ/Screen Time and Child Health History, each showing
+  2-3 real live indicators plus a "View Details →" link to its dedicated
+  page.
+- **Study Progress** (was "Study Flow", renamed again this same pass - see
+  below) - the whole pipeline at a glance.
+- A compact Assessment Progress section (`.compact-stat-row`s: Overall/
+  SANGIAN/VWM/DCCS/CD) with one "View Assessment Details →" link instead
+  of the old full clickable table.
+- A compact Study Snapshot (plain sex/age/SES one-line stats + a link),
+  not a card grid.
+
+**"Study Flow" renamed to "Study Progress" - four iterations the same day,
+current state is a plain document-flow layout, not an absolutely-positioned
+overlay**: the prior flat row-of-chips-with-arrows design (`.flow-row`/
+`.flow-stage`/`.flow-arrow`, all deleted) went through three animation
+attempts before a final, explicit layout correction. History, oldest first
+(each fully superseded by the next - only the last bullet describes the
+current code):
+1. An SVG tree (one absolutely-positioned `<svg viewBox="0 0 100 100"
+   preserveAspectRatio="none">` overlay drawing a central trunk, two
+   horizontal "bus" lines, and 8 branch lines to the core modules) with a
+   pulse traveling the trunk via `<circle><animateMotion>`. Rejected: the
+   circle rendered as a stretched ellipse under the non-uniform viewBox
+   scale, and its motion path crossed the invisible gap through the
+   middle of the card row - reported as "a floating green/teal oval/
+   bubble."
+2. The circle was replaced with two small fixed-size (4x4px) HTML dots
+   confined to the two vertical trunk segments. Rejected outright: the
+   user did not want any moving dot/circle/object at all.
+3. The dots were removed and replaced with two `<span className=
+   "pipeline-bus-flow">` HTML overlays positioned on top of the (still
+   absolutely-positioned SVG) horizontal bus lines, animating
+   `background-position-x` for a scrolling dashed highlight. Rejected as a
+   *layout* problem, not an animation one: the user reported the
+   connector/animation "overlapping the cards" because the whole
+   tree/bus-line system was one giant absolutely-positioned element laid
+   over the cards rather than occupying its own dedicated space, and the
+   8-module row wasn't a clean, intentional grid.
+4. **Current, final layout (supersedes all of the above)** - rebuilt as a
+   plain top-to-bottom document-flow hierarchy in `StudyProgressPipeline`
+   (`Overview.tsx`), with **no absolutely-positioned element anywhere in
+   the component**:
+   - `.pipeline-anchor` - a standalone, centered `Registration / Cohort`
+     node.
+   - `.pipeline-connector` - a small dedicated flex-column element (a 2px
+     static vertical line + a CSS-triangle arrowhead) occupying its own
+     fixed-height (30px) row in normal flow - it can never overlap a card
+     because nothing else shares that row.
+   - `.pipeline-core-section` - a clearly bordered box (`border` +
+     `--radius-sharp`, `--surface-1` background) containing its own
+     heading row (`.pipeline-core-heading`: two short horizontal-rule
+     segments flanking an uppercase "Core Data Collection" label) and a
+     `.pipeline-core-grid` (CSS Grid, `repeat(4, minmax(0,1fr))` desktop →
+     `repeat(2,...)` at ≤900px → `1fr` at ≤480px) holding the 8 **parallel**
+     core-module nodes (SES, Child Health History, DSEQ / Screen Time, PAQ
+     / Physical Activity, Dietary Intake, SSRS Parent, SSRS Child, SSRS
+     Teacher - unchanged `completed_count/total_registered` values from
+     `all_instrument_coverage`). Every card is a genuine grid cell with
+     consistent dimensions - never an ad hoc flex-wrap row. DSEQ and Child
+     Health History remain the two `<Link>`-rendered (`pipeline-node-
+     clickable`) cards to their dedicated pages.
+   - A second `.pipeline-connector`, then a standalone, centered
+     `Assessment Tools` anchor node.
+   - **Animation, scoped to exactly one element**: only the two
+     `.pipeline-core-heading-line` rule segments (a normal-flow part of
+     the heading row, not an overlay) carry the scrolling dashed
+     `repeating-linear-gradient`/`background-position-x` animation
+     (`pipeline-core-heading-flow`, `1.1s linear infinite`) - the only
+     horizontal connector-like element left in this design. Both
+     `.pipeline-connector-line` elements (the vertical connectors into and
+     out of the Core Data Collection section) are **completely static, by
+     design** - a vertical connector never receives the horizontal
+     scrolling treatment, per explicit instruction.
+   - Dark mode: deep navy page background (unchanged app-wide dark
+     surface), `.pipeline-core-section`/`.pipeline-node` use the existing
+     lighter `--surface-1`/`--tone-surface` tokens, connector
+     lines/arrowheads use a low-opacity slate override, and the heading-
+     rule dash pattern switches to a brighter cyan (`#5eead4`) with a
+     `drop-shadow` glow - a distinct treatment, not a simple inversion,
+     matching the same "higher alpha/brightness for equal visual weight on
+     dark" precedent used elsewhere in this file (e.g. the Active Cases
+     banner, the former sidebar's dark active-link background).
+   - `prefers-reduced-motion: reduce`: the heading-flow animation is only
+     declared inside a `no-preference` query, so under `reduce` the rule
+     segments render as a static (non-scrolling) dashed line - confirmed
+     live via Playwright (`animationName: "none"`, fixed
+     `background-position-x: 0%`).
+   - `.pipeline-node:hover`/`.pipeline-node-clickable:hover` still lifts
+     1px and brightens the border to the card's own tone accent;
+     `.pipeline-node-complete` (percent ≥ 100) still gets a tone-colored
+     border + soft glow, brighter in dark mode.
+   - Responsiveness is now driven entirely by the `.pipeline-core-grid`
+     column-count breakpoints above (no SVG/overlay to hide) - verified
+     zero card-to-card bounding-box overlap at 1440px (4 cols), 820px
+     (2 cols), and 390px (1 col) via a Playwright DOM measurement, not just
+     a visual read.
+Files touched for this final layout pass: `Overview.tsx` (`PipelineNode`
+simplified to drop its now-redundant `variant` prop, new
+`PipelineConnector` component, `StudyProgressPipeline` rewritten to the
+flow hierarchy above - `coreModuleDefs`/`coreModules` data prep is
+unchanged from the earlier passes) and `app.css` (the entire `.pipeline*`
+rule block replaced with `.pipeline`/`.pipeline-anchor`/
+`.pipeline-connector*`/`.pipeline-node*`/`.pipeline-core-*` - no SVG, no
+`vector-effect`, no absolutely-positioned overlay of any kind remains).
+
+Verified for the full 2026-09-28 Study Progress round: `tsc --noEmit`
+clean; `npm run build` succeeds. Live-verified via a cached local
+Playwright pattern against a real backend + live frontend dev server: zero
+console errors, zero horizontal overflow, and zero card-overlap at 1440px
+(desktop, 4-column grid), 820px (tablet, 2-column), and 390px (mobile,
+1-column); a hover capture (Child Health History node correctly
+highlights); a dark-mode capture (distinct connector/heading-rule colors,
+not a simple inversion); and a `prefers-reduced-motion: reduce` context
+(heading-rule animation confirmed disabled via computed style). Every
+displayed value read live from `/dashboard/overview`/`/dashboard
+/assessment-tool-status` at time of verification (e.g. SES 83/212, Child
+Health History 75/212, DSEQ 81/212, PAQ 73/212, Dietary Intake 72/212,
+SSRS Parent 76/212, SSRS Child 78/212, SSRS Teacher 0/212, Assessment
+Tools 15/212 - these will keep changing as REDCap data grows, per the
+standing "these are live observations, not constants" rule). Nothing was
+committed - working tree changes only.
+
+**Dashboard-wide denominator switched to the overall cohort (222) - EVERY
+visible number, SSRS consolidated into one module, top KPI strip trimmed
+to 3 cards (2026-09-28, two passes same day - senior requirement,
+display/denominator change only, no backend or REDCap logic touched):**
+
+*First pass (since corrected/superseded by the second - kept here only for
+history) scoped the 222 denominator to the Study Progress pipeline only,
+leaving `Current Active Cases`/`Assessment Progress`/`Core Assessment
+Completion` (top KPI strip), Key Study Modules' completion badges, the
+compact Assessment Progress section, and Study Snapshot's SES coverage
+line all still showing `/212`. A follow-up correction made clear the
+senior requirement was absolute: **zero visible occurrences of 212
+anywhere on the Dashboard**, not just in Study Progress. The second pass
+below is the current, final state.*
+
+- **Every displayed number/percent on `Overview.tsx` now uses
+  `STUDY_ORIGINAL_ENROLLMENT` (222, `lib/studyCohort.ts` - see "STUDY
+  ENROLLMENT HEADLINE" above) as its denominator** - `overview.total_
+  registered` (212) is no longer read anywhere on this page at all; the
+  local `total` variable that used to hold it was deleted outright (dead
+  code once nothing referenced it, `noUnusedLocals` is on in this
+  project's `tsconfig.json`). A single `studyDenominator` local
+  (`= STUDY_ORIGINAL_ENROLLMENT`) is used everywhere instead: top KPI
+  strip (`Current Active Cases` value itself is now `studyDenominator`,
+  footnote changed from "Children in analytical population" to "Overall
+  study cohort"; `Assessment Progress`/`Core Assessment Completion`
+  values and bars), Key Study Modules' DSEQ/Child Health History
+  completion badges, the compact Assessment Progress section's 5 rows
+  (Overall/SANGIAN/VWM/DCCS/CD), and Study Snapshot's SES coverage line.
+  Every percentage the API had computed against 212
+  (`assessmentToolStatus.*_participant.percent`, `overview.core_
+  assessment_percent`, `sesCoverage.percent_of_registered`) is recomputed
+  locally with `percentOf(count, studyDenominator)` instead of used as-is,
+  so no 212-denominated percent survives either. Every **numerator**
+  (`completed_count`, `done_count`, etc.) is still the real, unmodified
+  live REDCap value - only what it's divided/shown against changed. Other
+  pages (Registry, Data Quality, the dedicated Assessment Tool Status
+  page, Demographics, Screen Time, Child Health History, etc.) are
+  completely untouched and still correctly show the real 212 registered/
+  active population where that's the relevant figure for their own
+  purpose - this change is `Overview.tsx`-only.
+- **One deliberate exception, per an explicit senior example ("Registration
+  / Cohort → 222/222")**: the Registration/Cohort pipeline node's own
+  *count* (not just its denominator) is also `studyDenominator`, not the
+  real live registration-form completion count (212) - conceptually this
+  node represents whole-cohort enrollment itself, so showing anything
+  other than 222/222 (100%) here would have reintroduced a visible "212".
+  This is the only node whose numerator was overridden; every other node's
+  numerator is still the real live count.
+- **SSRS consolidated into one module**: the 3 separate SSRS Parent/Child/
+  Teacher grid cards were replaced with a single "SSRS" card showing all
+  three as stacked breakdown lines (e.g. `Parent 77/222 (34.7%)` / `Child
+  78/222 (35.1%)` / `Teacher 0/222 (0%)`) - `PipelineNodeData` gained an
+  optional `breakdown?: { label: string; count: number }[]` field; when
+  present, `PipelineNode` renders these stacked lines
+  (`.pipeline-node-breakdown`/`-item`) instead of its normal single count/
+  total line, each still denominated by `studyDenominator`. The 6 core
+  modules are now SES, Child Health History, DSEQ / Screen Time, PAQ /
+  Physical Activity, Dietary Intake, and this one consolidated SSRS card -
+  `.pipeline-core-grid`'s desktop column count was reduced from `repeat
+  (4,...)` to `repeat(3,...)` for a clean 2-row fit of 6 items (was 8);
+  the ≤900px/≤480px breakpoints (2-col/1-col) are unchanged.
+- **Top KPI strip trimmed**: the "Original Cohort" card (222 + migrated/
+  deceased chips) was removed outright from `.stat-strip` - the strip now
+  shows exactly Current Active Cases / Assessment Progress / Core
+  Assessment Completion, all denominated by 222 (see above).
+  `STUDY_MIGRATED_COUNT`/`STUDY_DECEASED_COUNT` were removed from
+  `Overview.tsx`'s imports (unused there now) but are unchanged in `lib
+  /studyCohort.ts` itself and still used by `DataQuality.tsx`'s cohort-
+  reconciliation section.
+Tests: none (frontend-only display change, no backend touched). Verified:
+`tsc --noEmit` clean; `npm run build` succeeds. Live-verified via the same
+cached local Playwright pattern against a real backend + live frontend dev
+server: confirmed the live API itself still returns `total_registered:
+212` unchanged (`curl` against `/api/v1/dashboard/overview`); a full page-
+text scan of the rendered Dashboard (`document.body.innerText.match(/212/
+g)`) returned **zero matches**, and a scan of every element's `title`
+attribute for "212" also returned zero - not just a visual spot-check.
+Confirmed top KPI strip shows exactly 3 labels, all `/222`; every Study
+Progress node shows `/222` including `Registration / Cohort 222/222
+(100%)`; the SSRS card shows all three Parent/Child/Teacher lines with no
+separate SSRS cards elsewhere in the grid; Key Study Modules' two
+completion badges show `/222`. Zero console errors; zero horizontal
+overflow at 1440px/390px; dark-mode and mobile-stack renders confirmed
+visually unchanged in every other respect (connector animation, colors,
+layout hierarchy). Nothing was committed - working tree changes only.
+
+**Study Progress card styling - sharp/square progress bars + persistent
+per-module colour accents (2026-09-28, same day, styling-only, scoped
+exactly to the Study Progress section):** the pipeline-node cards
+previously showed only plain text (`SES 83/222 (37.4%)`) with no visual
+progress indicator at all, and had no persistent colour identity at rest
+(a `--tone-accent` only ever appeared on hover or at 100% completion).
+This pass adds both, entirely flat/square - no rounded or pill-shaped UI
+anywhere in this section:
+- **Thin, sharp progress bars added to every card**: each `PipelineNode`
+  (Registration, all 6 core modules, Assessment Tools, and each of the 3
+  SSRS breakdown lines individually) now renders the existing shared
+  `MonitorBar` component underneath its value - already flat by design
+  dashboard-wide (`.monitor-bar { border-radius: 0 }`, confirmed via a live
+  computed-style check: `border-radius: 0px` on both the track and its
+  fill), so no new rounded-bar risk was introduced. A new scoped rule,
+  `.pipeline-node .monitor-bar { width: 100%; margin-top: 5px }`, was
+  needed because `.pipeline-node` uses `align-items: flex-start` (so a
+  bare block child would otherwise shrink instead of spanning the card).
+- **Persistent per-module colour accent**: `.pipeline-node` gained
+  `border-top: 3px solid var(--tone-accent, var(--border-hairline))` -
+  visible at rest on every card, not just on hover/complete (the existing
+  `.pipeline-node-complete` full-border-colour override and `:hover`
+  border-colour change are unchanged and layer on top of this). Corner
+  radius is unchanged (`--radius-sharp`, 3px, within the requested 0-4px
+  range) - confirmed via a live computed-style check.
+- **Two new tones added** (`Tone` type extended to `"blue" | "teal" |
+  "violet" | "amber" | "cyan" | "pink"`, `Overview.tsx`-local, plus
+  matching `.monitor-tone-cyan`/`.monitor-tone-pink` and `.monitor-bar-
+  tone-cyan`/`-pink` CSS, light + dark) to satisfy the full requested
+  colour set: a new `--series-cyan` root token (`#0e88a3` light / `#22d3ee`
+  dark, distinct from both blue and teal) was added since no existing
+  token was a genuine cyan; pink reuses the already-defined-but-previously
+  page-agnostic `--series-5` (`#e87ba4`/`#d55181`, an existing rose/pink
+  token, not new).
+- **Tones reassigned per the exact requested mapping**: SES teal/green,
+  Child Health History blue (previously teal), DSEQ / Screen Time
+  violet/purple (unchanged), PAQ / Physical Activity cyan (previously
+  blue), Dietary Intake amber (unchanged), SSRS pink (previously blue,
+  applies to all 3 breakdown bars), Assessment Tools cyan (previously
+  violet) - shares its hue with PAQ, per the senior's own colour list.
+  Registration/Cohort (not named in the requested colour list) keeps its
+  existing blue. This tone reassignment and the two new tones are scoped
+  to `Overview.tsx`'s `Tone` type/CSS only - the identically-named
+  `monitor-tone-teal`/`-violet` classes used by Key Study Modules' DSEQ/
+  Child Health cards elsewhere on the page were not touched (still teal/
+  violet as before), since the instruction was explicitly "Study Progress
+  card styling" only.
+No REDCap mapping, calculation, denominator (still 222 throughout, per the
+prior pass), API contract, connector-line animation, SSRS consolidation,
+or any other Dashboard section was touched - confirmed via `git diff
+--stat` (only `Overview.tsx`/`app.css` changed for this pass). Verified:
+`tsc --noEmit` clean; `npm run build` succeeds. Live-verified via the same
+cached local Playwright pattern against a real backend + live frontend dev
+server, both themes and at 1440px/390px: computed styles confirmed
+`.pipeline-node`'s `border-radius: 3px` and `.monitor-bar`/`.monitor-bar-
+fill`'s `border-radius: 0px` (genuinely square, not a pill); every card's
+`border-top-color` confirmed resolving to its assigned tone even at <100%
+completion (e.g. SES green, DSEQ purple at rest, not just on hover); the
+SSRS card's 3 breakdown lines each render their own bar; zero console
+errors; zero horizontal overflow at both widths; mobile single-column
+stack confirmed clean with all bars/accents intact. Nothing was committed
+- working tree changes only.
+
+**Lower Dashboard sections rebuilt as compact infographics (2026-09-28,
+same day - Key Study Modules, Assessment Progress, Study Snapshot; Study
+Progress above them explicitly untouched):** these three sections
+previously rendered as full-width text-row lists (`.compact-stat-row`,
+now dead CSS, removed) that read as generic tables rather than dashboard
+infographics. All three were rebuilt to show "more information per visual
+area" using only already-fetched live data - no new backend field,
+endpoint, or invented composite score (no DSEQ/health/dietary/SSRS score
+was created; every number is a value the page already displayed in text
+form before this pass).
+
+- **Key Study Modules → two featured infographic cards** (`.featured-
+  module-card`, still the existing 2-column `.key-module-grid`, 1-column
+  ≤760px): each card is now the whole clickable `<Link>` (was a plain div
+  with a separate link at the bottom), led by a small tone-tinted icon chip
+  (`IconMonitor` for DSEQ, `IconHeart` for Child Health) and a large
+  dominant headline figure (`.featured-module-headline-value`, same
+  1.55rem scale as the top KPI strip's `.stat-block-value`) with its
+  completion percent beside it and a `MonitorBar` underneath - not the old
+  small right-aligned completion badge. DSEQ keeps "Avg daily screen time"
+  as plain text (a duration, not a ratio - no bar) and adds a new
+  `DualMetricBars` component for "School-day vs Weekend": two bars scaled
+  against each other's own magnitude (`value / max(school, weekend, 1)`),
+  a genuine visual comparison of the same two numbers already shown as
+  text, not two independent 0-100% bars. Child Health's 3 named indicators
+  (Current illness / Chronic-neurological / Assessment readiness) each
+  gained their own real percent (`ConditionIndicator.percent_yes` or a
+  locally computed `percentOf`) and a `MonitorBar` - "Chronic /
+  neurological" specifically uses a new `ModuleIndicator` `breakdown` prop
+  to show its two already-existing sub-figures (`any_listed_condition`/
+  `any_neurological_history`, both real `ChhCompositeIndicator`s) as two
+  small bars under one label, instead of concatenating them into one text
+  line as before.
+- **Assessment Progress → one dominant block + a compact 4-column tool
+  grid** (`.assessment-infographic`): "Overall Assessment" is now a single
+  visually dominant bordered block (large headline figure + bar + percent,
+  matching the featured-module headline scale) instead of just the first
+  row in a stack; SANGIAN/VWM/DCCS/CD render as a `.assessment-tool-grid`
+  (4 columns desktop → 2 at ≤900px → 1 at ≤480px), each a small bordered
+  block with its own tone-tinted icon (`IconGraduationCap`/`IconBrain`/
+  `IconClipboardCheck`/`IconMonitor`, same icon-per-tool convention as an
+  earlier, since-superseded Overview pass), value, bar, and percent - a
+  genuine side-by-side comparison, not 4 stacked full-width rows. "Administration
+  status only - not outcome data" and "View Assessment Details →" are
+  unchanged.
+- **Study Snapshot → 3-column infographic grid** (`.snapshot-infographic-
+  grid`, 1-column ≤900px): **Sex Distribution** replaced its plain
+  "Male 51.9% · Female 48.1%" text line with a new `SplitBar` component - a
+  thin (8px), square-ended two-segment bar sized directly by each sex's
+  real percent share (Male blue, Female pink via a new `sexTone()` helper),
+  with a small dot-legend underneath; **Age Profile** replaced the single
+  "9 years dominant, 84.4%" text line with one `MonitorBar` row per
+  non-zero age bucket (from the same existing `age_distribution` array),
+  the dominant bucket's label bolded and its bar given a distinct tone
+  (`violet` vs `blue`) - the visual highlight is a presentation choice, the
+  underlying data/ordering is unchanged; **SES Coverage** got the same
+  dominant-headline-figure + bar treatment as the featured module cards.
+  "View Demographics →" is unchanged, now sitting below the 3-column grid
+  rather than below a single stacked list.
+- **Colour/shape discipline maintained throughout**: every new block uses
+  the same persistent `border-top: 3px solid var(--tone-accent, ...)`
+  accent convention introduced in the immediately preceding styling pass,
+  the same `--radius-sharp` (3px) corners, and the same flat `MonitorBar`
+  (`border-radius: 0`) - no rounded/pill-shaped element was introduced
+  anywhere in this redesign.
+Dead CSS removed: `.compact-stat-row`/`-label`/`-value` and its `.monitor-
+bar` override (confirmed via grep to have zero remaining consumers
+anywhere in `frontend/src`, since both of its only two call sites -
+Assessment Progress and Study Snapshot - were rewritten). `ModuleIndicator`
+was extended (not replaced) to accept optional `percent`/`tone`/
+`breakdown` props - every prior caller's behavior (label + value, no bar)
+still works unchanged where those new props are omitted.
+Tests: none (frontend-only presentation change, no backend touched, no new
+metric). Verified: `tsc --noEmit` clean; `npm run build` succeeds.
+Live-verified via the same cached local Playwright pattern against a real
+backend + live frontend dev server, both themes, at 1440px (desktop),
+900px (tablet breakpoint), and 390px (mobile): zero console errors, zero
+horizontal overflow at every width; full-page screenshots confirm the
+requested visual rhythm (Featured Modules 2-col → Assessment infographic →
+Cohort Snapshot 3-col) renders correctly in both themes and collapses
+cleanly to a single mobile column; Study Progress section above these
+three confirmed pixel-identical to before (untouched, per instruction).
+Nothing was committed - working tree changes only.
+
+**Card colour language corrected - bright top-border strips replaced with
+subtle whole-card tinting (2026-09-28, same day, styling-only correction,
+no layout/data change):** the immediately preceding two passes (sharp
+progress bars + persistent colour accents, then the infographic layout
+redesign) had given every module-tone card a bright 3px coloured top
+border on an otherwise plain grey/white card - reported as a "white page /
+bubble-gum" look, not a clinical dashboard. Fixed at the shared token
+level, not per-component:
+- **`border-top: 3px solid var(--tone-accent, ...)` removed from all 5
+  card rules** that had it (`.pipeline-node` - Study Progress cards,
+  `.featured-module-card` - Key Study Modules, `.assessment-overall-block`,
+  `.assessment-tool-block`, `.snapshot-block`) - each now uses a single
+  uniform 1px border on all 4 sides (via the pre-existing `border: 1px
+  solid var(--tone-border, ...)` already on each rule; the old top-only
+  override was simply deleted, no new border rule needed).
+- **`--tone-surface`/`--tone-border` actually defined for the first time**
+  - both existed as CSS custom-property *names* already referenced (with
+  a plain-surface fallback) by every card's `background`/`border`
+  declarations, but neither was ever assigned a value by any
+  `.monitor-tone-*` rule, so every card silently fell back to a flat
+  neutral surface and the coloured strip was the *only* place colour
+  ever appeared. Each of the 6 tones (`blue`/`teal`/`violet`/`amber`/
+  `cyan`/`pink`, light + dark) now sets: `--tone-surface` - a very
+  low-alpha tint of the tone's own colour (light: 0.05-0.06 alpha; dark:
+  0.09-0.1 alpha, deliberately higher for equal perceptual weight against
+  a dark background, same "higher alpha needed on dark" precedent used
+  repeatedly elsewhere in this file) - and `--tone-border` - a slightly
+  more visible but still low-alpha tint (light: 0.2-0.24; dark: 0.3-0.32)
+  for a thin, low-contrast, faintly-coloured border instead of a stark
+  neutral hairline. `--tone-accent`/`--tone-accent-soft` (used only by
+  small elements - icons, `MonitorBar` fills, link text, and the
+  `:hover`/`-complete` states) are completely unchanged.
+- **Net effect**: a card's identity now comes from its whole surface being
+  a whisper of its own colour (e.g. a very pale blue-slate DSEQ card in
+  light mode, a barely-lighter-than-page-background slate-blue card in
+  dark mode) with a matching faint border - never a saturated colour
+  covering the whole card, never a bright stripe. The KPI strip
+  (`.stat-strip`/`.stat-block`) was already built this way from an earlier
+  pass (a shared neutral `--surface-2` tint, no per-block colour at all)
+  and needed no change - it was never exhibiting the reported issue.
+  `.pipeline-node-complete` (100% completion) and `:hover` states are
+  unchanged and still apply a stronger, fully-opaque `--tone-accent`
+  border - a deliberate, meaningful state highlight, not the default
+  resting card style, so it doesn't reintroduce the bubble-gum look.
+Tests: none (pure CSS token change, no backend, no data, no layout/JSX
+structure change). Verified: `tsc --noEmit` clean; `npm run build`
+succeeds. Live-verified via the same cached local Playwright pattern
+against a real backend + live frontend dev server, both themes: computed
+styles confirmed every affected card's `border-top-width` is now `1px`
+(not `3px`) and its `background-color` resolves to a genuinely low-alpha
+tinted rgba (e.g. light `.pipeline-node` `rgba(42,120,214,0.05)`, dark
+`rgba(57,135,229,0.09)`) rather than a flat neutral surface; full-page
+screenshots at 1440px (both themes) and 390px confirm the intended
+"clean clinical / muted monitoring interface" look with zero bright
+stripes anywhere on the page; zero console errors; zero horizontal
+overflow at any width. Nothing was committed - working tree changes only.
+
+---
+
 ## FRONTEND ERROR ISOLATION (2026-08-26)
 
 **Bug fixed:** all 4 assessment-module routes (`/health-screening`, `/physical-activity`, `/screen-time`, `/neurodevelopment`) white-screened. **Root cause:** those pages destructure/`.map()` the new analytics response shape with no defensive checks (e.g. `data.named_conditions.map(...)`); if the API ever returns something else - the immediate trigger was a stale local backend process still serving the old pre-refactor `UnavailableModule` shape (`available`/`reason`/`unavailable_fields`) on port 8000 - the resulting `TypeError` had no React error boundary anywhere in the tree, so it unmounted the entire app (sidebar and all), not just the broken route.
