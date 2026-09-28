@@ -4349,8 +4349,8 @@ th.registry-instrument-col-highlighted {
 
 .featured-module-head {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  align-items: flex-start;
+  gap: var(--space-3);
 }
 
 .featured-module-icon {
@@ -4371,37 +4371,66 @@ th.registry-instrument-col-highlighted {
   color: var(--tone-accent, var(--text-primary));
 }
 
-.featured-module-headline {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  flex-wrap: wrap;
+.featured-module-card .monitor-bar {
+  margin-top: 6px;
 }
 
-.featured-module-headline-value {
-  font-size: 1.55rem;
+.key-module-description {
+  margin: 3px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+/* Main infographic zone (2026-09-28, reference-image redesign) - the large
+   completion ring on the left, a detail column (DSEQ: a headline stat +
+   the School-day/Weekend comparison; Child Health: the Key Indicators
+   list) on the right. Stacks vertically on narrow cards so the ring and
+   text can never overlap. */
+.featured-module-main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 560px) {
+  .featured-module-main {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+.featured-module-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.featured-module-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.featured-module-stat-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.featured-module-stat-value {
+  font-size: 1.3rem;
   font-weight: 750;
   line-height: 1.2;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
-.featured-module-headline-percent {
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.featured-module-card .monitor-bar {
-  margin-top: 6px;
-}
-
-.key-module-description {
-  margin: var(--space-3) 0 var(--space-2);
-  font-size: 0.76rem;
-  color: var(--text-muted);
+.featured-module-detail .dual-metric-bars {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
 }
 
 .module-indicator {
@@ -4433,29 +4462,107 @@ th.registry-instrument-col-highlighted {
   margin-top: 4px;
 }
 
-/* "Chronic / neurological"-style combined indicator - two real sub-figures
-   under one label, each with its own thin bar, instead of one concatenated
-   text line. */
-.module-indicator-breakdown {
+/* Completion ring - a real SVG data visualisation (not decorative UI
+   chrome), so a round shape here is fine per the "no pill-shaped UI"
+   instruction, which targets buttons/badges/progress *bars*, not charts.
+   The ring track/fill themselves have no border-radius on the card - only
+   the SVG stroke is round-capped, standard chart practice. */
+.completion-ring {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.completion-ring-center {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1px;
+  padding: 0 14px;
 }
 
-.module-indicator-row-sub {
-  font-size: 0.74rem;
+.completion-ring-center > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
-.module-indicator-sublabel {
+.completion-ring-value {
+  font-size: 1.05rem;
+  font-weight: 750;
+  line-height: 1.15;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.completion-ring-percent {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--tone-accent, var(--text-secondary));
+}
+
+.completion-ring-label {
+  margin-top: 2px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--text-muted);
 }
 
-.module-indicator-subvalue {
+/* "Key Indicators" list (Child Health History panel) - label/value text
+   plus a small completion ring per row, aligned in a compact column. */
+.key-indicators-list {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.key-indicators-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
   color: var(--text-secondary);
+}
+
+.key-indicator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0.35rem 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.key-indicator-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.key-indicator-label {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.key-indicator-value {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.key-indicator-percent {
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 /* Two-value real-data comparison (e.g. School-day vs Weekend screen time) -

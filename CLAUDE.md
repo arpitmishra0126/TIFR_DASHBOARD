@@ -4374,6 +4374,80 @@ screenshots at 1440px (both themes) and 390px confirm the intended
 stripes anywhere on the page; zero console errors; zero horizontal
 overflow at any width. Nothing was committed - working tree changes only.
 
+**Key Study Modules redesigned into two ring-based infographic panels
+(2026-09-28, same day - scoped exactly to Key Study Modules; Study
+Progress, Assessment Progress, Study Snapshot, and every other section
+untouched):** the two `.featured-module-card`s (DSEQ / Screen Time, Child
+Health History) were rebuilt around a real SVG completion ring as the
+primary visual, per an explicit reference-image request. Each panel is
+still the whole clickable card (`<Link>`, unchanged from the prior
+infographic pass) with three zones:
+- **Header**: icon chip + title + a short description, now grouped
+  together in one `.featured-module-head` (icon left, title+description
+  stacked in a div to its right) instead of description sitting below a
+  separate headline row.
+- **Main infographic area** (`.featured-module-main`, flex row, wraps to a
+  centered column ≤560px so the ring and text can never overlap): a new
+  `CompletionRing` component (plain SVG, no chart library - a track circle
+  + a round-capped progress arc sized by `stroke-dasharray` against the
+  circle's own circumference) replaces the old plain headline-number-plus-
+  bar. Its center shows the exact same 3 lines the old headline used to
+  show as flat text (`count/total`, `percent%`, "Instrument completion") -
+  no new figure. Round ring caps are a real chart convention, not "pill-
+  shaped UI" (that instruction targets buttons/badges/bars, not an actual
+  data visualisation) - progress *bars* elsewhere on the page remain
+  flat/square. DSEQ's detail column keeps "Average daily screen time" as a
+  plain stat (a duration, not a ratio) above the existing `DualMetricBars`
+  School-day/Weekend comparison, unchanged. Child Health's detail column
+  is a new "Key Indicators" list - 4 flat rows (Current illness, Chronic /
+  neurological, Neurological history, Assessment readiness concern, each
+  its own real `ConditionIndicator`/count pair with its own `valid_n`
+  denominator, matching the exact per-item numbers the reference spec
+  named) via a new `KeyIndicatorRow` component - label/value text on the
+  left, a small 34px `compact` `CompletionRing` (no center text, just the
+  ring - the exact figure is already printed as text beside it) on the
+  right. This supersedes the previous version's "Chronic / neurological"
+  breakdown-of-two-sub-figures design - Neurological history is now its
+  own independent row rather than nested under Chronic/neurological,
+  per the exact 4-row list the reference spec named.
+- **Footer**: "View DSEQ →"/"View Child Health →", unchanged - the whole
+  card remains the click target.
+- **Dead code removed**: `ModuleIndicator` (the label/value/optional-bar/
+  optional-breakdown component from the prior pass) is no longer called
+  anywhere on this page and was deleted outright, along with its
+  now-orphaned `.featured-module-headline*`/`.module-indicator-breakdown*`/
+  `.module-indicator-row-sub`/`-sublabel`/`-subvalue` CSS (confirmed via
+  grep - `.module-indicator`/`.module-indicator-row`/`-label`/`-value`
+  themselves are still used elsewhere - the "Data unavailable" fallback
+  text and Study Snapshot's Age Profile rows - and were left alone).
+- **Colour/shape discipline maintained**: the ring's progress arc colour
+  is the card's own `--tone-accent` (violet for DSEQ, blue for Child
+  Health, per-tone for each Key Indicator mini-ring); the card surface/
+  border are unchanged from the immediately preceding subtle-tint
+  correction (no bright stripe reintroduced); `--radius-sharp` (3px)
+  corners are unchanged on the card itself - only the ring, a genuine
+  chart element, is round.
+- **Bug fixed before considering this done**: the ring center's
+  "Instrument completion" label initially overflowed/clipped past the
+  ring's edge instead of wrapping to two lines, because `.completion-ring-
+  center`'s flex children had no `min-width: 0` (the default flex
+  `min-width: auto` prevented wrapping below content width). Fixed with
+  `.completion-ring-center > * { min-width: 0; max-width: 100%; }` plus
+  slightly more horizontal padding (8px → 14px) - re-verified visually
+  that it now wraps cleanly to two lines in both themes.
+Tests: none (frontend-only presentation change, no backend touched, no new
+metric - every Key Indicator figure is the same `ConditionIndicator`
+already fetched by `getHealthScreening()`). Verified: `tsc --noEmit`
+clean; `npm run build` succeeds. Live-verified via the same cached local
+Playwright pattern against a real backend + live frontend dev server,
+both themes, at 1440px (desktop, side-by-side) and 390px (mobile, ring
+centered above detail column, single-column card stack): zero console
+errors, zero horizontal overflow; screenshots confirm the ring text no
+longer clips, both panels' Key Indicator mini-rings render correctly at
+low percentages (2-6% live data, correctly shown as thin slivers, not
+fabricated), and the DSEQ School-day/Weekend comparison bars are
+unchanged. Nothing was committed - working tree changes only.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)

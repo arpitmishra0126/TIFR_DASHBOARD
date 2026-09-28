@@ -179,50 +179,6 @@ function StudyProgressPipeline({
   );
 }
 
-/** Key Study Module / infographic indicator row (2026-09-28 infographic
- * redesign) - a label/value line with an optional thin progress bar
- * visualising that same already-displayed number (never a second, invented
- * metric), and an optional `breakdown` for a single named indicator that
- * is itself made of two real sub-figures (e.g. "Chronic / neurological" -
- * two existing composite indicators shown as two small bars under one
- * label, instead of concatenated into one line of text). */
-function ModuleIndicator({
-  label,
-  value,
-  percent,
-  tone = "blue",
-  breakdown,
-}: {
-  label: string;
-  value?: string;
-  percent?: number;
-  tone?: Tone;
-  breakdown?: { label: string; value: string; percent: number; tone?: Tone }[];
-}) {
-  return (
-    <div className="module-indicator">
-      <div className="module-indicator-row">
-        <span className="module-indicator-label">{label}</span>
-        {value !== undefined && <span className="module-indicator-value">{value}</span>}
-      </div>
-      {percent !== undefined && <MonitorBar percent={percent} tone={tone} />}
-      {breakdown && (
-        <div className="module-indicator-breakdown">
-          {breakdown.map((item) => (
-            <div key={item.label} className="module-indicator-breakdown-item">
-              <div className="module-indicator-row module-indicator-row-sub">
-                <span className="module-indicator-sublabel">{item.label}</span>
-                <span className="module-indicator-subvalue">{item.value}</span>
-              </div>
-              <MonitorBar percent={item.percent} tone={item.tone ?? tone} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /** A small two-value horizontal comparison (e.g. School-day vs Weekend
  * screen time) - each bar's length is scaled against the larger of the two
  * `magnitude` values, so the pair is a genuine visual comparison, not two
@@ -262,6 +218,80 @@ function SplitBar({ segments }: { segments: { tone: Tone; percent: number }[] })
       {segments.map((segment, index) => (
         <div key={index} className={`split-bar-segment monitor-tone-${segment.tone}`} style={{ width: `${segment.percent}%` }} />
       ))}
+    </div>
+  );
+}
+
+/** A real data visualisation (not decorative UI chrome) - a completion
+ * ring showing `count/total` as a proportion of the ring's own
+ * circumference, drawn with plain SVG (no chart library) so it stays
+ * lightweight for a small per-panel visual. Center text is only shown in
+ * the non-`compact` size (the large per-panel ring); `compact` mini-rings
+ * (used inline per Key Indicator row) show only the ring itself - the
+ * exact figure is already printed as text right next to it. */
+function CompletionRing({
+  count,
+  total,
+  tone,
+  size = 128,
+  strokeWidth = 11,
+  compact = false,
+}: {
+  count: number;
+  total: number;
+  tone: Tone;
+  size?: number;
+  strokeWidth?: number;
+  compact?: boolean;
+}) {
+  const percent = percentOf(count, total);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled = (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+  return (
+    <div className={`completion-ring monitor-tone-${tone}${compact ? " completion-ring-compact" : ""}`} style={{ width: size, height: size }}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--gridline)" strokeWidth={strokeWidth} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${circumference - filled}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          style={{ stroke: "var(--tone-accent)" }}
+        />
+      </svg>
+      {!compact && (
+        <div className="completion-ring-center">
+          <span className="completion-ring-value">
+            {count}/{total}
+          </span>
+          <span className="completion-ring-percent">{percent}%</span>
+          <span className="completion-ring-label">Instrument completion</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One row in a "Key Indicators" list (Child Health History panel) - label
+ * + real count/total/percent text, plus a small completion ring for the
+ * same figure on the far right (a second, compact view of the same
+ * number, not a new metric). */
+function KeyIndicatorRow({ label, count, total, tone }: { label: string; count: number; total: number; tone: Tone }) {
+  const percent = percentOf(count, total);
+  return (
+    <div className="key-indicator-row">
+      <div className="key-indicator-text">
+        <span className="key-indicator-label">{label}</span>
+        <span className="key-indicator-value">
+          {count}/{total} <span className="key-indicator-percent">({percent}%)</span>
+        </span>
+      </div>
+      <CompletionRing count={count} total={total} tone={tone} size={34} strokeWidth={4} compact />
     </div>
   );
 }
@@ -578,34 +608,32 @@ export default function Overview() {
               <span className="featured-module-icon">
                 <IconMonitor width={15} height={15} />
               </span>
-              <span className="key-module-name">DSEQ / Screen Time</span>
+              <div>
+                <span className="key-module-name">DSEQ / Screen Time</span>
+                <p className="key-module-description">Digital Screen Exposure Questionnaire - screen time, physical activity, media behaviour.</p>
+              </div>
             </div>
             {screenTime ? (
-              <>
-                <div className="featured-module-headline">
-                  <span className="featured-module-headline-value">
-                    {screenTime.completion.completed} / {studyDenominator}
-                  </span>
-                  <span className="featured-module-headline-percent">
-                    {percentOf(screenTime.completion.completed, studyDenominator)}% instrument completion
-                  </span>
+              <div className="featured-module-main">
+                <CompletionRing count={screenTime.completion.completed} total={studyDenominator} tone="violet" />
+                <div className="featured-module-detail">
+                  <div className="featured-module-stat">
+                    <span className="featured-module-stat-label">Average daily screen time</span>
+                    <span className="featured-module-stat-value">
+                      {screenTime.average_daily_summary.mean !== null ? `${Math.round(screenTime.average_daily_summary.mean)} min (est.)` : "No data"}
+                    </span>
+                  </div>
+                  {screenTime.school_day_summary.mean !== null && screenTime.weekend_summary.mean !== null && (
+                    <DualMetricBars
+                      tone="violet"
+                      items={[
+                        { label: "School-day", value: `${Math.round(screenTime.school_day_summary.mean)} min`, magnitude: screenTime.school_day_summary.mean },
+                        { label: "Weekend", value: `${Math.round(screenTime.weekend_summary.mean)} min`, magnitude: screenTime.weekend_summary.mean },
+                      ]}
+                    />
+                  )}
                 </div>
-                <MonitorBar percent={percentOf(screenTime.completion.completed, studyDenominator)} tone="violet" />
-                <p className="key-module-description">Digital Screen Exposure Questionnaire - screen time, physical activity, media behaviour.</p>
-                <ModuleIndicator
-                  label="Avg daily screen time"
-                  value={screenTime.average_daily_summary.mean !== null ? `${Math.round(screenTime.average_daily_summary.mean)} min (est.)` : "No data"}
-                />
-                {screenTime.school_day_summary.mean !== null && screenTime.weekend_summary.mean !== null && (
-                  <DualMetricBars
-                    tone="violet"
-                    items={[
-                      { label: "School-day", value: `${Math.round(screenTime.school_day_summary.mean)} min`, magnitude: screenTime.school_day_summary.mean },
-                      { label: "Weekend", value: `${Math.round(screenTime.weekend_summary.mean)} min`, magnitude: screenTime.weekend_summary.mean },
-                    ]}
-                  />
-                )}
-              </>
+              </div>
             ) : (
               <p className="module-indicator">Data unavailable</p>
             )}
@@ -617,49 +645,42 @@ export default function Overview() {
               <span className="featured-module-icon">
                 <IconHeart width={15} height={15} />
               </span>
-              <span className="key-module-name">Child Health History</span>
+              <div>
+                <span className="key-module-name">Child Health History</span>
+                <p className="key-module-description">Baseline health and illness history - current health, chronic/neurological history, assessment readiness.</p>
+              </div>
             </div>
             {health ? (
-              <>
-                <div className="featured-module-headline">
-                  <span className="featured-module-headline-value">
-                    {health.completion.completed} / {studyDenominator}
-                  </span>
-                  <span className="featured-module-headline-percent">{percentOf(health.completion.completed, studyDenominator)}% instrument completion</span>
+              <div className="featured-module-main">
+                <CompletionRing count={health.completion.completed} total={studyDenominator} tone="blue" />
+                <div className="key-indicators-list">
+                  <span className="key-indicators-title">Key Indicators</span>
+                  <KeyIndicatorRow
+                    label="Current illness"
+                    count={health.chh.current_health.currently_ill.yes_count}
+                    total={health.chh.current_health.currently_ill.valid_n}
+                    tone="blue"
+                  />
+                  <KeyIndicatorRow
+                    label="Chronic / neurological"
+                    count={health.chh.chronic_illness.any_listed_condition.yes_count}
+                    total={health.chh.chronic_illness.any_listed_condition.valid_n}
+                    tone="amber"
+                  />
+                  <KeyIndicatorRow
+                    label="Neurological history"
+                    count={health.chh.neurological.any_neurological_history.yes_count}
+                    total={health.chh.neurological.any_neurological_history.valid_n}
+                    tone="pink"
+                  />
+                  <KeyIndicatorRow
+                    label="Assessment readiness concern"
+                    count={health.chh.assessment_day.any_assessment_day_concern_count}
+                    total={health.chh.assessment_day.any_assessment_day_concern_total}
+                    tone="cyan"
+                  />
                 </div>
-                <MonitorBar percent={percentOf(health.completion.completed, studyDenominator)} tone="blue" />
-                <p className="key-module-description">Baseline health and illness history - current health, chronic/neurological history, assessment readiness.</p>
-                <ModuleIndicator
-                  label="Current illness"
-                  value={`${health.chh.current_health.currently_ill.yes_count}/${health.chh.current_health.currently_ill.valid_n}`}
-                  percent={health.chh.current_health.currently_ill.percent_yes}
-                  tone="blue"
-                />
-                <ModuleIndicator
-                  label="Chronic / neurological"
-                  tone="pink"
-                  breakdown={[
-                    {
-                      label: "Chronic condition",
-                      value: `${health.chh.chronic_illness.any_listed_condition.yes_count}/${health.chh.chronic_illness.any_listed_condition.valid_n}`,
-                      percent: health.chh.chronic_illness.any_listed_condition.percent_yes,
-                      tone: "amber",
-                    },
-                    {
-                      label: "Neurological history",
-                      value: `${health.chh.neurological.any_neurological_history.yes_count}/${health.chh.neurological.any_neurological_history.valid_n}`,
-                      percent: health.chh.neurological.any_neurological_history.percent_yes,
-                      tone: "pink",
-                    },
-                  ]}
-                />
-                <ModuleIndicator
-                  label="Assessment readiness concern"
-                  value={`${health.chh.assessment_day.any_assessment_day_concern_count}/${health.chh.assessment_day.any_assessment_day_concern_total}`}
-                  percent={percentOf(health.chh.assessment_day.any_assessment_day_concern_count, health.chh.assessment_day.any_assessment_day_concern_total)}
-                  tone="cyan"
-                />
-              </>
+              </div>
             ) : (
               <p className="module-indicator">Data unavailable</p>
             )}
