@@ -517,6 +517,41 @@ export interface AssessmentToolStatusResponse {
   participant_statuses: AssessmentToolParticipantStatus[];
 }
 
+/** Monthly cumulative Assessment Tool Status "Done" counts, reconstructed
+ * from the REDCap Logging API (see `GET /dashboard/assessment-timeline`) -
+ * the Assessment Tool Status instrument itself has no completion-date
+ * field. `month` is timestamps recorded in REDCap (when a field's value was
+ * saved), not when the assessment was actually administered - the UI must
+ * label this accordingly, never as "assessment date". */
+export interface AssessmentTimelineMonth {
+  month: string; // "YYYY-MM"
+  sangian: number;
+  vwm: number;
+  dccs: number;
+  cd: number;
+}
+
+export interface AssessmentTimelineReconciliationItem {
+  timeline: number;
+  live: number;
+  matches: boolean;
+}
+
+export interface AssessmentTimelineResponse {
+  /** False when the log had no parseable Assessment Tool Status changes at
+   * all - distinct from a REDCap API failure, which rejects the fetch
+   * entirely instead. */
+  available: boolean;
+  /** False when the reconstructed timeline's final month does not match
+   * the live `/assessment-tool-status` participant counts - the chart must
+   * not be rendered in that case (fall back to the "unavailable" state),
+   * per the "do not proceed if it doesn't reconcile" requirement. */
+  reconciled: boolean;
+  series: AssessmentTimelineMonth[];
+  reconciliation: Record<string, AssessmentTimelineReconciliationItem>;
+  note: string;
+}
+
 export interface ProgressStage {
   key: string;
   label: string;

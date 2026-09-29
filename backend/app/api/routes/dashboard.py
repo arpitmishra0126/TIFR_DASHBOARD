@@ -9,6 +9,7 @@ from fastapi.responses import Response
 
 from app.api.deps import get_live_dashboard_service
 from app.schemas.dashboard import (
+    AssessmentTimelineResponse,
     AssessmentToolStatusResponse,
     DemographicsResponse,
     DietaryIntakeResponse,
@@ -133,6 +134,22 @@ async def get_assessment_tool_status(
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> AssessmentToolStatusResponse:
     return await service.get_assessment_tool_status(force=refresh)
+
+
+@router.get("/assessment-timeline", response_model=AssessmentTimelineResponse)
+async def get_assessment_timeline(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> AssessmentTimelineResponse:
+    """Monthly cumulative Assessment Tool Status "Done" counts, reconstructed
+    from the REDCap Logging API - see `LiveDashboardService
+    .get_assessment_timeline` for why this is a separate fetch from
+    `/assessment-tool-status`. A REDCap Logging-permission failure surfaces
+    as a normal 502 (the same shared `RedCapAPIError` handler every other
+    REDCap failure uses) - the frontend treats that the same as any other
+    secondary-fetch failure and falls back to an explicit unavailable state,
+    without affecting the rest of the dashboard."""
+    return await service.get_assessment_timeline(force=refresh)
 
 
 @router.get("/neurodevelopment", response_model=NeurodevelopmentResponse)

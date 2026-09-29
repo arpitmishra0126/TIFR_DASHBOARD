@@ -242,6 +242,53 @@ export function IconSettings(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function IconClock(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.3V12l3.2 2" />
+    </Svg>
+  );
+}
+
+export function IconBuilding(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <rect x="5" y="3.5" width="10" height="17" rx="1" />
+      <path d="M15 9.5h4v11H5" />
+      <path d="M8 7.3h1M11 7.3h1M8 10.6h1M11 10.6h1M8 13.9h1M11 13.9h1M17.3 12.5h1M17.3 15.5h1" />
+    </Svg>
+  );
+}
+
+export function IconDocument(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M7 3.5h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+      <path d="M14 3.5V8h4" />
+      <path d="M8.5 12.3h7M8.5 15.5h7" />
+    </Svg>
+  );
+}
+
+export function IconExternalLink(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M9 5H5.5a1 1 0 0 0-1 1v12.5a1 1 0 0 0 1 1H17a1 1 0 0 0 1-1V15" />
+      <path d="M13 4.5h6.5V11" />
+      <path d="M19.5 4.5 11 13" />
+    </Svg>
+  );
+}
+
+export function IconPulse(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M2.5 12.5h4l2-6 3.5 12 2.5-9 1.6 3h5.4" />
+    </Svg>
+  );
+}
+
 export function IconFlag(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>

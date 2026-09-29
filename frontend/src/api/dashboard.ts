@@ -1,5 +1,6 @@
 import { apiDownload, apiGet, withRefresh } from "./client";
 import type {
+  AssessmentTimelineResponse,
   AssessmentToolStatusResponse,
   DemographicsResponse,
   DietaryIntakeResponse,
@@ -74,6 +75,10 @@ export function getDietaryIntake(opts?: { force?: boolean }): Promise<DietaryInt
 
 export function getAssessmentToolStatus(opts?: { force?: boolean }): Promise<AssessmentToolStatusResponse> {
   return apiGet<AssessmentToolStatusResponse>(withRefresh("/dashboard/assessment-tool-status", opts?.force));
+}
+
+export function getAssessmentTimeline(opts?: { force?: boolean }): Promise<AssessmentTimelineResponse> {
+  return apiGet<AssessmentTimelineResponse>(withRefresh("/dashboard/assessment-timeline", opts?.force));
 }
 
 export function getNeurodevelopment(opts?: { force?: boolean }): Promise<NeurodevelopmentResponse> {

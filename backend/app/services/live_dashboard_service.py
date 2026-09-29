@@ -25,6 +25,7 @@ from app.services.export_service import build_active_cases_csv, build_active_cas
 from app.services.module_analytics import (
     SANGIAN_ASSESSMENT_FIELDS,
     VWM_ASSESSMENT_FIELDS,
+    build_assessment_timeline,
     build_assessment_tool_status_analysis,
     build_dietary_analysis,
     build_health_screening_analysis,
@@ -38,6 +39,9 @@ from app.schemas.dashboard import (
     AssessmentDomainStatus,
     AssessmentParticipantStatus,
     AssessmentPooledStatus,
+    AssessmentTimelineMonth,
+    AssessmentTimelineReconciliationItem,
+    AssessmentTimelineResponse,
     AssessmentToolItemStatus,
     AssessmentToolParticipantStatus,
     AssessmentToolStatusResponse,
@@ -676,6 +680,27 @@ class LiveDashboardService:
             overall_participant=AssessmentParticipantStatus(**analysis["overall_participant"]),
             common_participant_ids=analysis["common_participant_ids"],
             participant_statuses=[AssessmentToolParticipantStatus(**p) for p in analysis["participant_statuses"]],
+        )
+
+    async def get_assessment_timeline(self, force: bool = False) -> AssessmentTimelineResponse:
+        """Monthly cumulative Assessment Tool Status "Done" counts,
+        reconstructed from the REDCap Logging API (`get_log`) - a separate
+        fetch from the ordinary record export, since no field anywhere in
+        this project records a completion date for SANGIAN/VWM/DCCS/CD. A
+        REDCap permission/format failure on the log fetch itself propagates
+        as `RedCapAPIError`/`RedCapResponseValidationError` exactly like any
+        other REDCap call (see `main.py`'s exception handlers) - callers of
+        this endpoint (the Overview page) must treat that failure the same
+        way they already treat any other secondary-fetch failure, not as a
+        reason to break the rest of the dashboard."""
+        records, _choice_maps = await self._load(force=force)
+        log_entries = await self._repository.get_log(force=force)
+        analysis = build_assessment_timeline(log_entries, records)
+        return AssessmentTimelineResponse(
+            available=analysis["available"],
+            reconciled=analysis["reconciled"],
+            series=[AssessmentTimelineMonth(**month) for month in analysis["series"]],
+            reconciliation={key: AssessmentTimelineReconciliationItem(**value) for key, value in analysis["reconciliation"].items()},
         )
 
     async def get_neurodevelopment(self, force: bool = False) -> NeurodevelopmentResponse:

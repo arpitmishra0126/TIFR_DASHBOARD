@@ -653,6 +653,49 @@ class AssessmentToolStatusResponse(BaseModel):
     participant_statuses: list[AssessmentToolParticipantStatus] = []
 
 
+# --- Assessment Progress timeline (2026-09-29) - reconstructed from the
+# REDCap Logging API, since the Assessment Tool Status instrument itself has
+# no date field. See module_analytics.build_assessment_timeline for the full
+# reconstruction logic (chronological latest-value-wins, Done<->Not Done
+# reversal handling, monthly forward-fill, reconciliation against the live
+# `/assessment-tool-status` participant counts). ---
+class AssessmentTimelineMonth(BaseModel):
+    month: str  # "YYYY-MM"
+    sangian: int
+    vwm: int
+    dccs: int
+    cd: int
+
+
+class AssessmentTimelineReconciliationItem(BaseModel):
+    """`timeline` = this series' own final-month count; `live` = the same
+    "every field in the group Done" count computed fresh from the live
+    `/assessment-tool-status` participant-status logic. `matches` must be
+    True for the series to be considered trustworthy - see `reconciled` on
+    the parent response."""
+
+    timeline: int
+    live: int
+    matches: bool
+
+
+class AssessmentTimelineResponse(BaseModel):
+    """`available` is False when the REDCap log contained no parseable
+    Assessment Tool Status field changes at all (e.g. genuinely nothing
+    logged yet) - not the same as a REDCap API failure, which surfaces as an
+    HTTP error on this endpoint instead (see `RedCapClient.fetch_log`).
+    `reconciled` is False when the reconstructed timeline's final month
+    doesn't match the live participant counts - callers must not render the
+    chart in that case, per this feature's explicit "do not proceed if it
+    doesn't reconcile" requirement; `reconciliation` explains why."""
+
+    available: bool
+    reconciled: bool
+    series: list[AssessmentTimelineMonth] = []
+    reconciliation: dict[str, AssessmentTimelineReconciliationItem] = {}
+    note: str = "Based on the date assessment status was recorded in REDCap."
+
+
 # --- Assessment Progress pipeline ---
 class ProgressStage(BaseModel):
     key: str

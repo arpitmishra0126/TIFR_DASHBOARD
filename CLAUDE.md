@@ -4448,6 +4448,582 @@ low percentages (2-6% live data, correctly shown as thin slivers, not
 fabricated), and the DSEQ School-day/Weekend comparison bars are
 unchanged. Nothing was committed - working tree changes only.
 
+**Key Study Modules - clean rebuild from a reference image (2026-09-28,
+same day, supersedes the ring-based panels above only in *structure*, not
+data/values - the underlying donut/ring/comparison design from the
+immediately preceding pass was already visually close to target and is
+kept, not reworked):** per an explicit instruction to rebuild this one
+section "cleanly from scratch rather than continuing to patch," the ad hoc
+JSX (two near-duplicate `<Link className="key-module-card featured-module-
+card ...">` blocks) was replaced with three reusable components in
+`Overview.tsx`, matching the names requested in the brief:
+- **`ModuleInfographicCard({ to, tone, icon, title, description,
+  footerLabel, children })`** - the shared card shell (header, a
+  `children`-supplied main visual area, footer link) so the DSEQ and Child
+  Health cards can never structurally drift apart; both call sites now
+  differ only in their data/content, not in markup shape.
+- **`CompletionDonut({ count, total, tone, size, strokeWidth })`** - the
+  large per-card donut with centred `count/total`, `percent%`, and
+  "Instrument completion" text (was the non-`compact` branch of the old
+  `CompletionRing`).
+- **`IndicatorRing({ count, total, tone, size, strokeWidth })`** - the
+  small unlabelled ring used once per Key Indicator row (was the `compact`
+  branch of the same old component). A shared `ringGeometry()` helper
+  computes the SVG stroke-dasharray math once for both.
+CSS was renamed to match (`.key-module-grid`/`.key-module-card`/
+`.featured-module-*` → `.module-infographic-grid`/`-card`/`-head`/`-icon`/
+`-title`/`-description`/`-body`/`-detail`/`-stat*`; `.completion-ring*` →
+`.completion-donut*`; a new `.indicator-ring` class) - confirmed via grep
+that none of the old class/component names had any other consumer before
+removing them, so nothing was left duplicated or orphaned.
+**No visual/data change** - this was a structural refactor, not a redesign:
+same live `screenTime`/`health` fields, same tones (violet/blue, plus
+blue/amber/pink/cyan per Key Indicator row), same `--radius-sharp` (3px)
+corners, same thin single tone-tinted border, same whole-card subtle tint
+(no colored top-strip, no pill/bubble UI, per the brief's explicit
+constraints - all already true from the immediately preceding pass and
+preserved here). `React.ReactNode` typing required adding `import type {
+ReactNode } from "react"` to `Overview.tsx` - no other import changed.
+Tests: none (frontend-only structural refactor, no backend touched, no
+data/calculation change). Verified: `tsc --noEmit` clean; `npm run build`
+succeeds. Live-verified via the same cached local Playwright pattern
+against a real backend (port 8001) + live frontend dev server, both
+themes, at 1440px and 390px: zero console errors in either theme; zero
+horizontal overflow at 390px; screenshots confirm the DSEQ card (donut
+81/222 36.5%, "AVERAGE DAILY SCREEN TIME 57 min (est.)", School-day 52
+min / Weekend 69 min comparison bars) and Child Health card (donut 80/222
+36%, 4 Key Indicator rows each with its own compact ring) both render
+correctly in light and dark themes, matching the requested reference
+layout. Nothing was committed - working tree changes only.
+
+**Key Study Modules - pixel-target infographic restyle (2026-09-29,
+supersedes the "clean rebuild" component names above - `ModuleInfographicCard`/
+`CompletionDonut`/`IndicatorRing`/`ringGeometry` were replaced, not kept
+alongside, by the components below; the underlying live data/routing are
+still unchanged throughout):** per a detailed mockup-matching brief, the
+section was rebuilt again with a real three-zone card layout (tinted
+header / donut+divider+detail body / clickable footer bar) instead of the
+prior flatter card. Current components in `Overview.tsx`:
+- **`DonutRing({ percent, size, strokeWidth, color, trackColor, ariaLabel,
+  variant, children })`** - one generic SVG ring for both the large
+  per-card donut and the small per-indicator mini-donut. `size`/
+  `strokeWidth` are in the ring's own SVG viewBox coordinate space only -
+  the actual on-screen box size is controlled entirely by CSS
+  (`.kmp-donut-large`/`.kmp-donut-mini`, including responsive media
+  queries), so the stroke scales down proportionally with the box instead
+  of ever overflowing it or needing a second JS size calculation.
+- **`ModuleCompletionDonut({ count, total, label })`** - the large donut
+  (count/total, percent, "Instrument completion" centred inside).
+- **`IndicatorRow({ icon, label, count, total, tone })`** - one Key
+  Indicator row (icon chip, label, bold count, a small mini-donut with its
+  own percent on the far right); an optional `tone` overrides the card's
+  own accent for just that row via the same `monitor-tone-*` CSS cascade
+  (used for the amber "Chronic / neurological" and pink "Neurological
+  history" rows).
+- **`DayTypeRow({ icon, label, minutes, maxMinutes, tone })`** - one
+  "Screen time by day type" row (School-day/Weekend), rendering the
+  **existing shared `MonitorBar`** component underneath (thin, rectangular,
+  `border-radius: 0` - confirmed live via computed style - never a rounded/
+  pill bar), scaled against a configurable minutes ceiling (currently 90).
+- **`ModuleCard({ to, tone, icon, title, description, footerIcon,
+  footerLabel, children })`** - the shared 3-zone shell. **Colour comes
+  entirely from the existing `monitor-tone-*` classes** applied once on
+  the card itself (`violet` for DSEQ, `blue` for Child Health) - `--tone-
+  accent`/`--tone-surface`/`--tone-border`/`--tone-accent-soft` cascade
+  down to every child element (icon chips, the donut's accent color, the
+  footer link color, the amber/pink indicator-row overrides), so no new
+  colour system or hardcoded hex was introduced; these are the same tone
+  tokens (with their existing tuned light/dark alpha values) already used
+  by Study Progress/Assessment Progress elsewhere on this page.
+New CSS block in `app.css` (`.key-modules-panel`/`.kmp-*`, ~470 lines)
+replaced the entire prior `.module-infographic-*`/`.completion-donut*`/
+`.indicator-ring`/`.key-indicators-list`/`.key-indicator-*`/`.dual-metric-
+bars` rule set (confirmed via grep no other file referenced any of the old
+class names before removing them) - `.module-indicator`/`.module-
+indicator-row`/`-label`/`-value` were kept as-is (still used by the "No
+data"/"Data unavailable" fallback paragraphs and, separately, by Study
+Snapshot's Age Profile rows further down this same file). Outer
+`.key-modules-panel` is one bordered frame (`--surface-2` background,
+`--border-hairline`, `--radius-sharp`) holding the "KEY STUDY MODULES"
+title row + the 2-column `.kmp-grid`; each `.kmp-card` has a tinted header
+zone (`--tone-surface` background, bottom hairline), a body zone (donut
+column | 1px `.kmp-divider` | detail column, stacking vertically with a
+horizontal divider under 620px), and a clickable footer bar (`<Link>`,
+`:hover`/`:focus-visible` states, icon chip + bold `--tone-accent`-colored
+label + a muted chevron pinned right via the label's own `flex: 1`). No
+colored top-border strip anywhere; corners are `--radius-sharp` (3px, 0-4px
+range); no gradients/glow.
+**Stroke-width follow-up (2026-09-29, same day):** the large donut's arc
+was reported as too thick/bulky - `strokeWidth` was `40` (viewBox units)
+against a `size={320}` viewBox rendered into a `.kmp-donut-large` CSS box
+of 190-260px (responsive), yielding an actual on-screen stroke of
+~24-33px. Reduced to `strokeWidth={18}` - the SVG's own coordinate system
+means the stroke scales with the box, so this now renders ~10.7px (390px
+mobile box) to ~14.6px (1440px+ desktop box, confirmed live via
+`getComputedStyle` + `getBoundingClientRect` math) - genuinely thin across
+every breakpoint, matching the "approximately 10-14px depending on card
+size" target. The small mini-donut (`size={54}`, `strokeWidth={7}`,
+rendered 1:1 at 54px) was already thin and was left unchanged.
+No REDCap mapping, calculation, denominator (still `studyDenominator` =
+222 throughout, per the earlier "dashboard-wide denominator" rule), API
+contract, routing, or any other Dashboard section was touched - confirmed
+via `git diff --stat` (only `Overview.tsx`/`app.css` changed for this
+pass). Tests: none (frontend-only presentation change, no backend touched,
+no new metric). Verified: `tsc --noEmit` clean; `npm run build` succeeds.
+Live-verified via the same cached local Playwright pattern against a real
+backend (port 8001) + live frontend dev server, both themes, at 1440px and
+390px: zero console errors in either theme; zero horizontal overflow at
+390px; computed styles confirmed `.monitor-bar`/`.monitor-bar-fill`
+`border-radius: 0px` (genuinely square) and the donut arc's effective
+on-screen stroke within the target thin range at both the widest and
+narrowest breakpoints; screenshots confirm the DSEQ card (donut 81/222
+36.5%, "AVERAGE DAILY SCREEN TIME 57 min (est.)", School-day 52 min /
+Weekend 69 min square-ended comparison bars) and Child Health card (donut
+80/222 36% - live, not hardcoded - 4 Key Indicator rows each with its own
+thin mini-donut) render correctly and equal-height in both light (pale
+blue/slate tint, dark navy text) and dark (deep navy/slate, restrained
+blue/purple/cyan accents) themes. Nothing was committed - working tree
+changes only.
+
+**Assessment Progress panel rebuilt (2026-09-29, supersedes the
+`.assessment-infographic`/`.assessment-overall-block`/`.assessment-tool-
+grid`/`.assessment-tool-block` compact strip from the 2026-09-28 "Lower
+Dashboard infographic redesign" - those classes/components were deleted,
+not kept alongside the new ones):** rebuilt into a bordered `.ap-panel`
+(matching `.key-modules-panel`'s frame language) with a tinted "Overall
+Assessment" band, a two-column trend-chart/bar-chart row, and a clickable
+footer link. Data source is unchanged - the same `assessmentToolStatus`
+object already fetched via `getAssessmentToolStatus()` in this component's
+`useEffect` (`overall_participant`/`sangian_participant`/
+`vwm_participant`/`dccs_participant`/`cd_participant`, each
+`{done_count, total, percent}`) - no new endpoint, no mock data.
+Percentages are recomputed locally as `percentOf(done_count,
+studyDenominator)` (222), consistent with this page's existing
+"denominator switched to 222 dashboard-wide" rule from 2026-09-28 - the
+API's own `.percent` (denominated by the live 212) is not used directly,
+same as every other figure on this page.
+
+**Left panel - explicit "no time-series data" decision, not an
+omission:** the brief asked for a "cumulative assessments over time" area
+chart. Before implementing, `backend/app/ingestion/live_field_map.py`'s
+`ASSESSMENT_TOOL_STATUS_ITEM_FIELDS` was inspected - the live REDCap
+`assessment_tool_status` instrument has 9 Done/Not-Done radio fields and
+one completion flag, **no date/timestamp field of any kind**. The only
+date anywhere in the data model is `RegistryChild.visit_date`, which is a
+registration/visit date - nowhere defined as an assessment-tool completion
+date - so per explicit instruction it was **not** used as a stand-in
+(doing so would have mislabeled the chart). The left `.ap-trend-panel`
+therefore renders an honest `.ap-trend-unavailable` state (calendar icon +
+"Assessment timeline unavailable" + a one-sentence explanation naming
+exactly which fields exist and why a real time-series can't be shown) -
+no synthetic dates, no fake chart points. If a genuine completion-date
+field is ever added to this REDCap instrument, this state should be
+replaced with a real cumulative area chart built from it - never a
+proxy derived from an unrelated field like `visit_date`.
+
+**Right panel - "Current completion by assessment tool" bar chart**: a
+recharts `BarChart` (the project's existing chart library - no new
+dependency), one stacked bar per tool: `value` (the real coloured
+completed-count segment, per-tool `<Cell>` colours reusing existing design
+tokens - `--series-3` teal/SANGIAN, `--series-violet`/VWM, `--series-cyan`/
+DCCS, `--series-4` amber/CD, same tone assignments as the prior 4-column
+grid) stacked with `remaining` (`studyDenominator - count`, filled
+`var(--gridline)`) so every bar reads against a fixed 0-222 y-axis scale
+(`YAxis domain={[0, denominator]}`) - the "faint full-height gray track"
+from the brief, implemented as a genuine stacked value rather than a
+decorative overlay. `ASSESSMENT_TOOL_CONFIG` (`Overview.tsx`) is the one
+array driving the tool set, colours, and tones - documented in a code
+comment that the 4 entries mirror the backend's 4 fixed participant
+fields (not a dynamic list REDCap exposes), so adding a 5th tool would
+require a matching backend field first, then one more line here; the
+chart/labels/legend all render generically off this array's length. Each
+bar gets a custom two-line `ToolBarLabel` (recharts `LabelList` `content`
+render prop) positioned just above the real coloured segment's own top (so
+label height still correlates with magnitude despite the fixed 222 scale):
+bold "count / total" then a tone-coloured "pct%". Hover tooltip reuses the
+existing shared `ChartTooltipBox` component, showing exactly Tool /
+Completed / Total / Completion % (live-verified: hovering SANGIAN's bar
+shows "SANGIAN | Completed 76 | Total 222 | Completion % 34.2%",
+byte-for-byte matching `sangian_participant.done_count`/`studyDenominator`).
+Bars are perfectly rectangular (`radius={[0,0,0,0]}` on both stacked
+`<Bar>`s) - no rounded/pill segments.
+
+**Overall Assessment band**: `.ap-overall-band` (tinted `monitor-tone-blue`
+panel) - a 44px icon chip (`IconProgress`, a literal bar-chart glyph) +
+"OVERALL ASSESSMENT" label + `{done_count} / {studyDenominator}` on the
+left, a flex-growing square-ended `MonitorBar` + the repeated percent on
+the right, both from the same `overall_participant.done_count`/
+`studyDenominator` values as the tool bars.
+
+**Footer**: `.ap-footer` (icon chip + bold `--series-1`-colored "View
+Assessment Details →" link + a muted chevron pinned right via the label's
+own `flex: 1`, `:hover`/`:focus-visible` states) - same pattern as
+`.kmp-card-footer` on the Key Study Modules panel above it, reimplemented
+under its own `.ap-*` class names rather than sharing classes across the
+two unrelated panels. Still links to `/assessment-tool-status`, unchanged.
+
+**Bug found and fixed during this pass**: the bottom row's divider
+(`.ap-divider`) was a 3rd grid child dropped into a `grid-template-
+columns: 1.4fr 1fr` (2-column) grid, which auto-wrapped the tools panel
+onto its own row instead of placing it beside the trend panel - confirmed
+via `getBoundingClientRect()` showing the divider and tools panel in the
+wrong positions before the fix. Fixed by declaring a real 3rd column,
+`grid-template-columns: 1.4fr 1px 1fr` - re-verified the ~58%/42% split
+and the divider's own geometry (1px wide, spanning the full row height)
+render correctly.
+
+No REDCap mapping, calculation, denominator, API contract, routing, or any
+other Dashboard section was touched - confirmed via `git diff --stat`
+(only `Overview.tsx`/`app.css` changed). Tests: none (frontend-only
+presentation change, no backend touched, no new metric, no synthetic
+data). Verified: `tsc --noEmit` clean; `npm run build` succeeds.
+Live-verified via the same cached local Playwright pattern against a real
+backend (port 8001) + live frontend dev server, both themes, at 1440px,
+768px, and 375px: zero console errors at every width; zero horizontal
+overflow; clean single-column stacking below the 860px breakpoint;
+rendered values (76/222 34.2% SANGIAN, 76/222 34.2% VWM, 73/222 32.9%
+DCCS, 15/222 6.8% CD, 15/222 6.8% Overall) cross-checked character-for-
+character against a fresh `curl` of `/api/v1/dashboard/assessment-tool-
+status` before finishing (live: `sangian_participant.done_count=76`,
+`vwm_participant.done_count=76`, `dccs_participant.done_count=73`,
+`cd_participant.done_count=15`, `overall_participant.done_count=15`, all
+`/222` re-derived locally, not the API's own `/212` percent field).
+Nothing was committed - working tree changes only.
+
+**"Cumulative assessments recorded over time" - real historical timeline
+implemented via the REDCap Logging API (2026-09-29, same day, supersedes
+the "Assessment timeline unavailable" placeholder above as the default
+state):** the earlier pass correctly determined the `assessment_tool_status`
+instrument itself has no date field. Before building anything, a full
+read-only investigation was run against the live REDCap project (metadata
+export, record export, and - critically - a direct test call to REDCap's
+**Logging API**, `content=log`) to determine whether a genuine per-field
+completion timestamp exists anywhere else. **It does**: REDCap's own
+change-audit trail records a minute-precision timestamp for every field
+saved, including SANGIAN/VWM/DCCS/CD's fields - confirmed live (88 relevant
+log entries across 76 records, 2026-09-11 to 2026-09-24) and specifically
+verified to handle a **real Done -> Not Done reversal** correctly (record
+`09IND051B`'s `cd_3` was set Done on 2026-09-23 then reverted to Not Done
+on 2026-09-24 - both the log and the live record agree). This is a
+genuinely new REDCap data source for this app (previously only
+`content=record`/`content=metadata` were ever called) and required backend
+additions, not just a frontend change:
+
+- **`RedCapClient.fetch_log(begin_time="2000-01-01 00:00:00")`** (new,
+  `backend/app/redcap/client.py`) - `content=log&logtype=record`, same
+  retry/error handling as `fetch_records`/`fetch_metadata`. Requires the
+  configured API token to additionally have REDCap's separate "Logging"
+  export right - if missing/revoked, REDCap returns a non-2xx response and
+  this raises `RedCapAPIError` exactly like any other REDCap failure (502
+  via the existing shared exception handler in `main.py`) - no special-
+  cased handling needed. `begin_time` defaults to a fixed generic epoch
+  floor, not a hardcoded project-specific date, so the full log history is
+  always returned regardless of when a given project was created.
+- **`LiveRedCapRepository.get_log()`** (new) - same 30s-TTL cache/`force`
+  convention as `get_metadata`/`get_records`, own `_log`/`_log_fetched_at`
+  state.
+- **`module_analytics.build_assessment_timeline(log_entries, records)`**
+  (new) - the reconstruction logic. `_parse_assessment_timeline_changes()`
+  regex-parses the log's informal `"field = 'value'"` `details` text
+  (REDCap's own internal audit format, not a structured/versioned API
+  field - a malformed/unparseable entry is skipped, never raises),
+  filtered to the 9 `ASSESSMENT_TIMELINE_GROUPS` fields
+  (SANGIAN = all 6 sub-fields must be Done, matching
+  `_assessment_tool_participant_status`'s own "every field in the group"
+  rule exactly; VWM/DCCS/CD = their own single field). Events are sorted
+  chronologically and swept forward maintaining `current_state[record][field]
+  ` = latest known value - **never "ever became Done"** - so a later
+  reversal correctly reduces a subsequent month's count. One snapshot is
+  taken per calendar month (the state after that month's last event);
+  months with zero log activity **forward-fill** the previous month's
+  counts rather than being omitted, so the chart's x-axis stays
+  continuous. The **final month is cross-checked** against
+  `_assessment_tool_participant_status(reg, fields, total)` - the exact
+  same function the live `/assessment-tool-status` endpoint uses, computed
+  from the same already-fetched `records` - and `reconciled` is False if
+  they don't match, per this feature's explicit "do not proceed if it
+  doesn't reconcile" requirement. `available` is a separate flag (False
+  only when the log had zero parseable relevant changes at all - distinct
+  from a REDCap API failure, which rejects the endpoint call entirely
+  instead).
+- **New schemas** (`AssessmentTimelineMonth`/`AssessmentTimelineReconciliation
+  Item`/`AssessmentTimelineResponse` in `dashboard.py`), **new service
+  method** (`LiveDashboardService.get_assessment_timeline()`), **new
+  endpoint** `GET /api/v1/dashboard/assessment-timeline` (own fetch,
+  separate from `/assessment-tool-status` - a Logging-permission failure
+  here must not affect that other endpoint or the rest of the dashboard).
+- **Tests** (`test_module_analytics.py`, 6 new): no-log-entries ->
+  `available=False`; malformed/unparseable log entries are skipped without
+  crashing; **the Done -> Not Done reversal case** (mirrors the real
+  `09IND051B` finding exactly - asserts the final count is 0, not 1, and
+  reconciles); SANGIAN's "all 6 fields" rule; **forward-fill** across a
+  month with zero activity (asserts the gap month carries forward, not
+  reset to 0, and months stay in strict chronological order); a
+  reconciliation-mismatch case (`reconciled=False` when the log implies a
+  different state than the live record). Backend: **164/164 tests pass**
+  (up from 158).
+
+**Frontend** (`Overview.tsx`, `.ap-trend-panel`'s JSX only - the rest of
+the `.ap-panel` from the pass above is unchanged): a new
+`AssessmentTimelineChart` component (real recharts `AreaChart`, the
+project's existing chart library - no new dependency) renders **only**
+when `assessmentTimeline.available && .reconciled && .series.length > 0` -
+any other case (fetch failure, permission revoked, reconciliation
+mismatch, or zero relevant history) falls back to the pre-existing
+"Assessment timeline unavailable" state, now with a slightly more specific
+message when the failure is a reconciliation mismatch versus no data at
+all. `getAssessmentTimeline()` is fetched as its own independent
+`useEffect` call alongside the page's other secondary fetches - a failure
+is swallowed (`setAssessmentTimeline(null)`) exactly like
+`assessmentToolStatus`'s own established pattern, so it can never break or
+block the rest of Overview. 4 `Area` series (SANGIAN teal/`--series-3`,
+VWM violet/`--series-violet`, DCCS cyan/`--series-cyan`, CD amber/
+`--series-4` - the identical colours the right-panel bar chart already
+uses, via the shared `ASSESSMENT_TIMELINE_SERIES` config), each with a
+semi-transparent linear-gradient fill (`<defs>`/`<linearGradient>`, fading
+from ~28% to ~3% opacity) and a solid 2px stroke line on top. Hover
+tooltip (reuses the shared `ChartTooltipBox` component) shows the month
+label + all 4 series values **sorted descending**, each value coloured to
+match its series. Panel title/copy follow the exact required wording -
+**"Cumulative assessments recorded over time"** (not "...over time", to
+avoid implying literal assessment dates) plus the API's own `note` field,
+**"Based on the date assessment status was recorded in REDCap."**, always
+shown beneath the chart - never "assessment date"/"assessed on" anywhere
+in the UI. **Bug found and fixed during this pass**: recharts always draws
+a per-point dot for a series with only one data point (there's no line
+segment to draw instead) even with `dot={false}` - confirmed live via
+`getBoundingClientRect()`/SVG inspection, the dot was inheriting the
+Area's own faded gradient `fill`, rendering as a barely-visible pale ring.
+Fixed by giving `dot`/`activeDot` an explicit solid `fill={s.color}`. A
+small additional honest note ("Only one month of recorded history exists
+so far...") is shown only when `series.length === 1` (currently true - all
+logged ATS activity so far falls within September 2026) - explains the
+sparse-looking chart rather than leaving it unexplained; it will stop
+rendering automatically once a second month of history exists.
+
+No REDCap mapping, calculation, denominator, existing endpoint's contract,
+or the right-panel bar chart/overall band/footer (all built in the
+immediately preceding same-day pass, byte-for-byte unchanged) was touched.
+Verified: backend **164/164 tests pass**; frontend `tsc --noEmit` clean,
+`npm run build` succeeds. Live-verified via the same cached local
+Playwright pattern against a real backend (port 8001, `--reload` picked up
+the new route automatically) + live frontend dev server, both themes, at
+1440px/768px/375px: zero console errors and zero horizontal overflow at
+every width; a fresh `curl` of `/api/v1/dashboard/assessment-timeline`
+returned `"available": true, "reconciled": true` with `series: [{"month":
+"2026-09", "sangian": 76, "vwm": 76, "dccs": 73, "cd": 15}]` and every
+`reconciliation.*.matches` `true`; simulated hovering the chart
+(`mouse.move` after `scrollIntoViewIfNeeded`, since a raw `element.hover()`
+timed out fighting overlapping same-x dots) produced the tooltip text
+`"Sept 2026 | SANGIAN 76 | VWM 76 | DCCS 73 | CD 15"` - sorted descending,
+matching the live API payload exactly. Nothing was committed - working
+tree changes only.
+
+**Single-month visualization - Bar-based attempt tried and explicitly
+rejected, corrected to a genuine Area chart (2026-09-29, same day,
+chart-rendering-only both times - the underlying `series` data, the
+backend, and every other part of the `.ap-panel` are untouched):** with
+only one real month of Assessment Tool Status log history, the original
+`Area` chart rendered as 4 small, mostly-overlapping dots (SANGIAN/VWM
+both = 76 sat on the exact same pixel) - technically correct but
+illegible, since recharts' `Area` needs 2+ data points to interpolate a
+fill polygon.
+
+*First attempt (superseded - kept here only for history, do not
+reintroduce):* rewrote the component around `ComposedChart` and rendered
+each tool as a `Bar` (gradient fill + coloured stroke + rounded cap) for
+the single-month case. This was explicitly rejected: **"Do NOT use
+BarChart, bars, columns, or histogram-style rendering for the left
+panel... I need a REAL cumulative AREA/LINE chart"** - a `Bar`/`BarChart`
+element is not an `Area`, regardless of how area-like its gradient fill
+looks.
+
+**Current, correct implementation:** `AssessmentTimelineChart` uses
+**only** `AreaChart`/`Area` - never `Bar`/`BarChart`/`ComposedChart` -
+for both states:
+- **2+ real months** (automatic, unchanged from the very first pass): each
+  tool renders as a genuine interpolated `Area` (thin 2px line + soft
+  `0.32 -> 0.03` opacity gradient fill connecting the real points). No
+  code branch - this is what happens once a second month of real log
+  history exists.
+- **Exactly 1 real month** (current live state): an interpolated `Area`
+  mathematically cannot form a polygon from one `(x, y)` pair - there is
+  no second x-position to draw a shape between, regardless of chart type.
+  Rather than fabricate a second/duplicate data point to force one
+  (explicitly disallowed), the fill is instead drawn with recharts'
+  **`ReferenceArea`** - a companion element rendered inside the *same*
+  `<AreaChart>`, given only `x2={<the one real month's label>}` (`x1`
+  omitted) so recharts extends the fill from the plot's left edge up to
+  that real category position - a real, `y1={0}`-to-`y2={value}` area,
+  anchored to the zero baseline, ending exactly at the real data point (a
+  standard recharts technique: an unpaired `x1`/`x2` on a `ReferenceArea`
+  extends to that side's axis boundary; with only one category on the
+  axis, that boundary coincides with the plot edge, so the fill correctly
+  spans the whole plot up to the real point without needing a second
+  category to exist). The `Area` element itself is *also* still rendered
+  for this state (`fill="transparent"`, only the line/dot survive) purely
+  to draw the small solid-coloured marker (`dot={{r:3.5, fill:s.color,
+  ...}}`) at the real data point, per "keep the actual data point clearly
+  marked." **One rejected intermediate attempt**, for the record: giving
+  `ReferenceArea` both `x1={month}` AND `x2={month}` (equal values, to try
+  to highlight just that one category's own band) rendered **nothing at
+  all** (confirmed via direct SVG inspection - recharts silently emits no
+  path for a zero-width equal-x1/x2 categorical `ReferenceArea`, contrary
+  to some other charting libraries' "highlight one column" convention);
+  giving `x1` alone (no `x2`) rendered a fill extending forward from the
+  point to the chart's right edge, which read as an area projecting into
+  the future (misleading); `x2` alone (no `x1`, the version now in place)
+  extends *backward* from the point to the plot's left edge, correctly
+  reading as "accumulated history culminating in the one real
+  observation" - the standard area-chart convention (area *under* the
+  curve up to the current known point).
+- **Subtitle changed** to **"Recorded assessment completion status over
+  time"** (was "Total children who have completed each assessment tool")
+  - per explicit instruction, so the copy doesn't imply the log timestamp
+  is a literal assessment date. The panel title itself, "Cumulative
+  assessments recorded over time," and the `note` line ("Based on the
+  date assessment status was recorded in REDCap.") are unchanged from the
+  prior pass.
+- Colours are unchanged and already matched the request exactly: SANGIAN
+  `--series-3` (green), VWM `--series-violet` (purple), DCCS
+  `--series-cyan` (cyan/blue), CD `--series-4` (amber).
+- Legend, `YAxis`/`CartesianGrid`, and the hover tooltip (sorted
+  descending, colour-matched values, reusing the shared `ChartTooltipBox`)
+  are unchanged and shared between both render paths.
+No REDCap mapping, calculation, denominator, endpoint, reconciliation
+logic, or any other part of the Assessment Progress panel (overall band,
+right-panel bar chart, footer) was touched across either attempt -
+confirmed via `git diff --stat` (only `Overview.tsx` changed). Tests: none
+(pure chart-rendering change, no backend touched, no new/altered data).
+Verified: `tsc --noEmit` clean; `npm run build` succeeds. Live-verified via
+the same cached Playwright pattern against a real backend + live frontend
+dev server, both themes, at 1440px/768px/375px: zero console errors, zero
+horizontal overflow; direct SVG inspection confirmed the rendered element
+is a `<path class="recharts-reference-area-rect">`/`<path class="recharts-
+area-...">` pair (never a `<rect class="recharts-bar...">`); screenshots
+confirm a genuine soft translucent filled region rising from the zero
+baseline and culminating at the real "Sept 2026" data point, with small
+solid dot markers, in both themes; re-verified the hover tooltip still
+produces `"Sept 2026 | SANGIAN 76 | VWM 76 | DCCS 73 | CD 15"`, sorted
+descending, unchanged throughout every attempt in this pass. Backend
+untouched (164/164 tests still pass, not re-run since no backend file
+changed). Nothing was committed - working tree changes only.
+
+**Colour/opacity refinement - flat low-opacity fills instead of a gradient,
+theme-aware opacity, and a fixed dot-marker rendering bug (2026-09-29, same
+day, colour/opacity-only - the AreaChart/Area/ReferenceArea chart TYPE from
+the pass above is unchanged, per explicit instruction not to touch it
+again):** the area fills, still correct in *type*, read as one blended
+gray-teal wash rather than 4 distinguishable colours.
+
+- **Gradient replaced with a flat `fillOpacity`**: the top-heavy
+  `<linearGradient>` defs (`0.32 -> 0.03`) were removed entirely - a
+  gradient's own higher-opacity band nearest the line was itself
+  contributing to the "blended" look once 4 overlapping regions stacked.
+  Both `Area` (multi-month case) and `ReferenceArea` (single-month case)
+  now use a plain solid `fill={s.color}` + a shared flat `fillOpacity`
+  constant, `ASSESSMENT_TIMELINE_FILL_OPACITY = { light: 0.08, dark: 0.05 }`
+  - within the requested 0.08-0.15 range at the low end, and read via the
+  existing `useTheme()` hook (the same one `Layout.tsx`'s theme toggle
+  already uses) so dark mode gets a genuinely lower value, not a copy of
+  light mode's number - the app's `--series-*` tokens are already brighter
+  in dark mode, so the same opacity there would look heavier, not more
+  subtle.
+- **Z-order fixed for the single-month `ReferenceArea` fills**: since all 4
+  fills share the same x-range and zero baseline (an unavoidable
+  consequence of one real month with no second x-position to differentiate
+  them - see the "not supported" investigation above), the smaller series
+  would otherwise render fully hidden beneath the larger ones' regions.
+  Fixed by sorting the fills largest-value-first before rendering (a local
+  `[...ASSESSMENT_TIMELINE_SERIES].sort(...)` copy, not a mutation of the
+  shared config array), so the smallest series (currently CD) always
+  paints last/on top and stays visible.
+- **Bug found and fixed**: the per-point dot markers (the primary visual
+  differentiator for the single-month case, since there's no line segment
+  to draw from only one point) were rendering with `fill-opacity="0"` -
+  confirmed via direct SVG attribute inspection - because recharts'
+  per-series `dot`/`activeDot` config inherits the parent `Area`'s own
+  `fillOpacity` prop when the dot object doesn't explicitly set its own,
+  and that prop was intentionally set to `0` on the `Area` itself (to keep
+  its own now-redundant fill invisible in the single-month state, where
+  `ReferenceArea` supplies the visible fill instead). Fixed by adding an
+  explicit `fillOpacity: 1` to both the `dot` and `activeDot` config
+  objects - re-verified live (`fill-opacity="1"` on all 4 circles) and
+  confirmed visually: each dot now renders as its own fully-opaque,
+  correctly-coloured marker (green/violet/cyan/amber), the intended
+  primary per-series signal alongside the legend and hover tooltip.
+- **Honest limitation, not fixed and not fixable within this constraint
+  set**: with exactly one real month, all 4 `ReferenceArea` fills
+  geometrically span the *identical* x-range and both start from the same
+  zero baseline - the smaller series' entire fill region is a strict
+  subset of the larger ones', by definition, regardless of opacity tuning.
+  Even at the lowest reasonable opacity this still reads as one softly
+  blended, banded region rather than 4 crisply separated colour blocks -
+  a mathematical consequence of "share the same baseline, do not stack,
+  do not offset x-position," not an implementation shortcoming. The dots,
+  legend, and hover tooltip (all independently, correctly per-series
+  coloured) are the actual differentiators for this single-month state;
+  once a second real month of REDCap log history exists, the chart
+  automatically switches to genuine per-series `Area` fills at distinct
+  x-positions, which will read as properly separated coloured regions
+  with no such limitation.
+No REDCap mapping, calculation, denominator, endpoint, chart TYPE, or any
+other part of the Assessment Progress panel was touched - confirmed via
+`git diff --stat` (only `Overview.tsx` changed for this pass). Tests: none
+(pure colour/opacity/rendering-bug fix, no backend touched, no new/altered
+data). Verified: `tsc --noEmit` clean; `npm run build` succeeds.
+Live-verified via the same cached Playwright pattern against a real
+backend + live frontend dev server, both themes, at 1440px/768px/375px:
+zero console errors, zero horizontal overflow; re-verified the hover
+tooltip still produces `"Sept 2026 | SANGIAN 76 | VWM 76 | DCCS 73 | CD
+15"`, sorted descending, unchanged. Backend untouched (164/164 tests still
+pass, not re-run since no backend file changed). Nothing was committed -
+working tree changes only.
+
+---
+
+## REDCAP LOGGING API - NEW DATA SOURCE (2026-09-29)
+
+In addition to the existing `content=record`/`content=metadata` REDCap
+calls, this app can now also call **`content=log`** (REDCap's built-in
+change-audit trail) via `RedCapClient.fetch_log()` /
+`LiveRedCapRepository.get_log()`. This is currently used for exactly one
+purpose: reconstructing the "Cumulative assessments recorded over time"
+chart on the Dashboard (see the section above) from Assessment Tool
+Status's field-save timestamps, since that instrument has no date field of
+its own.
+
+**Requires a separate REDCap permission** ("Logging" export rights on the
+API token) from ordinary record/metadata export - confirmed the
+currently-configured token has this right (live-tested), but if the token
+is ever rotated/rescoped without it, `/api/v1/dashboard/assessment-timeline`
+alone will start failing (502) while every other endpoint keeps working
+normally - this is a deliberately isolated blast radius, not a shared
+dependency.
+
+**What the log actually contains**: one entry per record save -
+`timestamp` (minute precision), `username`, `action` (e.g. "Update record
+09IND051B"), `record`, and `details` - a REDCap-internal, informal text
+string (`"field1 = 'value1', field2 = 'value2', ..."`), not a structured/
+versioned field list. Any code parsing `details` must do so defensively
+(regex, skip-on-mismatch) - see `module_analytics
+._parse_assessment_timeline_changes()` for the established pattern.
+
+**Do not use this for anything requiring a hard real-time or complete
+guarantee** - it is REDCap's own audit convenience feature, not a primary
+data store; always cross-check derived conclusions against the live record
+export (`_assessment_tool_participant_status` or equivalent) the way
+`build_assessment_timeline`'s `reconciled` flag already does, and never
+present the reconstructed data as authoritative if that check fails.
+
+If a future task wants to extend this pattern to another instrument that
+also lacks a date field, reuse `RedCapClient.fetch_log()` /
+`LiveRedCapRepository.get_log()` as-is (already generic, not Assessment-
+Tool-Status-specific) and write a new, field-set-specific reconstruction
+function alongside `build_assessment_timeline` - do not generalize
+`build_assessment_timeline` itself into a catch-all without a concrete
+second use case in hand.
+
 ---
 
 ## FRONTEND ERROR ISOLATION (2026-08-26)
@@ -4641,7 +5217,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **158/158 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-14 Child Health History Dashboard implementation). Frontend `npm run build` succeeds.
+Backend test count: **164/164 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-29 REDCap-Logging-API-backed Assessment Progress timeline). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

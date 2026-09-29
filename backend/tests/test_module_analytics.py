@@ -917,3 +917,112 @@ def test_assessment_tool_status_participant_statuses_row_per_child_matches_aggre
     assert sum(r["dccs"] for r in rows) == result["dccs_participant"]["done_count"]
     assert sum(r["cd"] for r in rows) == result["cd_participant"]["done_count"]
     assert [r["child_id"] for r in rows if r["sangian"] and r["vwm"] and r["dccs"] and r["cd"]] == result["common_participant_ids"]
+
+
+def _log_entry(timestamp: str, record: str, details: str) -> dict:
+    return {"timestamp": timestamp, "username": "tester", "action": f"Update record {record}", "details": details, "record": record}
+
+
+def test_build_assessment_timeline_no_log_entries_is_unavailable_not_a_crash():
+    """An empty log (nothing logged yet, or the log fetch returned zero
+    matching entries) must report `available=False`, never fabricate a
+    series or raise."""
+    result = ma.build_assessment_timeline([], [{"child_id": "A"}])
+    assert result["available"] is False
+    assert result["reconciled"] is False
+    assert result["series"] == []
+
+
+def test_build_assessment_timeline_skips_unparseable_entries_without_crashing():
+    """A log entry with a malformed timestamp, no record id, or details text
+    that doesn't match the expected 'field = value' shape must be skipped,
+    not raise - REDCap's log `details` string is an informal audit format,
+    not a structured API contract."""
+    entries = [
+        {"timestamp": "not-a-date", "record": "A", "details": "cd_3 = '1'"},
+        {"timestamp": "2026-09-12 09:00", "record": None, "details": "cd_3 = '1'"},
+        {"timestamp": "2026-09-12 09:05", "record": "A", "details": "some unrelated free text with no field=value pairs"},
+        # A genuinely valid entry, to prove the rest of the batch still works.
+        _log_entry("2026-09-12 09:10", "A", "cd_3 = '1'"),
+    ]
+    records = [{"child_id": "A", "cd_3": "1"}]
+    result = ma.build_assessment_timeline(entries, records)
+    assert result["available"] is True
+    assert result["series"][-1]["cd"] == 1
+
+
+def test_build_assessment_timeline_handles_done_to_not_done_reversal():
+    """Mirrors the real investigation's confirmed case (record 09IND051B's
+    cd_3 set Done then reverted to Not Done): the reconstructed timeline
+    must use the LATEST value as of each point in time, not 'ever became
+    Done', so a later reversal correctly drops out of a subsequent month's
+    cumulative count."""
+    entries = [
+        _log_entry("2026-09-23 14:18", "R1", "cd_3 = '1'"),  # becomes Done in September
+        _log_entry("2026-09-24 18:05", "R1", "cd_3 = '2'"),  # reverted to Not Done, still September
+    ]
+    records = [{"child_id": "R1", "cd_3": "2"}]  # live state: currently Not Done
+    result = ma.build_assessment_timeline(entries, records)
+    assert result["available"] is True
+    # Only one month exists (September) - its final state must reflect the
+    # reversal (0 Done), not the earlier "1 Done" state, and must reconcile
+    # with the live record above.
+    last = result["series"][-1]
+    assert last["cd"] == 0
+    assert result["reconciled"] is True
+    assert result["reconciliation"]["cd"] == {"timeline": 0, "live": 0, "matches": True}
+
+
+def test_build_assessment_timeline_sangian_requires_all_six_fields_done():
+    """A record counts toward the SANGIAN series only once ALL 6 of its
+    sub-fields are logged Done - matching `_assessment_tool_participant_
+    status`'s own "every field in the group" rule exactly (needed for
+    reconciliation to hold)."""
+    entries = [
+        _log_entry("2026-09-11 10:00", "R1", "pkb_1 = '1', ank_2 = '1', lkt_3 = '1', hp_4 = '1', cmc_5 = '1'"),
+        # chmc_6 (the 6th field) only arrives in a later, separate save.
+        _log_entry("2026-09-11 10:05", "R1", "chmc_6 = '1'"),
+    ]
+    records = [
+        {
+            "child_id": "R1",
+            "pkb_1": "1", "ank_2": "1", "lkt_3": "1", "hp_4": "1", "cmc_5": "1", "chmc_6": "1",
+        }
+    ]
+    result = ma.build_assessment_timeline(entries, records)
+    assert result["series"][-1]["sangian"] == 1
+    assert result["reconciliation"]["sangian"] == {"timeline": 1, "live": 1, "matches": True}
+
+
+def test_build_assessment_timeline_forward_fills_months_with_no_log_activity():
+    """A month with zero log activity must carry forward the previous
+    month's cumulative counts (a flat line), not be omitted or reset to
+    zero - the x-axis must stay continuous month to month."""
+    entries = [
+        _log_entry("2026-07-05 09:00", "R1", "vwm_1 = '1'"),
+        # Next logged change is two months later (September) - August must
+        # still appear in the series, carrying July's count forward.
+        _log_entry("2026-09-05 09:00", "R2", "vwm_1 = '1'"),
+    ]
+    records = [{"child_id": "R1", "vwm_1": "1"}, {"child_id": "R2", "vwm_1": "1"}]
+    result = ma.build_assessment_timeline(entries, records)
+    months = {row["month"]: row["vwm"] for row in result["series"]}
+    assert months["2026-07"] == 1
+    assert "2026-08" in months
+    assert months["2026-08"] == 1  # carried forward from July, not 0
+    assert months["2026-09"] == 2
+    # Months must be in strict chronological order with no gaps.
+    assert [row["month"] for row in result["series"]] == sorted(months.keys())
+
+
+def test_build_assessment_timeline_reconciliation_fails_when_live_data_diverges():
+    """If the reconstructed timeline's final month does not match the live
+    participant counts, `reconciled` must be False (never silently True) -
+    this is the "do not proceed if it doesn't reconcile" safety check."""
+    entries = [_log_entry("2026-09-11 10:00", "R1", "dccs_2 = '1'")]
+    # Live record disagrees with what the log implies (simulates e.g. a
+    # gap in logging coverage or a change made outside the logged window).
+    records = [{"child_id": "R1", "dccs_2": "2"}]
+    result = ma.build_assessment_timeline(entries, records)
+    assert result["reconciliation"]["dccs"] == {"timeline": 1, "live": 0, "matches": False}
+    assert result["reconciled"] is False

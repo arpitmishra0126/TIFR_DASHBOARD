@@ -20,7 +20,9 @@ Overview, Demographics and Assessment Progress - for consistency across the
 dashboard. The underlying arithmetic (how a distribution/summary/coverage
 tier is computed) is identical either way.
 """
+import re
 from collections import Counter
+from datetime import UTC, datetime
 from statistics import mean, median
 from typing import Callable
 
@@ -1681,4 +1683,170 @@ def build_assessment_tool_status_analysis(records: list[dict]) -> dict:
         "participant_statuses": _assessment_tool_participant_statuses(
             reg, sangian_field_names, vwm_field, dccs_field, cd_field
         ),
+    }
+
+
+# --- Assessment Progress timeline (2026-09-29) - reconstructed from the
+# REDCap Logging API (content=log), the only place a per-field completion
+# timestamp exists anywhere in this project for Assessment Tool Status; the
+# instrument's own fields (confirmed live via a full metadata inspection)
+# have no date field at all. See CLAUDE.md's "Assessment Progress panel
+# rebuilt" investigation report for the full audit trail this is based on.
+# ---
+
+# One group per chart series - SANGIAN requires ALL 6 of its sub-fields to
+# be Done for a record to count (matching `_assessment_tool_participant_
+# status`'s own "every field in the group" rule exactly, so the timeline's
+# final month reconciles with that endpoint's live counts); VWM/DCCS/CD are
+# each a single field.
+ASSESSMENT_TIMELINE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("sangian", tuple(field for field, _ in SANGIAN_ASSESSMENT_FIELDS)),
+    ("vwm", (VWM_ASSESSMENT_FIELDS[0][0],)),
+    ("dccs", (VWM_ASSESSMENT_FIELDS[1][0],)),
+    ("cd", (VWM_ASSESSMENT_FIELDS[2][0],)),
+)
+
+_ASSESSMENT_TIMELINE_FIELDS: frozenset[str] = frozenset(
+    field for _key, fields in ASSESSMENT_TIMELINE_GROUPS for field in fields
+)
+
+# REDCap's log `details` string is an internal audit-trail text format
+# ("field = 'value', field2 = 'value2', ..."), not a structured/versioned
+# API contract - matched defensively; a field name is only ever accepted if
+# it is one of the 9 Assessment Tool Status fields above, and a value is
+# only ever "1"/"2" (Done/Not Done) per that instrument's own confirmed
+# choice coding - anything else is ignored, never guessed at.
+_LOG_FIELD_VALUE_PATTERN = re.compile(r"([A-Za-z0-9_]+) = '([^']*)'")
+
+
+def _parse_assessment_timeline_changes(log_entries: list[dict]) -> list[tuple[datetime, str, str, str]]:
+    """Flatten raw REDCap log entries into chronologically-sortable
+    `(timestamp, record_id, field, value)` tuples, keeping only entries for
+    the 9 Assessment Tool Status fields. A malformed/unparseable log entry
+    (unexpected timestamp format, missing record id) is skipped rather than
+    raising - this is best-effort reconstruction from an informal audit
+    log, not a guaranteed-shape API field."""
+    changes: list[tuple[datetime, str, str, str]] = []
+    for entry in log_entries:
+        record = entry.get("record")
+        timestamp_raw = entry.get("timestamp")
+        details = entry.get("details") or ""
+        if not record or not timestamp_raw:
+            continue
+        try:
+            timestamp = datetime.strptime(timestamp_raw, "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        for field, value in _LOG_FIELD_VALUE_PATTERN.findall(details):
+            if field in _ASSESSMENT_TIMELINE_FIELDS and value in ("1", "2"):
+                changes.append((timestamp, record, field, value))
+    return changes
+
+
+def _assessment_timeline_group_done(field_values: dict[str, str], fields: tuple[str, ...]) -> bool:
+    return all(field_values.get(field) == "1" for field in fields)
+
+
+def _add_month(dt: datetime) -> datetime:
+    if dt.month == 12:
+        return dt.replace(year=dt.year + 1, month=1)
+    return dt.replace(month=dt.month + 1)
+
+
+def build_assessment_timeline(log_entries: list[dict], records: list[dict]) -> dict:
+    """Monthly cumulative "Done" counts per assessment tool (SANGIAN/VWM/
+    DCCS/CD), reconstructed from the REDCap Logging API.
+
+    Correctness rules (per the investigation this implements):
+    - A field can be reverted Done -> Not Done (confirmed live: record
+      09IND051B's `cd_3` was set to Done on 2026-09-23, then reverted to
+      Not Done on 2026-09-24). This function ALWAYS uses each record's
+      LATEST known value as of a given point in time - never "ever became
+      Done" - so a later reversal correctly reduces a subsequent month's
+      count, exactly like a naive re-scan of live data would show.
+    - Multiple edits to the same field (corrections) are handled the same
+      way - only the last write before a given timestamp matters.
+    - Cumulative Done for month M = the number of distinct records whose
+      latest known status, as of the end of month M, satisfies the group's
+      "every field Done" rule. Months with zero log activity carry forward
+      the previous month's counts (a flat line), rather than being omitted
+      and breaking the chart's continuity.
+    - The final month's counts are cross-checked against
+      `_assessment_tool_participant_status` - the exact same function the
+      live `/assessment-tool-status` endpoint uses - computed from the same
+      already-fetched `records`. If they don't reconcile, `available` stays
+      True (the timeline itself parsed fine) but `reconciled` is False, and
+      callers/consumers must treat that as "do not trust/show this series"
+      rather than silently presenting a wrong chart.
+    """
+    changes = _parse_assessment_timeline_changes(log_entries)
+    changes.sort(key=lambda c: c[0])
+
+    reg = registered_records(records)
+    total = len(reg)
+    live_done_counts = {
+        key: _assessment_tool_participant_status(reg, fields, total)["done_count"] for key, fields in ASSESSMENT_TIMELINE_GROUPS
+    }
+
+    if not changes:
+        return {
+            "available": False,
+            "reconciled": False,
+            "series": [],
+            "reconciliation": {
+                key: {"timeline": 0, "live": live_done_counts[key], "matches": live_done_counts[key] == 0}
+                for key, _fields in ASSESSMENT_TIMELINE_GROUPS
+            },
+        }
+
+    current_state: dict[str, dict[str, str]] = {}
+
+    def snapshot_counts() -> dict[str, int]:
+        counts = {key: 0 for key, _fields in ASSESSMENT_TIMELINE_GROUPS}
+        for field_values in current_state.values():
+            for key, fields in ASSESSMENT_TIMELINE_GROUPS:
+                if _assessment_timeline_group_done(field_values, fields):
+                    counts[key] += 1
+        return counts
+
+    # One snapshot per distinct month, holding the state after the LAST
+    # change event observed in that month (changes are already sorted
+    # chronologically, so later writes to the same month key simply
+    # overwrite earlier ones - the final value is correct).
+    monthly_snapshots: dict[str, dict[str, int]] = {}
+    for timestamp, record, field, value in changes:
+        current_state.setdefault(record, {})[field] = value
+        monthly_snapshots[timestamp.strftime("%Y-%m")] = snapshot_counts()
+
+    first_month = changes[0][0].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month = datetime.now(UTC).replace(tzinfo=None, day=1, hour=0, minute=0, second=0, microsecond=0)
+    if last_month < first_month:
+        last_month = first_month
+
+    series: list[dict] = []
+    cursor = first_month
+    carry_forward = {key: 0 for key, _fields in ASSESSMENT_TIMELINE_GROUPS}
+    while cursor <= last_month:
+        month_key = cursor.strftime("%Y-%m")
+        if month_key in monthly_snapshots:
+            carry_forward = monthly_snapshots[month_key]
+        series.append({"month": month_key, **carry_forward})
+        cursor = _add_month(cursor)
+
+    latest = series[-1] if series else {}
+    reconciliation = {
+        key: {
+            "timeline": latest.get(key, 0),
+            "live": live_done_counts[key],
+            "matches": latest.get(key, 0) == live_done_counts[key],
+        }
+        for key, _fields in ASSESSMENT_TIMELINE_GROUPS
+    }
+    reconciled = all(item["matches"] for item in reconciliation.values())
+
+    return {
+        "available": True,
+        "reconciled": reconciled,
+        "series": series,
+        "reconciliation": reconciliation,
     }

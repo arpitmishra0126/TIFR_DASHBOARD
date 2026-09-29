@@ -1,23 +1,35 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import { getAssessmentToolStatus, getHealthScreening, getOverview, getRegistry, getScreenTime } from "../api/dashboard";
+import { getAssessmentTimeline, getAssessmentToolStatus, getHealthScreening, getOverview, getRegistry, getScreenTime } from "../api/dashboard";
 import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import FullScreenLoader from "../components/FullScreenLoader";
 import {
   IconBrain,
+  IconBuilding,
   IconCalendar,
   IconChart,
+  IconChevron,
   IconClipboardCheck,
-  IconGraduationCap,
+  IconClock,
+  IconDocument,
+  IconExternalLink,
   IconHeart,
+  IconHome,
   IconMonitor,
+  IconProgress,
+  IconPulse,
   IconUsers,
 } from "../components/icons";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, ReferenceArea, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
+import { ChartTooltipBox } from "../components/charts/ChartTooltip";
 import { useRefresh } from "../context/RefreshContext";
+import { useTheme } from "../context/ThemeContext";
 import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import type {
+  AssessmentTimelineResponse,
   AssessmentToolStatusResponse,
   HealthScreeningResponse,
   OverviewResponse,
@@ -179,28 +191,6 @@ function StudyProgressPipeline({
   );
 }
 
-/** A small two-value horizontal comparison (e.g. School-day vs Weekend
- * screen time) - each bar's length is scaled against the larger of the two
- * `magnitude` values, so the pair is a genuine visual comparison, not two
- * independent 0-100% bars. Used only where the underlying values are a
- * real, already-displayed pair of numbers - never invented. */
-function DualMetricBars({ tone, items }: { tone: Tone; items: { label: string; value: string; magnitude: number }[] }) {
-  const max = Math.max(...items.map((item) => item.magnitude), 1);
-  return (
-    <div className="dual-metric-bars">
-      {items.map((item) => (
-        <div key={item.label} className="dual-metric-item">
-          <div className="module-indicator-row">
-            <span className="module-indicator-label">{item.label}</span>
-            <span className="module-indicator-value">{item.value}</span>
-          </div>
-          <MonitorBar percent={(item.magnitude / max) * 100} tone={tone} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /** Fixed colour mapping for the Study Snapshot Sex Distribution split bar -
  * a presentation choice only, not a new data field. */
 function sexTone(label: string): Tone {
@@ -222,77 +212,465 @@ function SplitBar({ segments }: { segments: { tone: Tone; percent: number }[] })
   );
 }
 
-/** A real data visualisation (not decorative UI chrome) - a completion
- * ring showing `count/total` as a proportion of the ring's own
- * circumference, drawn with plain SVG (no chart library) so it stays
- * lightweight for a small per-panel visual. Center text is only shown in
- * the non-`compact` size (the large per-panel ring); `compact` mini-rings
- * (used inline per Key Indicator row) show only the ring itself - the
- * exact figure is already printed as text right next to it. */
-function CompletionRing({
-  count,
-  total,
-  tone,
-  size = 128,
-  strokeWidth = 11,
-  compact = false,
+/** Key Study Modules panel (2026-09-28, pixel-target restyle) - a fully
+ * reusable, generic `<DonutRing>` used for both the large per-card
+ * completion donut and every small mini-donut, plus a `<ModuleCard>` shell
+ * (header/body/footer zones) that both the DSEQ and Child Health cards are
+ * built from, so the two panels can never structurally drift apart. All
+ * colours/radii/spacing for this panel are CSS custom properties scoped
+ * under `.key-modules-panel` (see app.css) - a self-contained design system
+ * for this one section, not a change to the rest of the dashboard's shared
+ * tokens. Ring arcs animate from 0 on mount and respect
+ * `prefers-reduced-motion` (the transition itself is disabled under
+ * `reduce` in CSS, so a reduced-motion viewer sees the final arc
+ * immediately, never a frozen half-drawn one). */
+
+/** A generic completion ring, real SVG (no chart library) - the exact same
+ * component draws the large per-card donut (with center content) and every
+ * small mini-donut (no center content) per the mockup spec's own
+ * `<DonutRing size stroke value color />` shape. */
+function DonutRing({
+  percent,
+  size,
+  strokeWidth,
+  color,
+  trackColor = "var(--kmp-track)",
+  ariaLabel,
+  variant = "large",
+  children,
 }: {
-  count: number;
-  total: number;
-  tone: Tone;
-  size?: number;
-  strokeWidth?: number;
-  compact?: boolean;
+  percent: number;
+  size: number;
+  strokeWidth: number;
+  color: string;
+  trackColor?: string;
+  ariaLabel: string;
+  variant?: "large" | "mini";
+  children?: ReactNode;
 }) {
-  const percent = percentOf(count, total);
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const clamped = Math.min(100, Math.max(0, percent));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const filled = (Math.min(100, Math.max(0, percent)) / 100) * circumference;
+  const filled = drawn ? (clamped / 100) * circumference : 0;
   return (
-    <div className={`completion-ring monitor-tone-${tone}${compact ? " completion-ring-compact" : ""}`} style={{ width: size, height: size }}>
-      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--gridline)" strokeWidth={strokeWidth} />
+    <div className={`kmp-donut kmp-donut-${variant}`} role="img" aria-label={ariaLabel}>
+      {/* The box's rendered pixel size is controlled entirely by CSS
+          (`.kmp-donut-large`/`.kmp-donut-mini`, incl. responsive media
+          queries) - the `size`/`strokeWidth` props only define the SVG's
+          own coordinate system (viewBox), so the stroke scales down
+          proportionally as the box shrinks instead of overflowing it. */}
+      <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={trackColor} strokeWidth={strokeWidth} />
         <circle
+          className="kmp-donut-arc"
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
-          strokeDasharray={`${filled} ${circumference - filled}`}
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference - filled}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ stroke: "var(--tone-accent)" }}
+          style={{ stroke: color }}
         />
       </svg>
-      {!compact && (
-        <div className="completion-ring-center">
-          <span className="completion-ring-value">
-            {count}/{total}
-          </span>
-          <span className="completion-ring-percent">{percent}%</span>
-          <span className="completion-ring-label">Instrument completion</span>
-        </div>
-      )}
+      {children && <div className="kmp-donut-center">{children}</div>}
     </div>
   );
 }
 
-/** One row in a "Key Indicators" list (Child Health History panel) - label
- * + real count/total/percent text, plus a small completion ring for the
- * same figure on the far right (a second, compact view of the same
- * number, not a new metric). */
-function KeyIndicatorRow({ label, count, total, tone }: { label: string; count: number; total: number; tone: Tone }) {
+/** The large per-card completion donut - count/total, percent, and
+ * "Instrument completion" centred inside the ring. Colour is always
+ * `var(--tone-accent)`, resolved from whichever `monitor-tone-*` ancestor
+ * (the card itself, or a per-row override - see `IndicatorRow`) wraps it -
+ * the same reusable tone-cascade already used dashboard-wide, not a new
+ * hardcoded palette. */
+function ModuleCompletionDonut({ count, total, label }: { count: number; total: number; label: string }) {
+  const percent = percentOf(count, total);
+  // strokeWidth is in the ring's own 320-unit viewBox coordinate space, not
+  // rendered px - at the CSS box sizes `.kmp-donut-large` actually renders
+  // at (190-260px, see app.css), 18 viewBox units yields a genuinely thin
+  // ~10.7-14.6px physical stroke, not a bulky ring.
+  return (
+    <DonutRing percent={percent} size={320} strokeWidth={18} color="var(--tone-accent)" variant="large" ariaLabel={`${label} instrument completion: ${count} of ${total}, ${percent}%`}>
+      <span className="kmp-donut-value">
+        {count} / {total}
+      </span>
+      <span className="kmp-donut-percent">{percent}%</span>
+      <span className="kmp-donut-caption">Instrument completion</span>
+    </DonutRing>
+  );
+}
+
+/** One "Key Indicators" row (Child Health card) - icon chip, label, bold
+ * right-aligned count/denominator, and a small mini-donut with its own
+ * percent centred inside on the far right. `tone` optionally overrides the
+ * card's own accent tone for just this row (e.g. amber/pink for a
+ * different indicator) via the same `monitor-tone-*` class every other
+ * tone-coloured element on this page already uses. */
+function IndicatorRow({ icon, label, count, total, tone }: { icon: ReactNode; label: string; count: number; total: number; tone?: Tone }) {
   const percent = percentOf(count, total);
   return (
-    <div className="key-indicator-row">
-      <div className="key-indicator-text">
-        <span className="key-indicator-label">{label}</span>
-        <span className="key-indicator-value">
-          {count}/{total} <span className="key-indicator-percent">({percent}%)</span>
-        </span>
-      </div>
-      <CompletionRing count={count} total={total} tone={tone} size={34} strokeWidth={4} compact />
+    <div className={`kmp-indicator-row${tone ? ` monitor-tone-${tone}` : ""}${percent === 0 ? " kmp-indicator-row-zero" : ""}`}>
+      <span className="kmp-indicator-icon">{icon}</span>
+      <span className="kmp-indicator-label">{label}</span>
+      <span className="kmp-indicator-count">
+        {count} / {total}
+      </span>
+      <DonutRing
+        percent={percent}
+        size={54}
+        strokeWidth={7}
+        color={percent > 0 ? "var(--tone-accent)" : "var(--kmp-mini-track)"}
+        trackColor="var(--kmp-mini-track)"
+        variant="mini"
+        ariaLabel={`${label}: ${count} of ${total}, ${percent}%`}
+      >
+        <span className="kmp-indicator-percent">{percent}%</span>
+      </DonutRing>
     </div>
+  );
+}
+
+/** One "Screen time by day type" row (DSEQ card) - icon, label, the bold
+ * minute value, and the existing shared `MonitorBar` (thin, rectangular,
+ * square-ended - the same bar used dashboard-wide, not a new rounded/pill
+ * shape) scaled against a configurable minutes ceiling (School-day/Weekend
+ * are each read against a fixed, comparable daily scale, not against each
+ * other). */
+function DayTypeRow({ icon, label, minutes, maxMinutes, tone }: { icon: ReactNode; label: string; minutes: number; maxMinutes: number; tone: Tone }) {
+  const percent = Math.min(100, Math.max(0, (minutes / maxMinutes) * 100));
+  return (
+    <div className="kmp-day-row">
+      <div className="kmp-day-row-head">
+        <span className="kmp-day-icon">{icon}</span>
+        <span className="kmp-day-label">{label}</span>
+        <span className="kmp-day-value">{Math.round(minutes)} min</span>
+      </div>
+      <MonitorBar percent={percent} tone={tone} />
+    </div>
+  );
+}
+
+/** The shared card shell - header (icon chip/title/description), a body
+ * zone the caller fills, and a clickable footer link row (icon chip + bold
+ * link text + a chevron pinned to the far right). The whole footer row is
+ * the actual `<Link>` (not the whole card), matching the mockup's
+ * "whole footer row is clickable" spec while keeping the header/body
+ * selectable as plain text. */
+function ModuleCard({
+  to,
+  tone,
+  icon,
+  title,
+  description,
+  footerIcon,
+  footerLabel,
+  children,
+}: {
+  to: string;
+  tone: Tone;
+  icon: ReactNode;
+  title: string;
+  description: string;
+  footerIcon: ReactNode;
+  footerLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`kmp-card monitor-tone-${tone}`}>
+      <div className="kmp-card-header">
+        <span className="kmp-card-icon">{icon}</span>
+        <div>
+          <h3 className="kmp-card-title">{title}</h3>
+          <p className="kmp-card-description">{description}</p>
+        </div>
+      </div>
+      <div className="kmp-card-body">{children}</div>
+      <Link to={to} className="kmp-card-footer">
+        <span className="kmp-card-footer-icon">{footerIcon}</span>
+        <span className="kmp-card-footer-label">{footerLabel} →</span>
+        <IconChevron className="kmp-card-footer-chevron" width={16} height={16} />
+      </Link>
+    </div>
+  );
+}
+
+/** ==========================================================================
+ * Assessment Progress panel (2026-09-29 rebuild, trend panel upgraded same
+ * day once a real historical data source was confirmed) - one bordered
+ * outer frame (`.ap-panel`) holding: a tinted "Overall Assessment" band, a
+ * two-column row (cumulative trend chart | per-tool comparison bar chart),
+ * and a clickable footer link. Reuses the same `monitor-tone-*` tone
+ * cascade, `MonitorBar` (square-ended, `border-radius: 0`), and
+ * `--radius-sharp` (3px) geometry already established by the Key Study
+ * Modules panel above it.
+ *
+ * The left "trend" panel: the live `assessment_tool_status` instrument
+ * itself (confirmed in `backend/app/ingestion/live_field_map.py`'s
+ * `ASSESSMENT_TOOL_STATUS_ITEM_FIELDS`) has 9 Done/Not-Done radio fields
+ * and one completion flag - no date field of any kind, and
+ * `RegistryChild.visit_date` is a registration/visit date, not an
+ * assessment-tool completion date, so neither can drive a real timeline. A
+ * genuine per-field timestamp DOES exist, however, via the REDCap Logging
+ * API (`content=log`) - REDCap's own change-audit trail, which records
+ * exactly when each field's value was saved. `getAssessmentTimeline()`
+ * (new endpoint, `GET /dashboard/assessment-timeline`) fetches and
+ * reconstructs this server-side (`build_assessment_timeline` in
+ * `module_analytics.py`), correctly handling Done -> Not Done reversals and
+ * repeated edits (latest-value-as-of-each-point-in-time, not "ever became
+ * Done"), and cross-checks its own final month against the live
+ * `/assessment-tool-status` participant counts before calling itself
+ * `reconciled`. The chart below renders **only** when `available &&
+ * reconciled && series.length > 0` - any other case (fetch failure,
+ * REDCap Logging permission revoked, or a reconciliation mismatch) falls
+ * back to the explicit "Assessment timeline unavailable" state, never a
+ * silently wrong chart. Because this is a data-entry timestamp (when a
+ * staff member saved the field), not literally when the child sat the
+ * test, the panel is labelled "Cumulative assessments **recorded**
+ * over time" with an explicit note - never "assessment date"/"assessed
+ * on". ========================================================== */
+
+/** Same 4-tool colour/label config as `ASSESSMENT_TOOL_CONFIG` below,
+ * reused for the trend chart's series so the two panels' colours always
+ * agree (SANGIAN teal, VWM violet, DCCS cyan, CD amber). */
+const ASSESSMENT_TIMELINE_SERIES: { key: "sangian" | "vwm" | "dccs" | "cd"; label: string; color: string }[] = [
+  { key: "sangian", label: "SANGIAN", color: "var(--series-3)" },
+  { key: "vwm", label: "VWM", color: "var(--series-violet)" },
+  { key: "dccs", label: "DCCS", color: "var(--series-cyan)" },
+  { key: "cd", label: "CD", color: "var(--series-4)" },
+];
+
+function formatTimelineMonth(month: string): string {
+  const [year, monthNum] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(year, monthNum - 1, 1));
+  return date.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+/** "Cumulative assessments recorded over time" - a real, single AREA CHART
+ * (recharts `AreaChart`/`Area`, never `BarChart`/`Bar`) built entirely from
+ * `AssessmentTimelineResponse.series`. Hover tooltip rows are sorted
+ * descending by value.
+ *
+ * With 2+ real months, each tool renders as the standard interpolated
+ * `Area` (a saturated line, more prominent than its own fill, connecting
+ * the real points) - automatic, no code branch, exactly the normal
+ * cumulative-area behaviour once more REDCap log history accumulates.
+ *
+ * With exactly 1 real month (the current live state), an interpolated
+ * `Area` line mathematically cannot form a filled polygon from a single
+ * (x, y) pair - there is no second x-position to draw a shape between.
+ * Rather than fabricate a second/duplicate data point to force one
+ * (explicitly disallowed), each tool's fill is instead drawn with
+ * recharts' `ReferenceArea` given only `x2` = the one real month (`x1`
+ * omitted, so recharts extends the fill from the plot's left edge up to
+ * that real category - a genuine area anchored to the zero baseline,
+ * culminating at the real point, still inside the SAME `<AreaChart>` as
+ * the normal multi-month case; `Area` itself supplies only the line/dot
+ * for this single point, `fill="transparent"`) - never a `Bar`/`BarChart`.
+ *
+ * Colour/opacity (2026-09-29 refinement, per an explicit correction that
+ * the first version's overlapping fills read as one muddy blended block):
+ * each series uses a flat, low-opacity `fillOpacity` (not a gradient - a
+ * gradient's own higher-opacity top band was itself a contributor to the
+ * "blended" look once 4 overlapping regions stacked) so overlapping fills
+ * stay readable and distinct, while the LINE stroke (and the dot markers,
+ * which match their line's colour) stays fully saturated - clearly more
+ * prominent than its own fill, per the explicit "line darker than fill"
+ * requirement. Dark mode uses an even lower fill opacity than light mode
+ * (the app's existing `--series-*` tokens are already brighter/more
+ * saturated in dark mode - the same opacity there would look heavier, not
+ * lighter, so a lower value is needed for genuinely "extremely subtle"
+ * fills, not a blind copy of the light-mode number) - read via the
+ * existing `useTheme()` hook, the same one `Layout.tsx`'s theme toggle
+ * already uses. */
+const ASSESSMENT_TIMELINE_FILL_OPACITY = { light: 0.08, dark: 0.05 };
+
+function AssessmentTimelineChart({ series }: { series: AssessmentTimelineResponse["series"] }) {
+  const { theme } = useTheme();
+  const fillOpacity = ASSESSMENT_TIMELINE_FILL_OPACITY[theme];
+  const data = series.map((point) => ({ ...point, label: formatTimelineMonth(point.month) }));
+  const singleMonth = data.length === 1;
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+        <CartesianGrid vertical={false} stroke="var(--gridline)" strokeDasharray="3 4" />
+        <XAxis dataKey="label" tick={{ fill: "var(--text-secondary)", fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: "var(--baseline)" }} tickLine={false} />
+        <YAxis allowDecimals={false} tick={{ fill: "var(--text-muted)", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
+        <RechartsTooltip
+          content={(tooltipProps) => {
+            const point = tooltipProps.payload?.[0]?.payload as (AssessmentTimelineResponse["series"][number] & { label: string }) | undefined;
+            if (!point) return null;
+            const rows = ASSESSMENT_TIMELINE_SERIES.map((s) => ({ label: s.label, raw: point[s.key], color: s.color }))
+              .sort((a, b) => b.raw - a.raw)
+              .map((s) => ({
+                label: s.label,
+                value: (
+                  <span style={{ color: s.color, fontWeight: 700 }}>
+                    {s.raw.toLocaleString()}
+                  </span>
+                ),
+              }));
+            return <ChartTooltipBox active={tooltipProps.active} title={point.label} rows={rows} />;
+          }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} />
+        {singleMonth &&
+          // Painted largest value first, smallest last (on top) - since all
+          // 4 fills share the same x-range and zero baseline, the smaller
+          // series would otherwise sit fully hidden beneath the larger
+          // ones' translucent regions rather than visibly on top of them.
+          [...ASSESSMENT_TIMELINE_SERIES]
+            .sort((a, b) => data[0][b.key] - data[0][a.key])
+            .map((s) => (
+              <ReferenceArea
+                key={`fill-${s.key}`}
+                x2={data[0].label}
+                y1={0}
+                y2={data[0][s.key]}
+                fill={s.color}
+                fillOpacity={fillOpacity}
+                stroke="none"
+                ifOverflow="visible"
+              />
+            ))}
+        {ASSESSMENT_TIMELINE_SERIES.map((s) => (
+          <Area
+            key={s.key}
+            type="monotone"
+            dataKey={s.key}
+            name={s.label}
+            stroke={s.color}
+            strokeWidth={2}
+            fill={singleMonth ? "transparent" : s.color}
+            fillOpacity={singleMonth ? 0 : fillOpacity}
+            dot={
+              singleMonth
+                ? { r: 5, fill: s.color, fillOpacity: 1, stroke: "var(--surface-1)", strokeWidth: 2 }
+                : { r: 3.5, fill: s.color, fillOpacity: 1, stroke: "var(--surface-1)", strokeWidth: 1.5 }
+            }
+            activeDot={{ r: 5.5, fill: s.color, fillOpacity: 1, stroke: "var(--surface-1)", strokeWidth: 2 }}
+            isAnimationActive={false}
+          />
+        ))}
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Per-tool config for the "Current completion by assessment tool" bar
+ * chart - the 4 real participant-level fields
+ * `AssessmentToolStatusResponse` currently exposes (`sangian_participant`/
+ * `vwm_participant`/`dccs_participant`/`cd_participant`). If REDCap ever
+ * adds a 5th assessment tool, the backend schema (a fixed field per tool,
+ * not a list) would need its own new field first - this array would then
+ * gain one more literal entry to match, the same one-line extension the
+ * page's prior 4-tool grid already required; the chart/legend/labels below
+ * all render generically off this array's length, so nothing else changes. */
+interface AssessmentToolConfig {
+  key: string;
+  label: string;
+  tone: Tone;
+  color: string;
+}
+
+const ASSESSMENT_TOOL_CONFIG: AssessmentToolConfig[] = [
+  { key: "sangian", label: "SANGIAN", tone: "teal", color: "var(--series-3)" },
+  { key: "vwm", label: "VWM", tone: "violet", color: "var(--series-violet)" },
+  { key: "dccs", label: "DCCS", tone: "cyan", color: "var(--series-cyan)" },
+  { key: "cd", label: "CD", tone: "amber", color: "var(--series-4)" },
+];
+
+interface AssessmentToolBarDatum {
+  key: string;
+  name: string;
+  count: number;
+  total: number;
+  percent: number;
+  color: string;
+  value: number;
+  remaining: number;
+}
+
+/** Custom two-line label ("count / total" bold, "pct%" tone-colored)
+ * rendered just above each tool's real bar segment (not above the full
+ * fixed-scale track), so the label's vertical position still correlates
+ * with the tool's actual magnitude even though every bar is stacked to the
+ * same 222-unit scale. */
+function ToolBarLabel(props: { x?: string | number; y?: string | number; width?: string | number; index?: number; data: AssessmentToolBarDatum[] }) {
+  const { x, y, width, index, data } = props;
+  if (x === undefined || y === undefined || width === undefined || index === undefined) return null;
+  const item = data[index];
+  if (!item) return null;
+  const numX = Number(x);
+  const numY = Number(y);
+  const numWidth = Number(width);
+  const cx = numX + numWidth / 2;
+  return (
+    <g>
+      <text x={cx} y={numY - 18} textAnchor="middle" className="ap-bar-label-count">
+        {item.count} / {item.total}
+      </text>
+      <text x={cx} y={numY - 5} textAnchor="middle" className="ap-bar-label-percent" fill={item.color}>
+        {item.percent}%
+      </text>
+    </g>
+  );
+}
+
+/** "Current completion by assessment tool" - a vertical bar chart, one bar
+ * per tool, each stacked as `value` (the real coloured segment) +
+ * `remaining` (a faint `--gridline`-coloured segment filling the rest of a
+ * fixed `total` scale) so every bar reads against the same denominator
+ * track, per the reference spec's "faint full-height gray track" request -
+ * implemented as a real stacked value, not a decorative overlay. */
+function AssessmentToolBarChart({ data, denominator }: { data: AssessmentToolBarDatum[]; denominator: number }) {
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart data={data} margin={{ top: 46, right: 8, left: 0, bottom: 4 }} barCategoryGap="32%">
+        <CartesianGrid vertical={false} stroke="var(--gridline)" strokeDasharray="3 4" />
+        <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 12, fontWeight: 700 }} axisLine={{ stroke: "var(--baseline)" }} tickLine={false} />
+        <YAxis
+          domain={[0, denominator]}
+          allowDecimals={false}
+          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          width={34}
+        />
+        <RechartsTooltip
+          cursor={{ fill: "var(--surface-2)" }}
+          content={(tooltipProps) => {
+            const point = tooltipProps.payload?.[0]?.payload as AssessmentToolBarDatum | undefined;
+            if (!point) return null;
+            return (
+              <ChartTooltipBox
+                active={tooltipProps.active}
+                title={point.name}
+                rows={[
+                  { label: "Completed", value: point.count.toLocaleString() },
+                  { label: "Total", value: point.total.toLocaleString() },
+                  { label: "Completion %", value: `${point.percent}%` },
+                ]}
+              />
+            );
+          }}
+        />
+        <Bar dataKey="value" stackId="tool" radius={[0, 0, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+          {data.map((item) => (
+            <Cell key={item.key} fill={item.color} />
+          ))}
+          <LabelList dataKey="value" content={(labelProps) => <ToolBarLabel {...labelProps} data={data} />} />
+        </Bar>
+        <Bar dataKey="remaining" stackId="tool" radius={[0, 0, 0, 0]} maxBarSize={56} fill="var(--gridline)" isAnimationActive={false} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -422,6 +800,7 @@ function CoreRemainingDrawer({
 export default function Overview() {
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [assessmentToolStatus, setAssessmentToolStatus] = useState<AssessmentToolStatusResponse | null>(null);
+  const [assessmentTimeline, setAssessmentTimeline] = useState<AssessmentTimelineResponse | null>(null);
   const [screenTime, setScreenTime] = useState<ScreenTimeResponse | null>(null);
   const [health, setHealth] = useState<HealthScreeningResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -440,6 +819,14 @@ export default function Overview() {
     getAssessmentToolStatus()
       .then(setAssessmentToolStatus)
       .catch(() => setAssessmentToolStatus(null));
+    // The Logging-API-backed timeline is its own fetch, separate from
+    // assessmentToolStatus above - a REDCap Logging-permission failure (or
+    // any other error) here must not affect the rest of Overview; the
+    // trend panel simply falls back to its "unavailable" state (see the
+    // Assessment Progress panel JSX below).
+    getAssessmentTimeline()
+      .then(setAssessmentTimeline)
+      .catch(() => setAssessmentTimeline(null));
     getScreenTime()
       .then(setScreenTime)
       .catch(() => setScreenTime(null));
@@ -592,155 +979,215 @@ export default function Overview() {
         />
       </div>
 
-      {/* --- 3. Key Study Modules - two featured infographic cards, DSEQ and
-          Child Health History (2026-09-28 infographic redesign - a
-          balanced 2-column layout, each card led by a large dominant
-          completion figure and a small real-data visual comparison, not a
-          plain full-width text row). --- */}
-      <div className="monitor-section">
-        <div className="monitor-section-head">
-          <span className="monitor-section-title">Key Study Modules</span>
-          <span className="monitor-section-note">Featured modules - full analysis on their own page</span>
+      {/* --- 3. Key Study Modules - pixel-target restyle (2026-09-28) via
+          `ModuleCard`/`ModuleCompletionDonut`/`DonutRing`/`IndicatorRow`/
+          `DayTypeRow` - a self-contained panel/card design (see the
+          `.key-modules-panel` CSS block) matching a supplied mockup for
+          style only. Every value below is still read live from
+          `screenTime`/`health`/`studyDenominator` - no figure is
+          hardcoded, and every percent is computed via `percentOf()`. --- */}
+      <section className="key-modules-panel">
+        <div className="kmp-panel-header">
+          <span className="kmp-panel-title">Key Study Modules</span>
+          <span className="kmp-panel-subtitle">Featured modules - full analysis on their own page</span>
         </div>
-        <div className="key-module-grid">
-          <Link to="/screen-time" className="key-module-card featured-module-card monitor-tone-violet">
-            <div className="featured-module-head">
-              <span className="featured-module-icon">
-                <IconMonitor width={15} height={15} />
-              </span>
-              <div>
-                <span className="key-module-name">DSEQ / Screen Time</span>
-                <p className="key-module-description">Digital Screen Exposure Questionnaire - screen time, physical activity, media behaviour.</p>
-              </div>
-            </div>
+        <div className="kmp-grid">
+          <ModuleCard
+            to="/screen-time"
+            tone="violet"
+            icon={<IconMonitor width={26} height={26} />}
+            title="DSEQ / Screen Time"
+            description="Digital Screen Exposure Questionnaire - screen time, physical activity, media behaviour."
+            footerIcon={<IconDocument width={16} height={16} />}
+            footerLabel="View DSEQ"
+          >
             {screenTime ? (
-              <div className="featured-module-main">
-                <CompletionRing count={screenTime.completion.completed} total={studyDenominator} tone="violet" />
-                <div className="featured-module-detail">
-                  <div className="featured-module-stat">
-                    <span className="featured-module-stat-label">Average daily screen time</span>
-                    <span className="featured-module-stat-value">
-                      {screenTime.average_daily_summary.mean !== null ? `${Math.round(screenTime.average_daily_summary.mean)} min (est.)` : "No data"}
-                    </span>
-                  </div>
+              <>
+                <div className="kmp-donut-col">
+                  <ModuleCompletionDonut count={screenTime.completion.completed} total={studyDenominator} label="DSEQ" />
+                </div>
+                <div className="kmp-divider" />
+                <div className="kmp-detail-col">
+                  <span className="kmp-detail-label kmp-detail-label-dseq">Average daily screen time</span>
+                  {screenTime.average_daily_summary.mean !== null ? (
+                    <div className="kmp-headline-row">
+                      <span className="kmp-headline-icon">
+                        <IconClock width={18} height={18} />
+                      </span>
+                      <span className="kmp-headline-value">{Math.round(screenTime.average_daily_summary.mean)} min</span>
+                      <span className="kmp-headline-muted">(est.)</span>
+                    </div>
+                  ) : (
+                    <p className="module-indicator">No data</p>
+                  )}
                   {screenTime.school_day_summary.mean !== null && screenTime.weekend_summary.mean !== null && (
-                    <DualMetricBars
-                      tone="violet"
-                      items={[
-                        { label: "School-day", value: `${Math.round(screenTime.school_day_summary.mean)} min`, magnitude: screenTime.school_day_summary.mean },
-                        { label: "Weekend", value: `${Math.round(screenTime.weekend_summary.mean)} min`, magnitude: screenTime.weekend_summary.mean },
-                      ]}
-                    />
+                    <div className="kmp-day-panel">
+                      <span className="kmp-day-panel-title">Screen time by day type</span>
+                      <DayTypeRow icon={<IconBuilding width={15} height={15} />} label="School-day" minutes={screenTime.school_day_summary.mean} maxMinutes={90} tone="violet" />
+                      <DayTypeRow icon={<IconHome width={15} height={15} />} label="Weekend" minutes={screenTime.weekend_summary.mean} maxMinutes={90} tone="violet" />
+                    </div>
                   )}
                 </div>
-              </div>
+              </>
             ) : (
               <p className="module-indicator">Data unavailable</p>
             )}
-            <span className="monitor-detail-link">View DSEQ →</span>
-          </Link>
+          </ModuleCard>
 
-          <Link to="/health-screening" className="key-module-card featured-module-card monitor-tone-blue">
-            <div className="featured-module-head">
-              <span className="featured-module-icon">
-                <IconHeart width={15} height={15} />
+          <ModuleCard
+            to="/health-screening"
+            tone="blue"
+            icon={<IconHeart width={26} height={26} />}
+            title="Child Health History"
+            description="Baseline health and illness history - current health, chronic/neurological history, assessment readiness."
+            footerIcon={<IconExternalLink width={16} height={16} />}
+            footerLabel="View Child Health"
+          >
+            {health ? (
+              <>
+                <div className="kmp-donut-col">
+                  <ModuleCompletionDonut count={health.completion.completed} total={studyDenominator} label="Child Health History" />
+                </div>
+                <div className="kmp-divider" />
+                <div className="kmp-detail-col">
+                  <span className="kmp-detail-label">Key indicators</span>
+                  <div className="kmp-indicator-rows">
+                    <IndicatorRow
+                      icon={<IconDocument width={17} height={17} />}
+                      label="Current illness"
+                      count={health.chh.current_health.currently_ill.yes_count}
+                      total={health.chh.current_health.currently_ill.valid_n}
+                    />
+                    <IndicatorRow
+                      icon={<IconBrain width={17} height={17} />}
+                      label="Chronic / neurological"
+                      count={health.chh.chronic_illness.any_listed_condition.yes_count}
+                      total={health.chh.chronic_illness.any_listed_condition.valid_n}
+                      tone="amber"
+                    />
+                    <IndicatorRow
+                      icon={<IconPulse width={17} height={17} />}
+                      label="Neurological history"
+                      count={health.chh.neurological.any_neurological_history.yes_count}
+                      total={health.chh.neurological.any_neurological_history.valid_n}
+                      tone="pink"
+                    />
+                    <IndicatorRow
+                      icon={<IconClipboardCheck width={17} height={17} />}
+                      label="Assessment readiness concern"
+                      count={health.chh.assessment_day.any_assessment_day_concern_count}
+                      total={health.chh.assessment_day.any_assessment_day_concern_total}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="module-indicator">Data unavailable</p>
+            )}
+          </ModuleCard>
+        </div>
+      </section>
+
+      {/* --- 4. Assessment Progress panel (2026-09-29 rebuild) - a
+          bordered outer frame with a tinted overall-completion band, a
+          trend-panel/bar-chart row, and a clickable footer link. See the
+          `AssessmentToolBarChart`/`ASSESSMENT_TOOL_CONFIG` block above for
+          why the left panel is an explicit "unavailable" state rather than
+          a fabricated time series. --- */}
+      {assessmentToolStatus && (
+        <section className="ap-panel">
+          <div className="ap-panel-header">
+            <span className="ap-panel-title">Assessment Progress</span>
+            <span className="ap-panel-subtitle">Administration status only - not outcome data</span>
+          </div>
+
+          <div className="ap-overall-band monitor-tone-blue">
+            <div className="ap-overall-left">
+              <span className="ap-overall-icon">
+                <IconProgress width={24} height={24} />
               </span>
               <div>
-                <span className="key-module-name">Child Health History</span>
-                <p className="key-module-description">Baseline health and illness history - current health, chronic/neurological history, assessment readiness.</p>
+                <span className="ap-overall-label">Overall Assessment</span>
+                <span className="ap-overall-value">
+                  {assessmentToolStatus.overall_participant.done_count} / {studyDenominator}
+                </span>
               </div>
             </div>
-            {health ? (
-              <div className="featured-module-main">
-                <CompletionRing count={health.completion.completed} total={studyDenominator} tone="blue" />
-                <div className="key-indicators-list">
-                  <span className="key-indicators-title">Key Indicators</span>
-                  <KeyIndicatorRow
-                    label="Current illness"
-                    count={health.chh.current_health.currently_ill.yes_count}
-                    total={health.chh.current_health.currently_ill.valid_n}
-                    tone="blue"
-                  />
-                  <KeyIndicatorRow
-                    label="Chronic / neurological"
-                    count={health.chh.chronic_illness.any_listed_condition.yes_count}
-                    total={health.chh.chronic_illness.any_listed_condition.valid_n}
-                    tone="amber"
-                  />
-                  <KeyIndicatorRow
-                    label="Neurological history"
-                    count={health.chh.neurological.any_neurological_history.yes_count}
-                    total={health.chh.neurological.any_neurological_history.valid_n}
-                    tone="pink"
-                  />
-                  <KeyIndicatorRow
-                    label="Assessment readiness concern"
-                    count={health.chh.assessment_day.any_assessment_day_concern_count}
-                    total={health.chh.assessment_day.any_assessment_day_concern_total}
-                    tone="cyan"
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="module-indicator">Data unavailable</p>
-            )}
-            <span className="monitor-detail-link">View Child Health →</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* --- 4. Assessment Progress - compact infographic (2026-09-28
-          redesign): one visually dominant "Overall Assessment" block, then
-          the four tools as a compact comparative grid underneath, not a
-          stack of full-width table-like rows. --- */}
-      {assessmentToolStatus && (
-        <div className="monitor-section">
-          <div className="monitor-section-head">
-            <span className="monitor-section-title">Assessment Progress</span>
-            <span className="monitor-section-note">Administration status only - not outcome data</span>
-          </div>
-          <div className="assessment-infographic">
-            <div className="assessment-overall-block monitor-tone-blue">
-              <span className="assessment-overall-label">Overall Assessment</span>
-              <span className="assessment-overall-value">
-                {assessmentToolStatus.overall_participant.done_count} / {studyDenominator}
-              </span>
+            <div className="ap-overall-right">
               <MonitorBar percent={percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)} tone="blue" />
-              <span className="assessment-overall-percent">
-                {percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)}%
-              </span>
-            </div>
-            <div className="assessment-tool-grid">
-              {(
-                [
-                  { key: "sangian", label: "SANGIAN", icon: IconGraduationCap, tone: "teal", count: assessmentToolStatus.sangian_participant.done_count },
-                  { key: "vwm", label: "VWM", icon: IconBrain, tone: "violet", count: assessmentToolStatus.vwm_participant.done_count },
-                  { key: "dccs", label: "DCCS", icon: IconClipboardCheck, tone: "cyan", count: assessmentToolStatus.dccs_participant.done_count },
-                  { key: "cd", label: "CD", icon: IconMonitor, tone: "amber", count: assessmentToolStatus.cd_participant.done_count },
-                ] as { key: string; label: string; icon: typeof IconBrain; tone: Tone; count: number }[]
-              ).map((tool) => {
-                const percent = percentOf(tool.count, studyDenominator);
-                const Icon = tool.icon;
-                return (
-                  <div key={tool.key} className={`assessment-tool-block monitor-tone-${tool.tone}`}>
-                    <span className="assessment-tool-icon">
-                      <Icon width={13} height={13} />
-                    </span>
-                    <span className="assessment-tool-label">{tool.label}</span>
-                    <span className="assessment-tool-value">
-                      {tool.count} / {studyDenominator}
-                    </span>
-                    <MonitorBar percent={percent} tone={tool.tone} />
-                    <span className="assessment-tool-percent">{percent}%</span>
-                  </div>
-                );
-              })}
+              <span className="ap-overall-percent">{percentOf(assessmentToolStatus.overall_participant.done_count, studyDenominator)}%</span>
             </div>
           </div>
-          <Link to="/assessment-tool-status" className="monitor-detail-link">
-            View Assessment Details →
+
+          <div className="ap-bottom-grid">
+            <div className="ap-trend-panel">
+              <div className="ap-panel-title-block">
+                <span className="ap-panel-block-title">Cumulative assessments recorded over time</span>
+                <p className="ap-panel-block-subtitle">Recorded assessment completion status over time</p>
+              </div>
+              {assessmentTimeline && assessmentTimeline.available && assessmentTimeline.reconciled && assessmentTimeline.series.length > 0 ? (
+                <>
+                  <AssessmentTimelineChart series={assessmentTimeline.series} />
+                  <p className="ap-trend-note">
+                    {assessmentTimeline.note}
+                    {assessmentTimeline.series.length === 1 &&
+                      " Only one month of recorded history exists so far - the trend will show more detail as further months are logged."}
+                  </p>
+                </>
+              ) : (
+                <div className="ap-trend-unavailable">
+                  <IconCalendar width={22} height={22} />
+                  <p className="ap-trend-unavailable-title">Assessment timeline unavailable</p>
+                  <p className="ap-trend-unavailable-text">
+                    {assessmentTimeline && assessmentTimeline.available && !assessmentTimeline.reconciled
+                      ? "The recorded history for one or more tools does not currently reconcile with live REDCap data, so it is not shown rather than risk displaying an incorrect chart."
+                      : "REDCap's Assessment Tool Status instrument records only a Done / Not Done status for SANGIAN, VWM, DCCS, and CD Task, and no change history is available right now to reconstruct a timeline from."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="ap-divider" />
+
+            <div className="ap-tools-panel">
+              <div className="ap-panel-title-block">
+                <span className="ap-panel-block-title">Current completion by assessment tool</span>
+                <p className="ap-panel-block-subtitle">Number and percentage of children completed</p>
+              </div>
+              {(() => {
+                const participantByKey: Record<string, { done_count: number; total: number; percent: number }> = {
+                  sangian: assessmentToolStatus.sangian_participant,
+                  vwm: assessmentToolStatus.vwm_participant,
+                  dccs: assessmentToolStatus.dccs_participant,
+                  cd: assessmentToolStatus.cd_participant,
+                };
+                const barData: AssessmentToolBarDatum[] = ASSESSMENT_TOOL_CONFIG.map((tool) => {
+                  const count = participantByKey[tool.key].done_count;
+                  const percent = percentOf(count, studyDenominator);
+                  return {
+                    key: tool.key,
+                    name: tool.label,
+                    count,
+                    total: studyDenominator,
+                    percent,
+                    color: tool.color,
+                    value: count,
+                    remaining: Math.max(0, studyDenominator - count),
+                  };
+                });
+                return <AssessmentToolBarChart data={barData} denominator={studyDenominator} />;
+              })()}
+            </div>
+          </div>
+
+          <Link to="/assessment-tool-status" className="ap-footer">
+            <span className="ap-footer-icon">
+              <IconChart width={16} height={16} />
+            </span>
+            <span className="ap-footer-label">View Assessment Details →</span>
+            <IconChevron className="ap-footer-chevron" width={16} height={16} />
           </Link>
-        </div>
+        </section>
       )}
 
       {/* --- 5. Study Snapshot - three compact infographic blocks

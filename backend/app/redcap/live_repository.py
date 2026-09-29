@@ -25,6 +25,8 @@ class LiveRedCapRepository:
         self._metadata_fetched_at: float = 0.0
         self._records: list[dict] | None = None
         self._records_fetched_at: float = 0.0
+        self._log: list[dict] | None = None
+        self._log_fetched_at: float = 0.0
 
     async def get_metadata(self, force: bool = False) -> list[dict]:
         async with self._lock:
@@ -39,6 +41,20 @@ class LiveRedCapRepository:
                 self._records = await self._client.fetch_records(fields=list(LIVE_FIELDS))
                 self._records_fetched_at = time.monotonic()
             return self._records
+
+    async def get_log(self, force: bool = False) -> list[dict]:
+        """Cached REDCap change-log export - same 30s TTL/force-refresh
+        convention as `get_records`/`get_metadata`. Used only by the
+        Assessment Progress timeline (see `LiveDashboardService
+        .get_assessment_timeline`); a permission/format failure here
+        propagates as `RedCapAPIError`/`RedCapResponseValidationError`
+        exactly like the other two fetches, uncached, so a caller cannot
+        get a stale success cached over a real failure."""
+        async with self._lock:
+            if force or self._log is None or self._is_stale(self._log_fetched_at):
+                self._log = await self._client.fetch_log()
+                self._log_fetched_at = time.monotonic()
+            return self._log
 
     @staticmethod
     def _is_stale(fetched_at: float) -> bool:
