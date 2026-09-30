@@ -4043,6 +4043,11 @@ th.registry-instrument-col-highlighted {
   color: var(--text-secondary);
 }
 
+.sq-row-detail-percent {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 .sq-row-detail-value {
   float: right;
   font-size: 0.76rem;

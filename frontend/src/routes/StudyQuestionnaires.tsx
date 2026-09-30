@@ -100,8 +100,8 @@ interface QuestionnaireDomain {
 function compositeDetailRows(c: ChhCompositeIndicator): DetailRow[] {
   return [
     { label: "Any component Yes", value: `${c.yes_count}`, percent: percentOf(c.yes_count, c.valid_n) },
-    { label: "All components No", value: `${c.no_count}` },
-    { label: "Unknown / missing", value: `${c.unknown_or_missing_count}` },
+    { label: "All components No", value: `${c.no_count}`, percent: percentOf(c.no_count, c.valid_n) },
+    { label: "Unknown / missing", value: `${c.unknown_or_missing_count}`, percent: percentOf(c.unknown_or_missing_count, c.valid_n) },
     { label: "Answered (Valid N)", value: `${c.valid_n} of ${c.total} registered` },
   ];
 }
@@ -590,7 +590,10 @@ function IndicatorRow({
             {row.detailRows.map((dr, idx) => (
               <div className="sq-row-detail-item" key={`${dr.label}-${idx}`}>
                 <span className="sq-row-detail-label">{dr.label}</span>
-                <span className="sq-row-detail-value">{dr.value}</span>
+                <span className="sq-row-detail-value">
+                  {dr.value}
+                  {dr.percent !== undefined && <span className="sq-row-detail-percent"> ({dr.percent}%)</span>}
+                </span>
                 {dr.percent !== undefined && (
                   <div className="monitor-bar monitor-bar-tone-blue">
                     <div className="monitor-bar-fill" style={{ width: `${Math.min(100, Math.max(0, dr.percent))}%` }} />
