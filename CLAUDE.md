@@ -3451,6 +3451,66 @@ legible contrast, zero console errors. Backend: 167/167 tests pass
 (unaffected, no backend file touched this pass - confirmed via `git
 diff --stat`).
 
+**Visual-polish UI refactor (2026-10-10, same day - `HealthScreening.tsx`/
+`app.css` only; no backend file touched, no calculation/field-mapping
+changed):** a pure layout/typography/alignment pass, triggered by a review
+that found the disease matrix's columns inconsistent and numbers hard to
+read.
+- **Disease matrix table** - switched to `table-layout: fixed` with an
+  explicit `<colgroup>` (Condition gets the flexible share; Yes is a fixed
+  148px column holding the sliver bar + value together, right-aligned; No/
+  DK/Valid N/Asked N are fixed 72px columns) instead of the browser's
+  `auto` layout, which had left a large empty gap between the condition
+  name and the clustered numeric columns. Every numeric column is now
+  right-aligned (condition names stay left-aligned); font size raised
+  slightly (0.8rem → 0.82rem) for readability.
+- **Valid N vs Asked N discrepancy - audited, confirmed as correct
+  source-data behaviour, not a bug**: re-verified against the same root
+  cause already documented in the 2026-10-10 audit above (record
+  06IND361B answered every question but isn't marked Complete in REDCap,
+  so Valid N can be 1 higher than Asked N on most rows; one row, TB, is
+  the opposite case - one additional Complete form skipped only that
+  field). Rather than changing any denominator, this is now explained
+  directly on the page: a new lead paragraph above the 3 matrix tables,
+  plus a native `title=""` tooltip (dotted-underline "hover for
+  definition" affordance) on the Valid N/Asked N column headers and every
+  cell in those columns.
+- **`.chh-section-panel` radius** reduced from `--radius-card-lg` (18px,
+  the generic dashboard-wide card radius) to `--radius-sharp` (3px) -
+  scoped to this page's own class, so no other page's cards are affected
+  - matches the "0-4px for tables/bars/panels" clinical-aesthetic
+  instruction.
+- **Assessment Readiness's "large unused lower region"** - traced to
+  `performance_condition_prevalence` always being a non-empty array (one
+  entry per fixed option label, usually all zero-count) rendering inside
+  a full `ChartCard` even with nothing to show. Now renders a single-line
+  `chh-matrix-note` instead of a padded, mostly-empty card whenever no
+  option actually has a non-zero count (uses `.some(i => i.count > 0)`,
+  not `.length > 0`); the real data case (future "X children have a
+  performance-affecting condition" state) still renders the full
+  `ChartCard` exactly as before.
+- **Current Illness donut** reduced from 150px to 124px (component layout
+  itself, `.donut-chart`'s flex-row/legend-beside-ring structure, was
+  already correct and untouched) - less visually dominant relative to the
+  ranked symptom list beneath it.
+- Mobile/tablet re-verified after these changes: `.chh-matrix-scroll`'s
+  existing contained horizontal scroll (from the earlier redesign pass)
+  still correctly keeps the now-wider fixed-width matrix tables from
+  blowing out the page - confirmed zero page-level horizontal overflow at
+  390px and 820px.
+Tests: none (pure CSS/layout/JSX-structure change, no calculation touched
+- confirmed via `git diff --stat` showing only the 2 frontend files
+changed). Verified: `tsc --noEmit` clean, `npm run build` succeeds,
+backend 167/167 unaffected. Live-verified via the same Playwright pattern
+against a real backend + dev server: zero console errors at 1400px/820px/
+390px in both themes; zero horizontal overflow at any width; a blocked-
+API test confirmed the existing error/retry state still renders correctly
+(this pass didn't touch `DataLoadError`/`FullScreenLoader`); every other
+route (`/`, `/screen-time`, `/study-questionnaires`, `/data-quality`,
+`/registry`) spot-checked with zero console errors, confirming the
+scoped `.chh-section-panel`/`.chh-matrix-*` CSS changes didn't leak
+elsewhere.
+
 ---
 
 ## STUDY ENROLLMENT HEADLINE - 222 vs 212 (2026-09-17)

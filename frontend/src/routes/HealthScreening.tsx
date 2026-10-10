@@ -119,42 +119,53 @@ function ThreeWayInlineList({ breakdown }: { breakdown: ChhThreeWayBreakdown }) 
  * shown exactly as computed, nothing combined or re-derived here. A small
  * inline proportion sliver gives an at-a-glance visual cue without a
  * separate chart per condition. */
+const VALID_N_TITLE = "Children who actually answered this specific question (the correct percentage denominator)";
+const ASKED_N_TITLE = "Children whose Child Health History form REDCap has marked \"Complete\"";
+
 function DiseaseMatrixTable({ title, items }: { title: string; items: ConditionIndicator[] }) {
   return (
     <div className="chh-matrix-group">
       <div className="chh-matrix-group-title">{title}</div>
       <div className="chh-matrix-scroll">
-      <table className="data-table chh-matrix-table">
-        <thead>
-          <tr>
-            <th>Condition</th>
-            <th>Yes</th>
-            <th>No</th>
-            <th>DK</th>
-            <th>Valid N</th>
-            <th>Asked N</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((c) => (
-            <tr key={c.label}>
-              <td>{c.label}</td>
-              <td>
-                <span className="chh-matrix-yes">
-                  {c.yes_count} ({c.percent_yes}%)
-                </span>
-                <span className="chh-matrix-sliver">
-                  <span className="chh-matrix-sliver-fill" style={{ width: `${Math.min(100, c.percent_yes)}%` }} />
-                </span>
-              </td>
-              <td>{c.no_count}</td>
-              <td>{c.dont_know_count}</td>
-              <td>{c.valid_n}</td>
-              <td>{c.asked_n}</td>
+        <table className="data-table chh-matrix-table">
+          <colgroup>
+            <col className="chh-matrix-col-condition" />
+            <col className="chh-matrix-col-yes" />
+            <col className="chh-matrix-col-num" />
+            <col className="chh-matrix-col-num" />
+            <col className="chh-matrix-col-num" />
+            <col className="chh-matrix-col-num" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Condition</th>
+              <th>Yes</th>
+              <th>No</th>
+              <th>DK</th>
+              <th title={VALID_N_TITLE}>Valid N</th>
+              <th title={ASKED_N_TITLE}>Asked N</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((c) => (
+              <tr key={c.label}>
+                <td className="chh-matrix-condition">{c.label}</td>
+                <td className="chh-matrix-yes-cell">
+                  <span className="chh-matrix-sliver">
+                    <span className="chh-matrix-sliver-fill" style={{ width: `${Math.min(100, c.percent_yes)}%` }} />
+                  </span>
+                  <span className="chh-matrix-yes">
+                    {c.yes_count} ({c.percent_yes}%)
+                  </span>
+                </td>
+                <td>{c.no_count}</td>
+                <td>{c.dont_know_count}</td>
+                <td title={VALID_N_TITLE}>{c.valid_n}</td>
+                <td title={ASKED_N_TITLE}>{c.asked_n}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -395,7 +406,7 @@ export default function HealthScreening() {
                 { label: "Not ill", count: currentlyIll.no_count },
                 { label: "Don't know", count: currentlyIll.dont_know_count },
               ]}
-              height={150}
+              height={124}
               centerValue={`${currentlyIll.percent_yes}%`}
               centerLabel="Reporting illness"
             />
@@ -447,6 +458,14 @@ export default function HealthScreening() {
         note="Every condition's own valid-response denominator - never the full registered cohort"
       />
       <div className="chh-section-body chh-section-panel">
+        <p className="chh-matrix-note chh-matrix-note-lead">
+          <strong>Valid N</strong> is every child who actually answered that specific question - the correct percentage
+          denominator. <strong>Asked N</strong> is children whose form REDCap has marked "Complete." Audited against live
+          REDCap: one record in the current data answered every question on this form but has not yet been marked Complete,
+          so Valid N can run 1 higher than Asked N on most rows below - this is expected, source-data behaviour, not a
+          calculation error. A row where Valid N is lower than that (e.g. 102 instead of 103) means one additional,
+          otherwise-complete form skipped that one specific question.
+        </p>
         <DiseaseMatrixTable title="Chronic Conditions" items={chh.chronic_illness.condition_prevalence} />
         <DiseaseMatrixTable
           title="Neurological and Developmental History"
@@ -567,12 +586,14 @@ export default function HealthScreening() {
           percent={chh.assessment_day.condition_affecting_performance.percent_yes}
           tone="amber"
         />
-        {chh.assessment_day.performance_condition_prevalence.length > 0 && (
+        {chh.assessment_day.performance_condition_prevalence.some((i) => i.count > 0) ? (
           <ChartCard title="Performance-Affecting Conditions (Q26a)" subtitle="Among children with a condition that may affect performance">
             <InlineStatList
               items={chh.assessment_day.performance_condition_prevalence.map((i) => ({ label: i.label, count: i.count, percent: i.percent }))}
             />
           </ChartCard>
+        ) : (
+          <p className="chh-matrix-note">Performance-Affecting Conditions (Q26a): No data recorded yet.</p>
         )}
       </div>
 

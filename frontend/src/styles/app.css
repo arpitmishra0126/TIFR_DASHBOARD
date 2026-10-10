@@ -2553,7 +2553,10 @@ table.data-table tbody tr:hover {
 .chh-section-panel {
   background: var(--surface-1);
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card-lg);
+  /* Minimal-radius geometry per this page's clinical-research visual
+     system (0-4px for every table/bar/panel on this page) - was
+     --radius-card-lg (18px), the generic dashboard-wide card radius. */
+  border-radius: var(--radius-sharp);
   padding: var(--space-5);
 }
 
@@ -2767,27 +2770,82 @@ table.data-table tbody tr:hover {
   margin-bottom: var(--space-2);
 }
 
+/* Fixed, consistent column widths - a table-layout: auto table otherwise
+   lets the wide "Condition" column eat most of the row and leaves the 5
+   numeric columns clustered together with a large empty gap, which is
+   exactly the "inconsistent column widths" complaint this fixes. Condition
+   gets the only flexible share of the width; every numeric column is a
+   fixed, equal, comfortably-readable width. */
+.chh-matrix-table {
+  table-layout: fixed;
+  min-width: 560px;
+}
+
+.chh-matrix-col-condition {
+  width: auto;
+}
+
+.chh-matrix-col-yes {
+  width: 148px;
+}
+
+.chh-matrix-col-num {
+  width: 72px;
+}
+
 .chh-matrix-table td,
 .chh-matrix-table th {
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
 }
 
 .chh-matrix-table thead th {
   color: var(--text-muted);
 }
 
+/* Condition names left-aligned (the default); every numeric column
+   right-aligned, per the "left-align names, right-align numbers"
+   instruction. */
+.chh-matrix-table th:not(:first-child),
+.chh-matrix-table td:not(:first-child) {
+  text-align: right;
+}
+
+.chh-matrix-condition {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A native title="" tooltip marks Valid N/Asked N as explained - a subtle
+   dotted underline signals "hover for definition" without adding a new
+   UI affordance. */
+.chh-matrix-table th[title] {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--border-hairline);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.chh-matrix-yes-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .chh-matrix-yes {
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .chh-matrix-sliver {
   display: inline-block;
   width: 48px;
   height: 4px;
-  margin-left: var(--space-2);
+  flex-shrink: 0;
   background: var(--gridline);
-  vertical-align: middle;
 }
 
 .chh-matrix-sliver-fill {
@@ -2801,6 +2859,17 @@ table.data-table tbody tr:hover {
   font-size: 0.72rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.chh-matrix-note-lead {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--gridline);
+  font-size: 0.76rem;
+}
+
+.chh-matrix-note-lead strong {
+  color: var(--text-secondary);
 }
 
 /* Ranked developmental-concern-domain list. */
