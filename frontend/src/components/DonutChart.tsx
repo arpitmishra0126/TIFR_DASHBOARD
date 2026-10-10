@@ -24,6 +24,12 @@ interface DonutChartProps {
    * value is introduced, only a display choice of what to foreground. */
   centerValue?: string | number;
   centerLabel?: string;
+  /** Optional per-slice color override (same length/order as `data`) - for
+   * callers whose categories carry an existing semantic color convention
+   * (e.g. good/warning/critical/neutral) instead of the default generic
+   * categorical palette. Omit to keep every existing caller's behavior
+   * unchanged. */
+  colors?: string[];
 }
 
 function renderActiveShape(props: any) {
@@ -50,10 +56,11 @@ const TOOLTIP_WIDTH = 150;
 const TOOLTIP_HEIGHT = 72;
 const TOOLTIP_GAP = 14;
 
-export default function DonutChart({ data, height = 200, centerValue, centerLabel }: DonutChartProps) {
+export default function DonutChart({ data, height = 200, centerValue, centerLabel, colors }: DonutChartProps) {
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | undefined>(undefined);
   const total = data.reduce((sum, d) => sum + d.count, 0);
+  const palette = colors ?? CATEGORICAL_COLORS;
 
   const handleSliceEnter = (entry: any, index: number) => {
     setActiveIndex(index);
@@ -95,7 +102,7 @@ export default function DonutChart({ data, height = 200, centerValue, centerLabe
               }}
             >
               {data.map((entry, index) => (
-                <Cell key={entry.label} fill={CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length]} />
+                <Cell key={entry.label} fill={palette[index % palette.length]} />
               ))}
             </Pie>
             <Tooltip
@@ -134,7 +141,7 @@ export default function DonutChart({ data, height = 200, centerValue, centerLabe
             <span className="donut-legend-heading">
               <span
                 className="donut-legend-dot"
-                style={{ background: CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length] }}
+                style={{ background: palette[index % palette.length] }}
               />
               <span className="donut-legend-label">{entry.label}</span>
             </span>
@@ -147,7 +154,7 @@ export default function DonutChart({ data, height = 200, centerValue, centerLabe
                 className="donut-legend-bar-fill"
                 style={{
                   width: `${percentOf(entry.count, total)}%`,
-                  background: CATEGORICAL_COLORS[index % CATEGORICAL_COLORS.length],
+                  background: palette[index % palette.length],
                 }}
               />
             </span>

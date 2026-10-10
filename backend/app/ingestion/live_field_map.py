@@ -330,6 +330,42 @@ CHH_DASHBOARD_FIELDS: tuple[str, ...] = (
     "chh_health_affects_today_spec", # Q26a checkbox - performance-affecting conditions
 )
 
+# Free-text "_spec"/"_reason"/"_name" follow-up fields (2026-10-10) - found
+# missing from both CHH_EXPORT_FIELDS and CHH_DASHBOARD_FIELDS above during
+# a live-data verification pass: `data_quality.yes_missing_specification`
+# (and the new `verification_flags.missing_consultation_description_*`
+# below) compare a Yes/selected coded answer against its paired free-text
+# field, but every one of these text fields was never actually being
+# fetched from REDCap - so every "missing specification" count was silently
+# computing against an always-absent field, inflating each count to
+# (almost) the full Yes/selected count for that question rather than the
+# true number of genuinely blank descriptions. Confirmed live before this
+# fix: "Illness requiring consultation (Q4) missing specification" read 47
+# (= the full Q4-Yes count) instead of the true value of 1. Adding these to
+# LIVE_FIELDS is the minimal, necessary fix - no calculation logic changed,
+# only which fields are actually exported from REDCap. `chh_assessor_remarks`
+# (a free-text notes field not read by any calculation) and
+# `chh_seizures_age_onset`/`chh_seizures_recent_date` (free text, not a
+# coded value+unit pair usable by any derived metric) are deliberately not
+# added here, consistent with the project's "only fetch fields an actual
+# calculation uses" convention.
+CHH_SPECIFICATION_FIELDS: tuple[str, ...] = (
+    "chh_illness_current_spec", # Q1a
+    "chh_unwell_7days_spec", # Q3a
+    "chh_illness_3mo_spec", # Q4a
+    "chh_chronic_condition_spec", # Q7a
+    "chh_q8_other_spec", # Q8k_1
+    "chh_cns_infection_spec", # Q11a
+    "chh_dev_diagnosis_spec", # Q18a
+    "chh_surgery_spec", # Q20a
+    "chh_hospitalised_reason", # Q19b
+    "chh_medicine_name", # Q21a
+    "chh_medicine_reason", # Q21b
+    "chh_allergy_spec", # Q22b
+    "chh_symptoms_other_spec", # Q2a
+    "chh_dev_concern_other_spec", # Q17a
+)
+
 PAQA_EXPORT_FIELDS: tuple[str, ...] = (
     "paq_item1_score",
     "paq_item8_score",
@@ -408,6 +444,7 @@ EXPORT_ONLY_FIELDS: tuple[str, ...] = (
     *DSEQ_EXPORT_FIELDS,
     *CHH_EXPORT_FIELDS,
     *CHH_DASHBOARD_FIELDS,
+    *CHH_SPECIFICATION_FIELDS,
     *PAQA_EXPORT_FIELDS,
     *DIETARY_EXPORT_FIELDS,
     *SSRS_PARENT_FREQ_FIELDS,

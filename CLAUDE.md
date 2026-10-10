@@ -3147,6 +3147,310 @@ redundant title bar in between) and at 390px confirm clean single-column
 stacking with no horizontal overflow (`document.documentElement.
 scrollWidth <= clientWidth`).
 
+**Full compact infographic redesign (2026-10-10) - supersedes every
+`IndicatorGroup`/`CompositeKpi`/`SectionSummaryPanel`/`AlertStrip`/
+`NumericSummaryCard`/9-section (A-I) layout described above; those React
+components and their `.indicator-group*`/`.chh-summary-panel*`/
+`.chh-alert-strip*`/`.chh-hospitalisation-panel` CSS no longer exist in
+the codebase (deleted, confirmed via grep with no remaining consumer -
+do not try to restore or reference them):** `HealthScreening.tsx` was
+rewritten from scratch into a short, compact clinical page. Every number
+is still read from the exact same `/dashboard/health` response
+(`completion`, `named_conditions`, `general_flags`, `chh.*`) - no backend
+field, calculation, or denominator changed.
+
+- **Data Quality section removed entirely** from this page (was Section
+  13 at the bottom) - that functionality lives only on the dedicated
+  `/data-quality` page now, per explicit instruction not to duplicate it
+  here. `ChhDataQuality`/`chh.data_quality` is untouched in the API/types,
+  simply no longer rendered on this page.
+- **Overview** - the module-status-line badge (unchanged) is followed by
+  one `.stat-strip` of 4 compact `.stat-block`s (same shared component
+  Dashboard/Study Questionnaires already use): Completed CHH Forms
+  (`completion`), Current Illness (`chh.current_health.currently_ill`),
+  Chronic Conditions (`chh.chronic_illness.any_listed_condition`), and
+  Neurological / Developmental History - deliberately shown as **two
+  separate existing numbers** (`chh.neurological.any_neurological_history`
+  and `chh.developmental.any_developmental_concern`), never merged into a
+  single invented composite, per the explicit "do not invent composite
+  clinical indicators" instruction.
+- **Current Health Snapshot** (Sections A & B) - a two-column
+  `chart-grid.two-col` inside one `chh-section-panel`: left column is a
+  `DonutChart` of `currently_ill` (Yes/No/Don't know, `valid_n`
+  denominator) plus a compact `MiniStatRow` for Activity/School Impact and
+  a small `CategoryBarChart` (height 110) for the symptom-count
+  distribution; right column is a `MiniStatRow` list of 5 composite/
+  indicator percentages (chronic, neurological, sensory, developmental,
+  hospitalisation/treatment) - this list itself is the "concise comparison
+  chart," since all 5 real percentages sit side by side with their own
+  thin `monitor-bar`. No per-symptom bar chart or repeated chart-per-field
+  remains.
+- **Assessment Readiness** (Section I) - one `DonutChart` of
+  `chh.alerts`' 4 mutually-exclusive categories (No Concern/Assessment
+  Concern/Assessment Deferred/Missing Decision - confirmed mutually
+  exclusive by the backend's own `_chh_alert_category` precedence logic,
+  so a single segmented donut is correct here), colored via `DonutChart`'s
+  new optional `colors` prop (`var(--status-good/-warning/-critical/
+  -neutral)`) instead of its default generic palette - a `MiniStatRow` for
+  "Participants Flagged for Review" sits below with an explicit note that
+  it is a separate, broader indicator, not a 5th category of the donut.
+- **Detailed Indicator Explorer** - one `SectionHeader` + one
+  `.chh-explorer` wrapper holding ~12 collapsed-by-default
+  `DetailDisclosure` rows (one per domain: named conditions, general
+  flags, current symptoms, recent illness, chronic illness, neurological,
+  sensory, developmental, hospitalisation, functional health, assessment
+  day), each containing small `.data-table`s (new local renderers:
+  `ConditionDetailTable`, `CompositeDetailTable`, `PrevalenceDetailTable`,
+  `CategoryDetailTable`, `ThreeWayDetailTable`, `NumericDetailTable`) -
+  every exact Yes/No/Don't-know/Valid-N/Asked-N value, category
+  distribution, three-way breakdown, and numeric summary that used to be a
+  standalone chart on the page is still present here, just moved into one
+  collapsed reference section instead of being always-visible.
+- **`DonutChart.tsx` (shared component) extended, not replaced**: new
+  optional `colors?: string[]` prop (falls back to the existing
+  `CATEGORICAL_COLORS` palette when omitted) - every other caller
+  (Overview's Sex Distribution, etc.) is unaffected.
+- **Dark-mode table-text bug found and fixed during this pass**: table
+  cells inside `.chh-explorer` inherited a too-dark/low-contrast color in
+  dark theme (confirmed via computed-style inspection - no single CSS rule
+  was directly responsible; the inherited chain resolved several shades
+  darker than the panel's own background). Fixed by explicitly pinning
+  `.chh-explorer table.data-table td { color: var(--text-primary); }` /
+  `th { color: var(--text-muted); }` - verified before/after via
+  `getComputedStyle` (fixed to `rgb(238,241,247)`, the correct dark-theme
+  `--text-primary`) and a cropped screenshot of an open disclosure.
+Tests: none (frontend-only; no backend file touched, no calculation
+changed). Verified: `tsc --noEmit` clean, `npm run build` succeeds.
+Live-verified against a local backend hitting live REDCap (212
+registered, 102/212 CHH complete at time of check): every Overview KPI,
+donut, and MiniStatRow value cross-checked against a fresh `curl` of
+`/api/v1/dashboard/health` (e.g. currently ill 8/103 (7.8%), chronic
+2/102 (2%), neurological 7/103 (6.8%), developmental 21/102 (20.6%),
+alerts 103/103 No Concern, flagged 15/212) - all matched exactly;
+screenshots confirmed in both light and dark theme at 1400px and a
+390px mobile width (no horizontal overflow); the Detailed Indicator
+Explorer's tables were spot-checked open (Major or Chronic Illness,
+Hospitalisation/Treatment/Allergy) against the same live payload. No
+unresolved field-mapping or denominator question was found during this
+pass - every value used was already an existing, approved backend field.
+
+**"Health-History Overview" redesign (2026-10-10, same day - supersedes
+the compact-infographic redesign immediately above; the Detailed
+Indicator Explorer and the 2 `ConditionCompositionChart` cards it
+replaced are gone, superseded by the always-visible disease matrix
+below) - built on a full manual data-verification audit of this
+instrument against live REDCap, which also surfaced and fixed a genuine
+pre-existing backend bug:**
+
+**Bug found and fixed**: none of the Child Illness History `_spec`/
+`_reason`/`_name` free-text follow-up fields (e.g. `chh_illness_3mo_spec`,
+`chh_chronic_condition_spec`, `chh_medicine_name`) were ever included in
+`LIVE_FIELDS` (`live_field_map.py`) - so every "Yes but missing
+description" calculation, including the pre-existing (UI-removed but
+still-computed) `chh.data_quality.yes_missing_specification`, was silently
+comparing a real coded answer against an always-absent field, inflating
+every count to nearly the full Yes-count for that question. Confirmed
+live before the fix: "Illness requiring consultation (Q4) missing
+specification" read **47** (= the entire Q4-Yes count) instead of the
+true **1**. Fixed by adding a new `CHH_SPECIFICATION_FIELDS` tuple (14
+fields) to `LIVE_FIELDS` - no calculation logic changed, only which
+fields are actually fetched from REDCap. `chh_assessor_remarks` (unread
+by any calculation) and `chh_seizures_age_onset`/`chh_seizures_recent_date`
+(free text, not a coded value+unit pair) were deliberately not added,
+consistent with "only fetch fields an actual calculation uses."
+
+**New backend addition** (additive only - every existing `chh.*` field/
+calculation is unchanged): `chh.verification_flags`
+(`ChhVerificationFlags` schema, `_build_chh_verification_flags()` in
+`module_analytics.py`) - narrow, mechanically-defined, reproducible
+checks recomputed fresh on every request, never hardcoded:
+- `tb_without_chronic_condition_count`/`_ids` - TB (Q8c) coded Yes while
+  "any chronic condition" (Q7) is coded No - a generalized version of the
+  audit's 09IND210B finding.
+- `missing_consultation_description_count`/`_ids` - Q4=Yes with a blank
+  Q4a (branching logic `[chh_illness_3mo]='1'` means this is never
+  legitimately N/A) - reproduces the audit's 06IND356G finding.
+- `checkbox_blank_on_complete` (one entry per Q2/Q17/Q23) - a record
+  marked Complete with **not even "None" ticked** on that checkbox. Uses a
+  new, dedicated `_chh_checkbox_truly_blank()` helper - deliberately
+  **not** the existing `_chh_checkbox_answered()` (used by
+  `_chh_checkbox_domain_status()` for every other checkbox calculation on
+  this page), since that helper can never return False for this project:
+  REDCap exports every checkbox option's `___code` sub-field as `"0"` (not
+  blank) for every registered child regardless of completion (the
+  documented 2026-09-14 quirk), so "any non-blank sub-field" is never a
+  valid "did they actually answer" signal. The new helper checks for any
+  code (including the None code) actually being `"1"` instead. Every
+  existing checkbox calculation (`any_current_symptom`, etc.) is
+  untouched - this is a new, separate, additive check only.
+Free-text-vs-code contradictions (the audit's 09IND253B TB/free-text case)
+are deliberately **not** automated - reliable free-text parsing can't be
+done without guessing, so that category is described qualitatively in the
+page copy instead of flagged programmatically. Tests: 3 new in
+`test_module_analytics.py` (one per flag type, including a dedicated
+regression test for the checkbox-quirk distinction above) + a shape
+assertion added to the existing `/dashboard/health` endpoint test.
+Backend: **167/167 tests pass** (up from 164).
+
+**Frontend** (`HealthScreening.tsx` fully rewritten again, `DonutChart.tsx`
+unchanged from the prior pass, `app.css` additions only):
+- **A. Health History at a Glance** - `.stat-strip` 4 blocks: Health Forms
+  Completed (`completed/222`, the senior-confirmed `STUDY_ORIGINAL_
+  ENROLLMENT` constant from `lib/studyCohort.ts` - footnote separately
+  states the live `completed/total_registered` figure too, so the
+  222-cohort number and the valid-response/active-cohort number are never
+  mixed into one ratio), Current Illness, Chronic Conditions
+  (`any_listed_condition` composite - an existing, already-approved
+  backend composite, not invented here), and Neurological/Developmental
+  History (still two separate real numbers side by side, never merged
+  into one fabricated composite, same precedent as the prior pass).
+- **B. Current Illness** - two-column: left = one donut (`currently_ill`
+  Yes/No/DK) + a ranked compact list of `symptom_prevalence` (not a bar
+  chart) with an explicit "may overlap" note; right = `MiniStatRow`s for
+  Activity/School Impact and Healthcare Consultation, plus compact
+  `InlineStatList`s (new component - label/value rows, no chart) for
+  illness frequency and school absence, plus the school-days-missed
+  numeric summary as plain text.
+- **C. Reported Diseases and Medical History** - the page's primary
+  section, per explicit instruction to make actual conditions visible
+  rather than hiding them behind broad labels. New always-visible
+  `DiseaseMatrixTable` component (not behind a disclosure) - 3 compact
+  tables (Chronic Conditions / Neurological and Developmental History /
+  Other Medical History), each row an unmodified `ConditionIndicator`
+  (Condition | Yes n(%) + a small inline proportion sliver | No | DK |
+  Valid N | Asked N). A `.chh-matrix-scroll` wrapper (`overflow-x: auto`)
+  keeps these tables from blowing out the page on narrow screens instead
+  of clipping or forcing page-level horizontal scroll - found and fixed
+  live via a 390px Playwright check during this pass. An explicit note
+  clarifies 0-Yes rows are genuine coded No (never a blank mistaken for
+  No) and that condition counts are never summed into a fabricated "total
+  affected children."
+- **D. Hospitalisation and Medication** - `ever_hospitalised` +
+  `hospitalisation_count_summary` (mean/median) + `recurrent_
+  hospitalisation`, `regular_medication` - explicitly does **not**
+  reproduce medicine names/reasons or hospitalisation-reason free text,
+  per instruction; a one-line note says these are recorded in REDCap but
+  not shown here.
+- **E. Developmental Concerns and Overall Health** - new `RankedList`
+  component (rank + label + bar + count/%, sorted by count descending) for
+  `domain_prevalence`; `domain_count_distribution` shown inline to make
+  "multiple concerns per child" visible; a note distinguishes an explicit
+  "None" response from the rare literally-blank-checkbox case, **using the
+  new `verification_flags.checkbox_blank_on_complete` count directly**
+  (e.g. "...excludes 1 record where this checkbox was left entirely blank
+  - see Findings to Verify") rather than a vague caveat - a genuine
+  distinction made possible by this pass's new backend field, not merely
+  asserted. `overall_health_distribution` kept as the one remaining small
+  `CategoryBarChart` on the page (Very good → Very poor, `showPercent`).
+  The previous pass's separate "Functional Health Status" section
+  (`any_functional_limitation`/`poor_health`/`suboptimal_health`/function
+  checklist) is **not** on this page any more - out of the new,
+  intentionally tighter spec's explicit section list; nothing was deleted
+  from the backend/API, it's simply not surfaced here (same "nav-hidden
+  but not removed" precedent used throughout this app).
+- **F. Assessment Readiness** - per the "one main donut for current
+  illness, not a donut for every condition" rule, the prior pass's
+  Assessment-Day-Decision donut was replaced with compact lists:
+  `ThreeWayInlineList` for `well_for_assessment` (Q25) and an
+  `InlineStatList` for `assessment_decision_distribution` (Q27), plus
+  `condition_affecting_performance` (Q26) and `performance_condition_
+  prevalence` (Q26a) as before - every field used is a real recorded
+  readiness/decision field, nothing inferred from a diagnosis/medication/
+  symptom.
+- **Findings to Verify** - new `FindingsToVerify` component, a single
+  collapsed-by-default `DetailDisclosure` driven entirely by `chh.
+  verification_flags` (recomputed live, never hardcoded): TB-without-
+  chronic-condition, missing-consultation-description, and the 3
+  checkbox-blank-on-complete groups, each with its count and record IDs.
+  Explicit copy frames these as "verification flags only - not confirmed
+  diagnoses or confirmed data-collector errors" and separately notes "this
+  application has no per-user access control - record IDs below are
+  visible to anyone who can open this page; treat this section as
+  internal-use only" (this app genuinely has no auth/access-control layer
+  anywhere, so "authorised users only" could not be implemented as a real
+  restriction - a fake client-side gate was deliberately not added, since
+  it would give false confidence rather than real protection). No child
+  names or raw free-text medical histories are reproduced anywhere on the
+  page.
+- **New shared CSS**: `.chh-inline-list*`, `.chh-matrix-*`, `.chh-ranked-*`,
+  `.chh-verify-*` in `app.css`; the prior pass's now-unused `.chh-explorer`
+  wrapper rules were left in place only where still referenced (the
+  dark-mode table-text-contrast fix pattern was defensively reapplied
+  directly on `.chh-matrix-table`, since these tables are no longer nested
+  inside a `<details>` the way the fix's original rule targeted).
+Tests: 3 new backend tests + 1 endpoint shape assertion (see above); no
+frontend tests exist in this project (consistent with every other page).
+Verified: `tsc --noEmit` clean, `npm run build` succeeds, backend
+**167/167** tests pass. Live-verified against a local backend hitting live
+REDCap (212 registered, 102/212 CHH complete, 103 substantively-answered
+per the existing 103-vs-102 reconciliation): every KPI, matrix row, and
+Findings-to-Verify entry cross-checked against a fresh `curl` of
+`/api/v1/dashboard/health` and matched exactly (e.g. TB 1/102, Anaemia
+2/103, any developmental concern 21/102 (20.6%), healthcare consultation
+47/103 (45.6%) with exactly 1 missing-description flag after the
+LIVE_FIELDS fix, 1 record flagged blank on each of Q2/Q17/Q23).
+Screenshots confirmed in both themes at 1400px and a 390px mobile width
+(zero console errors; zero horizontal page overflow after the matrix-
+table-scroll fix). Scope confirmed via `git diff --stat`: only
+`HealthScreening.tsx`/`app.css`/`liveDashboard.ts` (frontend) and
+`live_field_map.py`/`module_analytics.py`/`dashboard.py`/two test files
+(backend) changed - no other route, unrelated dashboard section, or the
+separate Data Quality page was touched.
+
+**Findings to Verify refined into a record-grouped view (2026-10-10, same
+day - frontend-only, `HealthScreening.tsx`/`app.css` only; `chh.
+verification_flags` itself and every detection rule in
+`module_analytics.py` are byte-for-byte unchanged):** the flat per-flag-
+type list (3 sections, each with its own count and a comma-joined ID list)
+was restructured so each **record** appears once, with its own distinct
+flags listed underneath - no two distinct flags are ever merged into one
+line even when they share a record (verified: 06IND356G correctly shows
+4 separate bullet flags, not 1).
+- New `flattenFindings()` helper turns `verification_flags` into one row
+  per (record, flag) pair - `totalFlags` (flag-instance count) and
+  `uniqueRecords` (distinct-record count) are both derived from this same
+  flattened list, so they can never drift apart from what's rendered. The
+  disclosure's own summary text now reads exactly `"Findings to Verify —
+  {N} flag(s) across {M} record(s)"` (correct singular/plural via a new
+  `pluralize()` helper), live-verified as `"Findings to Verify — 5 flags
+  across 2 records"` against the current live data.
+- **Access-control check performed before implementing**: confirmed via a
+  codebase-wide search (`login|auth|jwt|session.*user|role`) that this
+  application has **no authentication or authorization system anywhere**
+  - the only match was an unrelated REDCap-API-token reference in
+    `redcap/client.py`. Since there is no real role/session system to
+  restrict record IDs to, the section does **not** claim to be secure.
+  Instead, a client-side **"Show record IDs" / "Hide record IDs" toggle**
+  (plain `useState`, defaults to hidden) controls whether IDs render as
+  `••••` or the real ID - explicitly documented in the section's own copy
+  as "a display preference only, not a real security boundary... do not
+  treat this toggle as access control," since anyone who can open the page
+  can already read the IDs directly from the `/dashboard/health` API
+  response regardless of this toggle's state.
+- Each record's flag line keeps both its description and its REDCap
+  field/question name (e.g. "Healthcare consultation (Q4) = Yes with a
+  blank required description (Q4a) (chh_illness_3mo_spec)").
+- Old `.chh-verify-item*`/`.chh-verify-ids*` CSS (flat-list layout) was
+  replaced with `.chh-verify-toggle`/`.chh-verify-records`/`.chh-verify-
+  record*`/`.chh-verify-field` (record-grouped layout) - same restrained
+  styling (hairline separators, small type, no new cards/charts/colors),
+  confirmed via grep to have no other consumer before removing.
+- Both verification disclaimer paragraphs were kept (and the access-
+  control caveat added as a second, explicit paragraph) - "automated
+  screening flags only... require human review; none of them is a
+  confirmed data-entry error or a confirmed clinical diagnosis."
+Tests: this project has no frontend test suite (consistent with every
+other page) - verified instead via (1) a standalone Node script
+reproducing the exact `flattenFindings`/grouping/pluralize logic against
+the real live-shaped payload (5 flags/2 records; 06IND356G's 4 flags
+confirmed distinct, not merged; a synthetic all-empty payload confirmed
+0 flags/0 records) and (2) a live Playwright check against the real
+backend + dev server: heading text exact match, toggle hides/reveals IDs
+correctly (06IND356G/09IND210B), both themes screenshot-verified with
+legible contrast, zero console errors. Backend: 167/167 tests pass
+(unaffected, no backend file touched this pass - confirmed via `git
+diff --stat`).
+
 ---
 
 ## STUDY ENROLLMENT HEADLINE - 222 vs 212 (2026-09-17)

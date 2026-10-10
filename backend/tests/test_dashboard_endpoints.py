@@ -104,8 +104,15 @@ def test_health_endpoint_returns_real_named_conditions_and_completion():
     for section in (
         "current_health", "recent_illness", "chronic_illness", "neurological", "sensory",
         "developmental", "hospitalisation", "functional_health", "assessment_day", "alerts", "data_quality",
+        "verification_flags",
     ):
         assert section in chh
+    # Verification flags (2026-10-10) - shape only, calculation correctness
+    # covered by the dedicated module_analytics tests.
+    vflags = chh["verification_flags"]
+    assert "tb_without_chronic_condition_ids" in vflags
+    assert "missing_consultation_description_ids" in vflags
+    assert len(vflags["checkbox_blank_on_complete"]) == 3
 
 
 def test_physical_activity_endpoint_returns_real_score_summaries():

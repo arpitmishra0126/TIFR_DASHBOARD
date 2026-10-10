@@ -335,6 +335,33 @@ class ChhDataQuality(BaseModel):
     duplicate_child_id_records: int
 
 
+class ChhCheckboxBlankGroup(BaseModel):
+    label: str
+    field: str
+    count: int
+    record_ids: list[str]
+
+
+class ChhVerificationFlags(BaseModel):
+    """Narrow, mechanically-defined, reproducible checks for the Child
+    Health History page's "Findings to Verify" section (added 2026-10-10,
+    following a manual audit of this instrument against live REDCap).
+    These are verification flags only - never confirmed diagnoses or
+    confirmed data-collector errors - and are recomputed from current data
+    on every request, never hardcoded. Free-text-vs-code contradictions
+    (e.g. a free-text history that appears to describe a condition
+    contradicting its own coded Yes/No answer) are deliberately NOT
+    automated here, since reliable free-text parsing cannot be done
+    without guessing - those require a human reviewer, not a flag."""
+
+    tb_without_chronic_condition_count: int
+    tb_without_chronic_condition_ids: list[str]
+    missing_consultation_description_count: int
+    missing_consultation_description_ids: list[str]
+    checkbox_blank_on_complete: list[ChhCheckboxBlankGroup]
+    total_registered: int
+
+
 class ChildHealthHistorySections(BaseModel):
     current_health: ChhCurrentHealthSection
     recent_illness: ChhRecentIllnessSection
@@ -347,6 +374,7 @@ class ChildHealthHistorySections(BaseModel):
     assessment_day: ChhAssessmentDaySection
     alerts: ChhAlertSummary
     data_quality: ChhDataQuality
+    verification_flags: ChhVerificationFlags
 
 
 class HealthScreeningResponse(BaseModel):

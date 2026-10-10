@@ -238,6 +238,61 @@ def test_build_health_screening_analysis_chh_checkbox_denominator_uses_instrumen
     assert symptom["asked_n"] == 1
 
 
+def test_chh_verification_flags_tb_without_chronic_condition():
+    """Generalized, mechanical version of the 09IND210B audit finding:
+    TB (Q8c) coded Yes while the overall chronic-condition question (Q7)
+    is coded No - flagged for human review, never auto-corrected."""
+    records = [
+        {"child_id": "A", "chh_q8_tb": "1", "chh_chronic_condition": "0"},  # flagged
+        {"child_id": "B", "chh_q8_tb": "1", "chh_chronic_condition": "1"},  # consistent, not flagged
+        {"child_id": "C", "chh_q8_tb": "0", "chh_chronic_condition": "0"},  # not flagged
+    ]
+    flags = ma._build_chh_verification_flags(records, total=3)
+    assert flags["tb_without_chronic_condition_count"] == 1
+    assert flags["tb_without_chronic_condition_ids"] == ["A"]
+
+
+def test_chh_verification_flags_missing_consultation_description():
+    """Generalized version of the 06IND356G audit finding: Q4=Yes with a
+    blank Q4a, which branching logic ([chh_illness_3mo]='1') never excuses."""
+    records = [
+        {"child_id": "A", "chh_illness_3mo": "1", "chh_illness_3mo_spec": ""},  # flagged
+        {"child_id": "B", "chh_illness_3mo": "1", "chh_illness_3mo_spec": "fever"},  # has description
+        {"child_id": "C", "chh_illness_3mo": "0", "chh_illness_3mo_spec": ""},  # correctly N/A, not flagged
+    ]
+    flags = ma._build_chh_verification_flags(records, total=3)
+    assert flags["missing_consultation_description_count"] == 1
+    assert flags["missing_consultation_description_ids"] == ["A"]
+
+
+def test_chh_verification_flags_checkbox_blank_on_complete_excludes_redcap_zero_default():
+    """A checkbox question is only flagged "truly blank" when NOT EVEN the
+    "None" option is ticked - distinct from `_chh_checkbox_answered`, which
+    cannot detect this because REDCap exports every option's ___code
+    sub-field as "0" (not blank) for every registered child regardless of
+    completion. A record where every sub-field is explicitly "0" (the
+    REDCap default, never actually ticked) must still be flagged."""
+    codes = tuple(str(i) for i in range(1, 11))  # chh_symptoms_current: 1-9 + 10=None
+    records = [
+        {
+            "child_id": "A", "child_illness_history_complete": "2",
+            **_chh_checkbox_fields("chh_symptoms_current", codes),  # every code "0" - never actually ticked
+        },
+        {
+            "child_id": "B", "child_illness_history_complete": "2",
+            **_chh_checkbox_fields("chh_symptoms_current", codes, checked=("10",)),  # genuinely selected "None"
+        },
+        {
+            "child_id": "C", "child_illness_history_complete": "0",  # not complete - excluded entirely
+            **_chh_checkbox_fields("chh_symptoms_current", codes),
+        },
+    ]
+    flags = ma._build_chh_verification_flags(records, total=3)
+    symptom_group = next(g for g in flags["checkbox_blank_on_complete"] if g["field"] == "chh_symptoms_current")
+    assert symptom_group["count"] == 1
+    assert symptom_group["record_ids"] == ["A"]
+
+
 def test_ordered_category_counts_preserves_choice_code_order_and_zero_categories():
     choice_maps = {"q10": {"1": "Less than 30 minutes", "2": "30 minutes-1 hour", "3": "1-2 hours"}}
     records = [{"q10": "2"}, {"q10": "2"}, {"q10": "1"}]

@@ -579,82 +579,13 @@ a, button {
 }
 
 .chh-section-body > .chart-card,
-.chh-section-body > .table-card,
-.chh-section-body > .chh-alert-strip {
+.chh-section-body > .table-card {
   margin-bottom: 0;
 }
 
 .chh-section-body > .detail-disclosure {
   margin-top: 0;
   margin-bottom: 0;
-}
-
-/* --- Child Health History "Overview" alert strip (2026-09-14) - one row
-   of 4 compact stat cells matching the spec's green/amber/red/grey
-   assessment-day alert categories. Page-scoped (Child Health History
-   only); reuses the existing --status-good/-warning/-critical/-neutral
-   tokens, no new color system. --- */
-.chh-alert-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.chh-alert-stat {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--border-hairline);
-  background: var(--surface-1);
-}
-
-.chh-alert-stat-value {
-  font-size: 1.5rem;
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-.chh-alert-stat-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
-.chh-alert-stat-percent {
-  font-size: 0.74rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.chh-alert-stat-good {
-  background: var(--status-good-bg);
-  border-color: rgba(12, 163, 12, 0.18);
-}
-.chh-alert-stat-good .chh-alert-stat-value {
-  color: var(--status-good);
-}
-
-.chh-alert-stat-warning {
-  background: var(--status-warning-bg);
-  border-color: rgba(184, 121, 12, 0.2);
-}
-.chh-alert-stat-warning .chh-alert-stat-value {
-  color: var(--status-warning);
-}
-
-.chh-alert-stat-critical {
-  background: var(--status-critical-bg);
-  border-color: rgba(208, 59, 59, 0.22);
-}
-.chh-alert-stat-critical .chh-alert-stat-value {
-  color: var(--status-critical);
-}
-
-.chh-alert-stat-neutral {
-  background: var(--status-neutral-bg);
-  border-color: var(--border-hairline);
 }
 
 /* Dietary Intake only - tightens the gap between the Instrument Completion
@@ -2613,22 +2544,12 @@ table.data-table tbody tr:hover {
    supplies the flex/gap spacing mechanics from the earlier layout fix) is
    additionally wrapped in `.chh-section-panel` so the whole section reads
    as ONE cohesive bordered block instead of a stack of individually-boxed
-   cards. Data Quality intentionally does NOT get this class - unchanged
-   per instruction. This establishes a deliberate three-tier hierarchy
-   inside that one frame, so the page no longer reads as one repeated card
-   shape end to end:
-     1. `.indicator-group` / `.chh-summary-panel` - flat, tinted, list-style
-        panels for quick facts (no shadow - intentionally the *quietest*
-        tier).
-     2. `.kpi-card` (untouched, still shadowed + tone accent bar) - the
-        only tier that should look "prominent," reserved for composite/
-        numeric highlights.
-     3. `.chart-card` - flattened to plain content within the frame,
-        separated from a neighboring chart by a hairline divider instead
-        of its own card chrome.
-   Every rule below is scoped under `.chh-section-panel`, so `.chart-card`/
-   `.kpi-card`/`.table-card`'s own default styling - used by every other
-   page - is completely unchanged. */
+   cards. Data Quality was removed from this page entirely in the 2026-10-10
+   compact redesign (now only on the dedicated Data Quality page). Flattens
+   `.chart-card` to plain in-frame content, separated from a neighboring
+   chart by a hairline divider instead of its own card chrome; `.kpi-card`/
+   `.table-card`'s own default styling - used by every other page - is
+   completely unchanged. */
 .chh-section-panel {
   background: var(--surface-1);
   border: 1px solid var(--border-hairline);
@@ -2683,188 +2604,320 @@ table.data-table tbody tr:hover {
   }
 }
 
-/* --- Hospitalisation, Treatment and Allergy (Section G) focused cleanup
-   (2026-09-15) - scoped to this one section only, not the shared
-   `.chh-section-panel` rule every other section also uses:
-   1. The panel no longer repeats "Hospitalisation, Treatment and Allergy"
-      as its own internal `.indicator-group` heading (removed at the JSX
-      call site, via `IndicatorGroup`'s now-optional `title`) - the
-      `SectionHeader` immediately above the panel is the only heading. With
-      that internal title/divider gone, less top padding is needed before
-      the first indicator row, so this section's own top padding is
-      tightened from the shared `--space-5` (24px) to `--space-4` (16px);
-      side/bottom padding are unchanged, and no other section's panel
-      padding is affected.
-   2. `Major treatment history`/`Hospitalisation Count` (the 2-card
-      `.kpi-row` right below the indicator panel) get the same
-      sharper-corner/tighter-padding treatment already established
-      elsewhere on this page (`.ses-metric-row .kpi-card`, `.coding-score-
-      row .kpi-card`) - `--space-3`/`--space-4` instead of the default
-      `--space-4` all around - so each card's height matches its own
-      3-line content (label/value/sublabel) instead of carrying extra
-      padding on every edge. `.kpi-row`'s own grid (equal-width columns,
-      stretched to equal height, collapsing to one column on narrow
-      screens) is untouched, so the two cards remain aligned at equal
-      height on desktop and stack cleanly on mobile exactly as before. */
-.chh-hospitalisation-panel {
+/* --- Child Health History compact redesign (2026-10-10) - supersedes the
+   prior `.indicator-group`/`.chh-summary-panel`/`.chh-hospitalisation-panel`/
+   `.chh-alert-strip` rules (all removed; no remaining consumer, confirmed
+   via grep before deleting) with the smaller, flatter set below. --- */
+
+/* One comparison/summary row - label + n/N·percent on one line, a thin
+   square-ended monitor-bar beneath. Used for the "Medical and
+   Developmental History" composite list and standalone single-indicator
+   rows (Activity/School Impact, Participants Flagged for Review) - the
+   same shape stands in for both a grouped list and a one-off stat so no
+   second component was needed. */
+.chh-mini-row {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.chh-mini-row:last-child {
+  border-bottom: none;
+}
+
+.chh-mini-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.8rem;
+}
+
+.chh-mini-row-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.chh-mini-row-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chh-stat-secondary {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.chh-subviz-label {
+  margin-top: var(--space-3);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.chh-explorer-empty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.chh-explorer-note {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Detailed Indicator Explorer - a flat list of bordered disclosure rows
+   (not nested inside `.chh-section-panel`, since its tables should read
+   as plain reference data, not a tinted/flattened section). */
+.chh-explorer > .detail-disclosure {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-1);
+}
+
+.chh-explorer .detail-disclosure-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Explicit text color for every table cell in the explorer - without this,
+   `td`/`th` inherit a too-dark/low-contrast color in dark mode (observed
+   via computed-style inspection: body cell text resolved several shades
+   darker than this panel's own background, failing contrast) despite no
+   rule here setting it directly. Pinning it removes the ambiguity. */
+.chh-explorer table.data-table td {
+  color: var(--text-primary);
+}
+
+.chh-explorer table.data-table th {
+  color: var(--text-muted);
+}
+
+/* --- Health-History Overview redesign additions (2026-10-10) --- */
+
+/* Compact label/value rows for distributions that aren't a single
+   proportion (illness frequency, assessor decision, etc.) - no chart, no
+   bar, just aligned text per the "numeric summary, not a chart for every
+   question" instruction. */
+.chh-inline-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.chh-inline-list-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-hairline);
+  font-size: 0.8rem;
+}
+
+.chh-inline-list-row:last-child {
+  border-bottom: none;
+}
+
+.chh-inline-list-label {
+  color: var(--text-secondary);
+}
+
+.chh-inline-list-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Reported Diseases and Medical History - the always-visible clinical
+   matrix. Deliberately plain/dense (no card-within-card), explicit text
+   color on every cell (same dark-mode-contrast fix applied to the
+   Detailed Indicator Explorer's tables previously - this table is no
+   longer nested inside a <details>, so the fix is reapplied directly
+   here, defensively, in case the same cascade issue recurs). */
+.chh-matrix-group + .chh-matrix-group {
+  margin-top: var(--space-4);
   padding-top: var(--space-4);
+  border-top: 1px solid var(--gridline);
 }
 
-.chh-hospitalisation-panel .kpi-row .kpi-card {
-  padding: var(--space-3) var(--space-4);
+.chh-matrix-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* --- Compact grouped-indicator panel (2026-09-15, restyled same day from
-   a mini-card-grid look to a flat, tinted, list-style panel - the earlier
-   version shared .chart-card's background/border/radius/shadow almost
-   exactly, which is why consolidating cards into it didn't visibly change
-   the page's card-heavy rhythm). Deliberately the quietest visual tier on
-   the page: a light `--surface-2` tint, no shadow, a sharper radius than
-   `.chart-card`, and each indicator rendered as a label/value row
-   separated by a hairline `border-bottom` (a compact list, not a grid of
-   mini-cards) - "separators, small labels, aligned values" instead of
-   free-floating chips. CSS grid (not flex-wrap) so rows align into neat
-   columns and collapse to one column automatically below ~230px, with no
-   media query needed. */
-.indicator-group {
-  background: var(--surface-2);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: var(--space-3) var(--space-4);
-}
-
-.indicator-group-title {
-  font-size: 0.76rem;
+.chh-matrix-group-title {
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-secondary);
-  padding-bottom: var(--space-2);
   margin-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-hairline);
 }
 
-.indicator-group-empty {
-  font-size: 0.82rem;
+.chh-matrix-table td,
+.chh-matrix-table th {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.chh-matrix-table thead th {
   color: var(--text-muted);
 }
 
-.indicator-group-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  column-gap: var(--space-5);
-}
-
-.indicator-group-item {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 6px 0;
-  border-bottom: 1px solid var(--gridline);
-}
-
-.indicator-group-item-label {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.indicator-group-item-value {
-  font-size: 0.82rem;
+.chh-matrix-yes {
   font-weight: 700;
-  color: var(--text-primary);
+}
+
+.chh-matrix-sliver {
+  display: inline-block;
+  width: 48px;
+  height: 4px;
+  margin-left: var(--space-2);
+  background: var(--gridline);
+  vertical-align: middle;
+}
+
+.chh-matrix-sliver-fill {
+  display: block;
+  height: 100%;
+  background: var(--series-1);
+}
+
+.chh-matrix-note {
+  margin: var(--space-2) 0 0;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* Ranked developmental-concern-domain list. */
+.chh-ranked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chh-ranked-row {
+  display: grid;
+  grid-template-columns: 18px minmax(70px, 1fr) minmax(40px, 90px) auto;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.78rem;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .chh-ranked-row {
+    grid-template-columns: 16px 1fr auto;
+    row-gap: 2px;
+  }
+  .chh-ranked-bar {
+    grid-column: 2 / 4;
+  }
+}
+
+.chh-ranked-index {
+  color: var(--text-muted);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.chh-ranked-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* --- Combined summary panel for the "weak" sections (Major/Chronic
-   Illness, Developmental and Learning History, Functional Health Status)
-   (2026-09-15) - merges a near-empty compact panel and a separately
-   elevated highlight card (which together still looked like two
-   disconnected boxes) into ONE bordered, tone-accented panel: the
-   section's one important composite/derived metric as a header line,
-   its remaining flat indicators as compact rows below a divider. Reuses
-   the `kpi-tone-*` custom properties (--tone-accent/--tone-accent-soft)
-   every KpiCard already defines, so the accent-color language matches the
-   highlight-card tier exactly - a soft tone-tinted fill plus a solid
-   left accent bar (rather than `.kpi-card`'s top bar), keeping it
-   visually distinct from an actual `.kpi-card` while still reading as
-   "important." */
-.chh-summary-panel {
-  background: var(--tone-accent-soft, var(--surface-2));
+.chh-ranked-bar {
+  margin-top: 0;
+}
+
+.chh-ranked-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Findings to Verify. */
+.chh-verify-note {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 0 0 var(--space-3);
+}
+
+.chh-verify-toggle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--series-1);
+  background: none;
   border: 1px solid var(--border-hairline);
-  border-left: 3px solid var(--tone-accent, var(--series-1));
-  border-radius: var(--radius-control);
-  padding: var(--space-4);
-}
-
-.chh-summary-panel-title {
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  border-radius: var(--radius-sharp);
+  padding: 4px 10px;
+  cursor: pointer;
   margin-bottom: var(--space-3);
 }
 
-.chh-summary-panel-highlight {
+.chh-verify-toggle:hover {
+  background: var(--surface-2);
+}
+
+.chh-verify-records {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  column-gap: var(--space-3);
-  row-gap: 2px;
-  padding-bottom: var(--space-3);
-  margin-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-hairline);
+  flex-direction: column;
 }
 
-.chh-summary-panel-highlight-label {
-  font-size: 0.86rem;
+.chh-verify-record {
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.chh-verify-record-id {
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary);
-  flex: 1 1 auto;
+  font-family: var(--font-mono, monospace);
+  margin-bottom: 4px;
 }
 
-.chh-summary-panel-highlight-value {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--tone-accent, var(--text-primary));
-  font-variant-numeric: tabular-nums;
-}
-
-.chh-summary-panel-highlight-sublabel {
-  flex-basis: 100%;
-  font-size: 0.76rem;
-  color: var(--text-muted);
-}
-
-.chh-summary-panel-rows {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  column-gap: var(--space-5);
-}
-
-.chh-summary-panel-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--gridline);
-  font-size: 0.82rem;
-}
-
-.chh-summary-panel-row span:first-child {
+.chh-verify-record-count {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.chh-summary-panel-row span:last-child {
-  font-weight: 700;
-  color: var(--text-primary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.chh-verify-record-flags {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.chh-verify-field {
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
 }
 
 .pagination-controls {

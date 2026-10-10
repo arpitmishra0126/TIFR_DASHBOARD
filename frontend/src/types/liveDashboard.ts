@@ -278,6 +278,22 @@ export interface ChhDataQuality {
   duplicate_child_id_records: number;
 }
 
+export interface ChhCheckboxBlankGroup {
+  label: string;
+  field: string;
+  count: number;
+  record_ids: string[];
+}
+
+export interface ChhVerificationFlags {
+  tb_without_chronic_condition_count: number;
+  tb_without_chronic_condition_ids: string[];
+  missing_consultation_description_count: number;
+  missing_consultation_description_ids: string[];
+  checkbox_blank_on_complete: ChhCheckboxBlankGroup[];
+  total_registered: number;
+}
+
 export interface ChildHealthHistorySections {
   current_health: ChhCurrentHealthSection;
   recent_illness: ChhRecentIllnessSection;
@@ -290,6 +306,7 @@ export interface ChildHealthHistorySections {
   assessment_day: ChhAssessmentDaySection;
   alerts: ChhAlertSummary;
   data_quality: ChhDataQuality;
+  verification_flags: ChhVerificationFlags;
 }
 
 export interface HealthScreeningResponse {

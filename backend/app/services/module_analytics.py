@@ -957,6 +957,76 @@ def _build_chh_sections(all_records: list[dict], reg: list[dict], choice_maps: d
         "assessment_day": assessment_day,
         "alerts": alerts,
         "data_quality": data_quality,
+        "verification_flags": _build_chh_verification_flags(reg, total),
+    }
+
+
+def _chh_checkbox_truly_blank(record: dict, base_field: str, all_codes: tuple[str, ...]) -> bool:
+    """True only when NOT EVEN the "None" option is ticked - i.e. this
+    checkbox question was never actually engaged with. Deliberately
+    distinct from `_chh_checkbox_answered` (used by
+    `_chh_checkbox_domain_status` above): that helper checks for any
+    non-blank sub-field, which can never be False for this project, since
+    REDCap exports every checkbox option's ___code sub-field as "0" (not
+    blank) for every registered child regardless of completion status (the
+    documented checkbox-default quirk noted at the top of
+    `_build_chh_sections`). Used only by the verification-flags builder
+    below - every existing domain-status calculation is left untouched."""
+    return not any(_chh_checkbox_value(record, base_field, c) == "1" for c in all_codes)
+
+
+def _build_chh_verification_flags(reg: list[dict], total: int) -> dict:
+    """Narrow, mechanically-defined, reproducible checks surfaced in the
+    Child Health History page's "Findings to Verify" section (2026-10-10,
+    following a manual audit of this instrument against live REDCap).
+    Verification flags only - never confirmed diagnoses or confirmed
+    data-collector errors - recomputed fresh from `reg` on every request.
+    Free-text-vs-code contradictions are intentionally not automated here
+    (unreliable without guessing); only coded-field-vs-coded-field and
+    branching-rule checks are included."""
+    chh_complete_reg = [r for r in reg if parse_complete_flag(r.get("child_illness_history_complete"))]
+
+    tb_ids = [
+        child_id(r)
+        for r in reg
+        if (r.get("chh_q8_tb") or "").strip() == "1" and (r.get("chh_chronic_condition") or "").strip() == "0"
+    ]
+    consult_ids = [
+        child_id(r)
+        for r in reg
+        if (r.get("chh_illness_3mo") or "").strip() == "1" and (r.get("chh_illness_3mo_spec") or "").strip() == ""
+    ]
+
+    checkbox_groups: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+        ("Current symptoms (Q2)", CHH_SYMPTOM_FIELD, tuple(c for c, _ in CHH_SYMPTOM_OPTIONS) + (CHH_SYMPTOM_NONE_CODE,)),
+        (
+            "Developmental concerns (Q17)",
+            CHH_DEV_CONCERN_FIELD,
+            tuple(c for c, _ in CHH_DEV_CONCERN_OPTIONS) + (CHH_DEV_CONCERN_NONE_CODE,),
+        ),
+        (
+            "Functional limitation (Q23)",
+            CHH_FUNCTION_LIMIT_FIELD,
+            tuple(c for c, _ in CHH_FUNCTION_LIMIT_OPTIONS) + (CHH_FUNCTION_LIMIT_NONE_CODE,),
+        ),
+    )
+    checkbox_blank_on_complete = [
+        {
+            "label": label,
+            "field": field,
+            "count": sum(1 for r in chh_complete_reg if _chh_checkbox_truly_blank(r, field, all_codes)),
+            "record_ids": [child_id(r) for r in chh_complete_reg if _chh_checkbox_truly_blank(r, field, all_codes)],
+        }
+        for label, field, all_codes in checkbox_groups
+    ]
+
+    return {
+        "tb_without_chronic_condition_count": len(tb_ids),
+        "tb_without_chronic_condition_ids": tb_ids,
+        "missing_consultation_description_count": len(consult_ids),
+        "missing_consultation_description_ids": consult_ids,
+        "checkbox_blank_on_complete": checkbox_blank_on_complete,
+        "total_registered": total,
     }
 
 

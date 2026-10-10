@@ -144,3 +144,9 @@ documentation.
 See `render.yaml` for the Render blueprint (backend Web Service + frontend
 Static Site). Required environment variables and deployment steps are
 documented in `CLAUDE.md`.
+
+
+#RUNNING BACKEND 
+cd D:\TIFR_DASHBOARD\backend                                                                                     
+>> .\.venv\Scripts\Activate.ps1      
+>> python -m uvicorn app.main:app --reload --port 8001
