@@ -261,9 +261,7 @@ export default function ScreenTime() {
       <div className="chart-grid two-col">
         <ChartCard title="Screen Time by Device" subtitle="Mean estimated minutes/day - TV and smartphone/tablet only">
           <GroupedBarChart data={deviceStacked} series={deviceSeries} stacked unit=" min" />
-          <p className="chart-card-note">
-            Laptop/computer excluded - REDCap records only its weekly-use frequency, not duration.
-          </p>
+          <p className="chart-card-note">Laptop/computer excluded - frequency only, no duration recorded.</p>
         </ChartCard>
         <ChartCard title="Screen-Use Purpose" subtitle="DSEQ Q13, primary reported use">
           <DonutChart data={purposeDonut} />

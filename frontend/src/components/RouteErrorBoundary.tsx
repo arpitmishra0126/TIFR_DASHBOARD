@@ -38,10 +38,7 @@ export default class RouteErrorBoundary extends Component<RouteErrorBoundaryProp
       return (
         <div className="route-error-card">
           <StatusBadge label="Module Unavailable" tone="warning" />
-          <p className="route-error-message">
-            This module could not load its data. The live REDCap connection or analytics response may be
-            temporarily unavailable - no data has been invented in its place.
-          </p>
+          <p className="route-error-message">Could not load data - nothing has been invented in its place.</p>
           <button type="button" className="export-button" onClick={this.retry}>
             Try again
           </button>

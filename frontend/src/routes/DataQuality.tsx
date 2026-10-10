@@ -452,7 +452,7 @@ export default function DataQuality() {
       <div className="monitor-section">
         <div className="monitor-section-head">
           <span className="monitor-section-title">Date / Timeline QC</span>
-          <span className="monitor-section-note">Only `visit_date` is exposed for this population</span>
+          <span className="monitor-section-note">Visit date only</span>
         </div>
         <div className="dq-check-table">
           <div className="dq-check-row" onClick={() => focusIssue("visit_date_missing")}>

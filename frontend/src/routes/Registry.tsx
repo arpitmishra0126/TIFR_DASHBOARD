@@ -288,8 +288,7 @@ export default function Registry() {
             <div className="query-control-heading">
               <div className="query-control-title">{activeQueryDef.label}</div>
               <div className="query-control-explain">
-                {quickQuery === "follow_up" &&
-                  "Participants who completed the Core Study Assessments and/or SSRS Child, and are due for their next stage (SSRS Child or SSRS Teacher)."}
+                {quickQuery === "follow_up" && "Participants due for their next stage (SSRS Child or SSRS Teacher)."}
                 {quickQuery === "incomplete" &&
                   (incompleteInstrument
                     ? `Showing participants who have not completed ${INSTRUMENT_COLUMNS.find((c) => c.key === incompleteInstrument)?.label ?? "the selected instrument"}.`
