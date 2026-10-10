@@ -2612,6 +2612,80 @@ table.data-table tbody tr:hover {
    `.chh-alert-strip` rules (all removed; no remaining consumer, confirmed
    via grep before deleting) with the smaller, flatter set below. --- */
 
+/* Current Illness section (2026-10-10 rework) - a section-scoped,
+   slightly denser instance of the shared `.stat-strip`/`.stat-block`
+   pattern (same classes, same one-bordered-frame-with-dividers look as
+   the page-level KPI strip and Dashboard/Study Questionnaires - reused,
+   not reinvented) for the 3 Current-Illness KPIs. */
+.chh-illness-kpi-strip {
+  margin-bottom: var(--space-3);
+}
+
+.chh-illness-kpi-strip .stat-block-value {
+  font-size: 1.3rem;
+}
+
+.chh-illness-grid {
+  margin-top: var(--space-4);
+}
+
+.chh-illness-grid + .chart-card {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--gridline);
+}
+
+/* Horizontal comparison bars - mutually-exclusive category distributions
+   (Yes/No/Don't-know; illness-frequency bands) where bar width is a true
+   percent-of-this-distribution scale, directly comparable row to row -
+   distinct from `.chh-ranked-*` below, whose items can overlap and so
+   scale relative to their own list's max instead. Square-ended
+   (`.monitor-bar` is already `border-radius: 0` site-wide), consistent
+   with every other bar on this page. */
+.chh-cmp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chh-cmp-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(70px, 140px) auto;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.8rem;
+}
+
+.chh-cmp-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chh-cmp-bar {
+  margin-top: 0;
+}
+
+.chh-cmp-value {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .chh-cmp-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+  }
+  .chh-cmp-bar {
+    grid-column: 1 / 3;
+  }
+}
+
 /* One comparison/summary row - label + n/N·percent on one line, a thin
    square-ended monitor-bar beneath. Used for the "Medical and
    Developmental History" composite list and standalone single-indicator
@@ -2859,17 +2933,6 @@ table.data-table tbody tr:hover {
   font-size: 0.72rem;
   color: var(--text-muted);
   line-height: 1.5;
-}
-
-.chh-matrix-note-lead {
-  margin: 0 0 var(--space-4);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--gridline);
-  font-size: 0.76rem;
-}
-
-.chh-matrix-note-lead strong {
-  color: var(--text-secondary);
 }
 
 /* Ranked developmental-concern-domain list. */

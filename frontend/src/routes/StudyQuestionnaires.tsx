@@ -484,8 +484,7 @@ function buildDomains(
       description: "Udai Pareek + BG Prasad",
       tone: "blue",
       groups: [{ label: "", rows: sesRows }],
-      footnote:
-        "8 additional Udai Pareek sub-items (occupation, social participation, house type, farm animals, education, land, assets, household-size band) are export-only today, not exposed on any live dashboard endpoint.",
+      footnote: "8 additional Udai Pareek sub-items are export-only, not shown here.",
     },
     {
       number: "02",
@@ -530,7 +529,7 @@ function buildDomains(
       description: "Height, weight and related measurements",
       tone: "blue",
       groups: [{ label: "", rows: anthroRows }],
-      footnote: "Only instrument completion is exposed on a live dashboard endpoint today - individual measurements are available for detailed analysis in REDCap directly.",
+      footnote: "Only completion status is available here; measurements are in REDCap.",
     },
     {
       number: "06",
@@ -700,7 +699,7 @@ export default function StudyQuestionnaires() {
       <PageHeader
         eyebrow="Study Questionnaires"
         title="Study Questionnaires"
-        subtitle="Overview of key questionnaire domains and indicators. Select any row to view details."
+        subtitle="Key questionnaire domains - select a row for details."
       />
 
       <div className="stat-strip">

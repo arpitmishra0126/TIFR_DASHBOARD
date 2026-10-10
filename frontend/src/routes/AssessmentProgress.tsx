@@ -41,7 +41,7 @@ export default function AssessmentProgress() {
 
       <ChartCard
         title="Instrument completion pipeline"
-        subtitle="Each stage counts only children who also completed every prior stage - see Overview for the headline counts"
+        subtitle="Cumulative - each stage requires every prior stage"
       >
         <Funnel stages={data.stages} />
       </ChartCard>

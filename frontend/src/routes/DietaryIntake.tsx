@@ -107,7 +107,7 @@ export default function DietaryIntake() {
 
       <SectionHeader
         title="Other Food Specified"
-        note="Open-ended item (die_other_specify) - a separate entry from the 'Other Vegetables'/'Other Fruits' food groups above, not a duplicate of them"
+        note="Separate from 'Other Vegetables'/'Other Fruits' above"
       />
       <div className="table-card">
         <p className="chart-card-subtitle" style={{ padding: "var(--space-4) var(--space-4) 0" }}>

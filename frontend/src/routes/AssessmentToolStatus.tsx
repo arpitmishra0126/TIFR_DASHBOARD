@@ -210,10 +210,7 @@ export default function AssessmentToolStatus() {
         <KpiCard label="Overall Assessment Tool Status" value={domainValue(data.overall)} sublabel={domainSublabel(data.overall)} tone="aqua" />
       </div>
 
-      <SectionHeader
-        title="Assessment Breakdown"
-        note="Valid N = children who answered that specific assessment - blank responses are excluded, never counted as Not Done"
-      />
+      <SectionHeader title="Assessment Breakdown" />
       <div className="table-card">
         <table className="data-table">
           <thead>
@@ -221,7 +218,7 @@ export default function AssessmentToolStatus() {
               <th>Assessment</th>
               <th>Done</th>
               <th>Not Done</th>
-              <th>Valid N</th>
+              <th title="Blank responses excluded, never counted as Not Done">Valid N</th>
               <th>Completion %</th>
             </tr>
           </thead>
@@ -241,7 +238,7 @@ export default function AssessmentToolStatus() {
 
       <SectionHeader
         title="Participant Assessment Status"
-        note="Per-child SANGIAN/VWM/DCCS/CD status - search, filter, and view the common-participant intersection"
+        note="Per-child SANGIAN/VWM/DCCS/CD status"
       />
       <div className="table-card">
         <ParticipantAssessmentStatusPanel status={data} />

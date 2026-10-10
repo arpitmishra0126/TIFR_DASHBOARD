@@ -1123,25 +1123,20 @@ export default function Overview() {
             <div className="ap-trend-panel">
               <div className="ap-panel-title-block">
                 <span className="ap-panel-block-title">Cumulative assessments recorded over time</span>
-                <p className="ap-panel-block-subtitle">Recorded assessment completion status over time</p>
               </div>
               {assessmentTimeline && assessmentTimeline.available && assessmentTimeline.reconciled && assessmentTimeline.series.length > 0 ? (
                 <>
                   <AssessmentTimelineChart series={assessmentTimeline.series} />
-                  <p className="ap-trend-note">
-                    {assessmentTimeline.note}
-                    {assessmentTimeline.series.length === 1 &&
-                      " Only one month of recorded history exists so far - the trend will show more detail as further months are logged."}
-                  </p>
+                  <p className="ap-trend-note">{assessmentTimeline.note}</p>
                 </>
               ) : (
                 <div className="ap-trend-unavailable">
                   <IconCalendar width={22} height={22} />
-                  <p className="ap-trend-unavailable-title">Assessment timeline unavailable</p>
+                  <p className="ap-trend-unavailable-title">Timeline unavailable</p>
                   <p className="ap-trend-unavailable-text">
                     {assessmentTimeline && assessmentTimeline.available && !assessmentTimeline.reconciled
-                      ? "The recorded history for one or more tools does not currently reconcile with live REDCap data, so it is not shown rather than risk displaying an incorrect chart."
-                      : "REDCap's Assessment Tool Status instrument records only a Done / Not Done status for SANGIAN, VWM, DCCS, and CD Task, and no change history is available right now to reconstruct a timeline from."}
+                      ? "Data doesn't reconcile yet."
+                      : "No historical data recorded yet."}
                   </p>
                 </div>
               )}

@@ -6,7 +6,6 @@ import { percentOf } from "../components/charts/chartHelpers";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
 import DetailDisclosure from "../components/DetailDisclosure";
-import DonutChart from "../components/DonutChart";
 import FullScreenLoader from "../components/FullScreenLoader";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
@@ -93,6 +92,35 @@ function InlineStatList({ items }: { items: { label: string; count: number; perc
         <div className="chh-inline-list-row" key={i.label}>
           <span className="chh-inline-list-label">{i.label}</span>
           <span className="chh-inline-list-value">
+            {i.count} ({i.percent}%)
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** One horizontal comparison-bar row - label left, a shared-scale
+ * square-ended bar, count+percent right-aligned. Used for mutually-
+ * exclusive category distributions (Yes/No/Don't-know; illness-frequency
+ * bands) where bar width == percent of that distribution's own valid_n is
+ * a meaningful, directly comparable scale - unlike `RankedList` below,
+ * whose items can overlap (a child can report more than one symptom), so
+ * that component deliberately scales each bar relative to the list's own
+ * max instead. */
+function ComparisonBars({ items, tone = "blue" }: { items: { label: string; count: number; percent: number }[]; tone?: Tone }) {
+  if (items.length === 0 || items.every((i) => i.count === 0)) {
+    return <p className="chh-explorer-empty">No data recorded yet.</p>;
+  }
+  return (
+    <div className="chh-cmp-list">
+      {items.map((i) => (
+        <div className="chh-cmp-row" key={i.label}>
+          <span className="chh-cmp-label">{i.label}</span>
+          <div className={`monitor-bar monitor-bar-tone-${tone} chh-cmp-bar`}>
+            <div className="monitor-bar-fill" style={{ width: `${Math.min(100, Math.max(0, i.percent))}%` }} />
+          </div>
+          <span className="chh-cmp-value">
             {i.count} ({i.percent}%)
           </span>
         </div>
@@ -260,15 +288,10 @@ function FindingsToVerify({ flags }: { flags: HealthScreeningResponse["chh"]["ve
   return (
     <DetailDisclosure summary={summary}>
       <p className="chh-verify-note">
-        These are <strong>automated screening flags only</strong> - mechanically recomputed from today's live REDCap data on
-        every page load, never hardcoded. They require <strong>human review</strong>; none of them is a confirmed data-entry
-        error or a confirmed clinical diagnosis, and no value is inferred or auto-corrected on their basis.
+        Automated screening flags - require <strong>human review</strong>, not confirmed errors or diagnoses.
       </p>
-      <p className="chh-verify-note">
-        <strong>No per-user access control exists in this application</strong> (verified: there is no login, session, or
-        role system anywhere in the codebase) - so a toggle below can hide record IDs from casual view, but this is a
-        display preference only, not a real security boundary. Anyone able to open this page can still reveal the IDs or
-        read them directly from the API response; do not treat this toggle as access control.
+      <p className="chh-verify-note" title="No login/role system exists in this app - this toggle is a display preference, not access control.">
+        No access control in this app - IDs can be hidden below, but this isn't security.
       </p>
 
       {totalFlags === 0 ? (
@@ -300,12 +323,6 @@ function FindingsToVerify({ flags }: { flags: HealthScreeningResponse["chh"]["ve
           </div>
         </>
       )}
-
-      <p className="chh-verify-note">
-        Free-text-vs-code contradictions (e.g. a written history describing a condition whose matching coded field says "No")
-        cannot be reliably automated without guessing at free text, and are not included above - those require a human
-        reviewer reading the original record directly in REDCap.
-      </p>
     </DetailDisclosure>
   );
 }
@@ -339,7 +356,7 @@ export default function HealthScreening() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Child Health History"
-        subtitle="Screening and illness-history instrument - the conditions and indicators actually reported are shown directly; no single combined clinical health score is calculated."
+        subtitle="Reported conditions and indicators - no combined health score is calculated."
       />
 
       <div className="module-status-line">
@@ -385,87 +402,94 @@ export default function HealthScreening() {
             <span className="chh-stat-secondary">neurological</span>
           </span>
           <span className="stat-block-footnote">
-            {neurological.percent_yes}% neurological (seizures/fainting/CNS infection/head injury) · developmental{" "}
-            {developmental.yes_count}/{developmental.valid_n} ({developmental.percent_yes}%) - shown separately, not combined
-            into one figure
+            {neurological.percent_yes}% neurological · developmental {developmental.yes_count}/{developmental.valid_n} (
+            {developmental.percent_yes}%)
           </span>
         </div>
       </div>
 
       {/* --- B. Current Illness --- */}
-      <SectionHeader title="Current Illness" note="Sections A & B - today's status and recent illness history" />
+      <SectionHeader title="Current Illness" note="Today's status, recent illness history, and school impact" />
       <div className="chh-section-body chh-section-panel">
-        <div className="chart-grid two-col">
-          <ChartCard
-            title="Currently Reporting Illness"
-            subtitle={`Among ${currentlyIll.valid_n} children who answered (asked ${currentlyIll.asked_n})`}
-          >
-            <DonutChart
-              data={[
-                { label: "Currently ill", count: currentlyIll.yes_count },
-                { label: "Not ill", count: currentlyIll.no_count },
-                { label: "Don't know", count: currentlyIll.dont_know_count },
+        <div className="stat-strip chh-illness-kpi-strip">
+          <div className="stat-block">
+            <span className="stat-block-label" title={VALID_N_TITLE}>
+              Currently Ill
+            </span>
+            <span className="stat-block-value">
+              {currentlyIll.yes_count}/{currentlyIll.valid_n}
+            </span>
+            <span className="stat-block-footnote">{currentlyIll.percent_yes}% of {currentlyIll.valid_n} valid responses</span>
+          </div>
+          <div className="stat-block">
+            <span className="stat-block-label">Healthcare Consultation (3 months)</span>
+            <span className="stat-block-value">
+              {chh.recent_illness.consultation_required.yes_count}/{chh.recent_illness.consultation_required.valid_n}
+            </span>
+            <span className="stat-block-footnote">
+              {chh.recent_illness.consultation_required.percent_yes}% of {chh.recent_illness.consultation_required.valid_n} valid
+              responses
+            </span>
+          </div>
+          <div className="stat-block">
+            <span className="stat-block-label">Activity/School Impact (7 days)</span>
+            <span className="stat-block-value">
+              {activitySchool.yes_count}/{activitySchool.valid_n}
+            </span>
+            <span className="stat-block-footnote">{activitySchool.percent_yes}% of {activitySchool.valid_n} valid responses</span>
+          </div>
+        </div>
+
+        <div className="chart-grid two-col chh-illness-grid">
+          <ChartCard title="Current Illness Status" subtitle={`Among ${currentlyIll.valid_n} children who answered`}>
+            <ComparisonBars
+              tone="blue"
+              items={[
+                { label: "Currently ill", count: currentlyIll.yes_count, percent: currentlyIll.percent_yes },
+                { label: "Not ill", count: currentlyIll.no_count, percent: percentOf(currentlyIll.no_count, currentlyIll.valid_n) },
+                {
+                  label: "Don't know",
+                  count: currentlyIll.dont_know_count,
+                  percent: percentOf(currentlyIll.dont_know_count, currentlyIll.valid_n),
+                },
               ]}
-              height={124}
-              centerValue={`${currentlyIll.percent_yes}%`}
-              centerLabel="Reporting illness"
             />
-            <div className="chh-subviz-label">Most Frequently Reported Symptoms</div>
-            <p className="chh-matrix-note">A child may report more than one symptom - percentages need not sum to 100%.</p>
-            <RankedList items={chh.current_health.symptom_prevalence} />
           </ChartCard>
 
-          <ChartCard title="Recent Illness History" subtitle="Numeric summaries - each with its own valid-response denominator">
-            <MiniStatRow
-              label="Activity/School Impact (7 days)"
-              count={activitySchool.yes_count}
-              total={activitySchool.valid_n}
-              percent={activitySchool.percent_yes}
-              tone="blue"
-            />
-            <MiniStatRow
-              label="Healthcare Consultation (3 months)"
-              count={chh.recent_illness.consultation_required.yes_count}
-              total={chh.recent_illness.consultation_required.valid_n}
-              percent={chh.recent_illness.consultation_required.percent_yes}
+          <ChartCard title="Illness Frequency (3 months)" subtitle="None / Once / Twice / Three or more times">
+            <ComparisonBars
               tone="teal"
-            />
-            <div className="chh-subviz-label">Illness Frequency (3 months)</div>
-            <InlineStatList
               items={(() => {
                 const dist = chh.recent_illness.illness_frequency_distribution;
                 const total = dist.reduce((s, d) => s + d.count, 0);
                 return dist.map((d) => ({ label: d.code, count: d.count, percent: percentOf(d.count, total) }));
               })()}
             />
-            <div className="chh-subviz-label">School Absence Due to Illness</div>
-            <ThreeWayInlineList breakdown={chh.recent_illness.missed_school} />
-            {chh.recent_illness.school_days_missed_summary.mean !== null && (
-              <p className="chh-matrix-note">
-                Among children who missed school: mean {chh.recent_illness.school_days_missed_summary.mean} days, median{" "}
-                {chh.recent_illness.school_days_missed_summary.median} days (n=
-                {chh.recent_illness.school_days_missed_summary.valid_n}/{chh.recent_illness.school_days_missed_summary.total}
-                ).
-              </p>
-            )}
           </ChartCard>
         </div>
+
+        <ChartCard title="Reported Symptoms" subtitle={`Among ${chh.current_health.symptom_prevalence[0]?.total ?? 0} children who answered the symptom checklist`}>
+          <p className="chh-matrix-note">May report more than one - percentages need not total 100%.</p>
+          <RankedList items={chh.current_health.symptom_prevalence} />
+        </ChartCard>
+
+        <ChartCard title="School Absence Due to Illness" subtitle="No / Yes / Not applicable, kept distinct (past 3 months)">
+          <ThreeWayInlineList breakdown={chh.recent_illness.missed_school} />
+          {chh.recent_illness.school_days_missed_summary.mean !== null ? (
+            <p className="chh-matrix-note">
+              Days missed: mean {chh.recent_illness.school_days_missed_summary.mean}, median{" "}
+              {chh.recent_illness.school_days_missed_summary.median} (n={chh.recent_illness.school_days_missed_summary.valid_n}/
+              {chh.recent_illness.school_days_missed_summary.total})
+            </p>
+          ) : (
+            <p className="chh-matrix-note">No data yet.</p>
+          )}
+        </ChartCard>
       </div>
 
       {/* --- C. Reported Diseases and Medical History --- */}
-      <SectionHeader
-        title="Reported Diseases and Medical History"
-        note="Every condition's own valid-response denominator - never the full registered cohort"
-      />
+      <SectionHeader title="Reported Diseases and Medical History" note="Own valid-response denominator per condition" />
       <div className="chh-section-body chh-section-panel">
-        <p className="chh-matrix-note chh-matrix-note-lead">
-          <strong>Valid N</strong> is every child who actually answered that specific question - the correct percentage
-          denominator. <strong>Asked N</strong> is children whose form REDCap has marked "Complete." Audited against live
-          REDCap: one record in the current data answered every question on this form but has not yet been marked Complete,
-          so Valid N can run 1 higher than Asked N on most rows below - this is expected, source-data behaviour, not a
-          calculation error. A row where Valid N is lower than that (e.g. 102 instead of 103) means one additional,
-          otherwise-complete form skipped that one specific question.
-        </p>
         <DiseaseMatrixTable title="Chronic Conditions" items={chh.chronic_illness.condition_prevalence} />
         <DiseaseMatrixTable
           title="Neurological and Developmental History"
@@ -490,16 +514,11 @@ export default function HealthScreening() {
             chh.hospitalisation.known_allergy,
           ]}
         />
-        <p className="chh-matrix-note">
-          A "0 Yes" row reflects a genuine coded "No" from valid respondents (confirmed directly against live REDCap) - a
-          blank/unanswered field is never counted as No, and is instead excluded from Valid N. Rows are independent
-          questions; counts are not added together into a combined "total affected children" figure, since a child can
-          report more than one condition.
-        </p>
+        <p className="chh-matrix-note">A blank field is excluded from Valid N, never counted as No.</p>
       </div>
 
       {/* --- D. Hospitalisation and Medication --- */}
-      <SectionHeader title="Hospitalisation and Medication" note="Section G - numeric depth beyond the matrix above" />
+      <SectionHeader title="Hospitalisation and Medication" />
       <div className="chh-section-body chh-section-panel">
         <MiniStatRow
           label="Ever Hospitalised"
@@ -510,11 +529,9 @@ export default function HealthScreening() {
         />
         {chh.hospitalisation.hospitalisation_count_summary.mean !== null && (
           <p className="chh-matrix-note">
-            Among those hospitalised: mean {chh.hospitalisation.hospitalisation_count_summary.mean} times, median{" "}
-            {chh.hospitalisation.hospitalisation_count_summary.median} (n={chh.hospitalisation.hospitalisation_count_summary.valid_n}
-            /{chh.hospitalisation.hospitalisation_count_summary.total}); recurrent (2+ times): {chh.hospitalisation.recurrent_hospitalisation.count}/
-            {chh.hospitalisation.recurrent_hospitalisation.total} ({chh.hospitalisation.recurrent_hospitalisation.percent}%). Reasons
-            are recorded in REDCap but not reproduced here.
+            Mean {chh.hospitalisation.hospitalisation_count_summary.mean} times, median{" "}
+            {chh.hospitalisation.hospitalisation_count_summary.median} (n={chh.hospitalisation.hospitalisation_count_summary.valid_n}/
+            {chh.hospitalisation.hospitalisation_count_summary.total}) · recurrent (2+): {chh.hospitalisation.recurrent_hospitalisation.percent}%
           </p>
         )}
         <MiniStatRow
@@ -524,11 +541,10 @@ export default function HealthScreening() {
           percent={chh.hospitalisation.regular_medication.percent_yes}
           tone="teal"
         />
-        <p className="chh-matrix-note">Medication names/reasons are recorded in REDCap but are not reproduced on this page.</p>
       </div>
 
       {/* --- E. Developmental Concerns and Overall Health --- */}
-      <SectionHeader title="Developmental Concerns and Overall Health" note="Section F - ranked by how often each domain is reported" />
+      <SectionHeader title="Developmental Concerns and Overall Health" />
       <div className="chh-section-body chh-section-panel">
         <ChartCard
           title="Developmental Concern Domains"
@@ -536,21 +552,11 @@ export default function HealthScreening() {
         >
           <RankedList items={chh.developmental.domain_prevalence} />
           <p className="chh-matrix-note">
-            A child can report concerns in more than one domain - the ranked counts above need not sum to the number of
-            children with any concern. Per-child domain count: {chh.developmental.domain_count_distribution.map((c) => `${c.code}: ${c.count}`).join(" · ")}.
+            Domains per child: {chh.developmental.domain_count_distribution.map((c) => `${c.code}: ${c.count}`).join(" · ")}
           </p>
-          <p className="chh-matrix-note">
-            "No concern" includes an explicit "None" response{devBlankGroup && devBlankGroup.count > 0 ? (
-              <>
-                {" "}
-                and excludes {devBlankGroup.count} record(s) where this checkbox was left entirely blank on an otherwise
-                completed form - see Findings to Verify below
-              </>
-            ) : (
-              " - no record currently has this checkbox left entirely blank on a completed form"
-            )}
-            .
-          </p>
+          {devBlankGroup && devBlankGroup.count > 0 && (
+            <p className="chh-matrix-note">{devBlankGroup.count} blank-checkbox record(s) excluded - see Findings to Verify.</p>
+          )}
         </ChartCard>
         <ChartCard title="Overall Perceived Health" subtitle="Exact counts and percentages, ordered Very good → Very poor">
           <CategoryBarChart
@@ -563,7 +569,7 @@ export default function HealthScreening() {
       </div>
 
       {/* --- F. Assessment Readiness --- */}
-      <SectionHeader title="Assessment Readiness" note="Section I - the actual recorded readiness/fitness fields only" />
+      <SectionHeader title="Assessment Readiness" />
       <div className="chh-section-body chh-section-panel">
         <div className="chart-grid two-col">
           <ChartCard title="Well Enough for Today's Assessment" subtitle="Yes / No / Unsure, kept distinct (Q25)">
@@ -598,7 +604,7 @@ export default function HealthScreening() {
       </div>
 
       {/* --- Findings to Verify --- */}
-      <SectionHeader title="Findings to Verify" note="Unresolved source-data flags - recalculated live, never hardcoded" />
+      <SectionHeader title="Findings to Verify" />
       <div className="chh-section-body">
         <FindingsToVerify flags={chh.verification_flags} />
       </div>

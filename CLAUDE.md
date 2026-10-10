@@ -3511,6 +3511,118 @@ route (`/`, `/screen-time`, `/study-questionnaires`, `/data-quality`,
 scoped `.chh-section-panel`/`.chh-matrix-*` CSS changes didn't leak
 elsewhere.
 
+**Current Illness section rebuilt, donut removed (2026-10-10, same day -
+`HealthScreening.tsx`/`app.css` only; every other section on this page,
+all calculations, and `DonutChart.tsx` itself are untouched):**
+- **3-KPI row** (Currently Ill / Healthcare Consultation 3 months /
+  Activity-School Impact 7 days) now sits at the top of the section,
+  reusing the exact `.stat-strip`/`.stat-block` markup the page-level KPI
+  row already uses (a new `.chh-illness-kpi-strip` modifier only shrinks
+  the value font slightly) - not a new component, per "follow the
+  existing design system."
+- **Donut removed.** New `ComparisonBars` component (one horizontal,
+  square-ended `monitor-bar` per category, bar width = that category's own
+  percent of the distribution's `valid_n`) replaces it for two genuinely
+  mutually-exclusive distributions, shown as a balanced two-column
+  `chart-grid.two-col` row: **Current Illness Status** (Currently ill/Not
+  ill/Don't know) and **Illness Frequency (3 months)** (None/Once/Twice/
+  Three or more times) - both read the exact same `chh.current_health
+  .currently_ill`/`chh.recent_illness.illness_frequency_distribution`
+  fields as before, just rendered as bars instead of donut slices or a
+  bare numeric list. `ComparisonBars` is deliberately distinct from the
+  pre-existing `RankedList` (used below for symptoms): `RankedList` scales
+  each bar relative to the list's own max, correct for items that can
+  overlap (multi-select symptoms); `ComparisonBars` scales by true percent
+  of one shared denominator, correct for mutually-exclusive categories -
+  using the wrong one for either data shape would have been misleading.
+- **Reported Symptoms** and **School Absence Due to Illness** are now
+  their own full-width `ChartCard`s below the two-column row (same
+  `RankedList`/`ThreeWayInlineList` + mean/median note as before, just
+  promoted out of being squeezed into the old two-card layout).
+- **Valid N (103) vs Asked N (102) explained directly in this section
+  now too** (previously only explained under "Reported Diseases and
+  Medical History") - re-confirmed the same, already-documented root
+  cause (one record, 06IND361B, answered every question but isn't
+  REDCap-marked Complete) still holds; a new one-line note under the KPI
+  row cross-references the fuller explanation lower on the page instead of
+  duplicating it. No denominator was changed or hidden.
+- `DonutChart` import removed from this file (confirmed via grep: no
+  longer used anywhere in `HealthScreening.tsx`; the shared `DonutChart.tsx`
+  component itself is untouched and still used elsewhere, e.g. Overview's
+  Sex Distribution).
+Tests: none (pure UI change, no backend file touched, no calculation
+changed - confirmed via `git diff --stat` showing only the 2 frontend
+files). Verified: `tsc --noEmit` clean, `npm run build` succeeds, backend
+167/167 unaffected. Live-verified via the same Playwright pattern against
+a real backend + dev server, both themes, at 1400px and 390px: zero
+console errors, zero horizontal overflow, the 3-KPI strip and comparison
+bars collapse cleanly on mobile (reusing `.stat-strip`'s existing
+responsive breakpoints), the blocked-API error/retry state still renders
+correctly, and every other route spot-checked with zero console errors.
+
+**Dashboard-wide content cleanup - verbose explanatory paragraphs removed
+(2026-10-10, same day - frontend text/content only; no backend file, data,
+or calculation touched):** an audit found several pages had accumulated
+long explanatory paragraphs (methodology commentary, repeated REDCap-
+live-data/denominator disclaimers, "how to interpret this chart" prose)
+from the iterative redesign passes earlier this day. Trimmed throughout to
+short labels/subtitles, with genuinely necessary detail moved into a
+native `title=""` tooltip instead of staying as page copy - nothing
+essential (counts, percentages, Valid N/Asked N/DK/N/A labels, real
+findings) was removed, only the prose explaining them.
+- **`HealthScreening.tsx`** (heaviest pass): removed the Current-Illness
+  section's Valid-N-vs-Asked-N paragraph (explanation moved to a `title`
+  tooltip on the "Currently Ill" KPI label, reusing the same
+  `VALID_N_TITLE` constant already on the matrix table headers), the
+  "Reported Diseases" section's lead paragraph and trailing "0 Yes" caveat
+  paragraph (tooltips on the Valid N/Asked N table headers already cover
+  this), the Developmental Concerns section's two-sentence "need not sum"
+  paragraph (now a single data line), the hospitalisation/medication
+  "reasons not reproduced" sentences, and 3 of 3 `FindingsToVerify`
+  disclaimer paragraphs (compressed to 2 short lines: one for "automated
+  flags, needs human review," one for the no-access-control caveat with
+  its fuller detail moved into a `title` tooltip). `SectionHeader` notes
+  referencing internal spec lettering ("Section F -", "Section G -",
+  "Section I -") were dropped as meaningless to a dashboard user. Dead CSS
+  (`.chh-matrix-note-lead`) removed after its only consumer was deleted.
+- **`Overview.tsx`**: the Assessment Progress trend panel's redundant
+  subtitle (near-duplicate of its own title) removed; the single-month
+  explanatory sentence and the two long "timeline unavailable" reason
+  sentences shortened to a few words each.
+- **`StudyQuestionnaires.tsx`**: page subtitle and 2 domain footnotes
+  (SES sub-items, Anthropometry) shortened; raw internal field-name
+  mentions removed from one of them.
+- **`ScreenTime.tsx`**: page subtitle (two sentences explaining the
+  DSEQ-banded-minutes estimation methodology) shortened to one short
+  phrase that still flags the values as estimated.
+- **`Neurodevelopment.tsx`**: the no-data state's reassurance sentence
+  ("this will populate automatically... no value is invented here")
+  removed - the data fact alone (0 of N answered) is kept.
+- **`DataQuality.tsx`**: a cross-reference footnote sentence (Assessment
+  QC → Cross-Form Consistency) removed as non-essential navigation prose.
+- **`AssessmentToolStatus.tsx`**: the Valid N definition sentence moved
+  to a `title` tooltip on the Valid N column header; a redundant
+  "search, filter, and view..." clause (self-evident from the UI
+  controls themselves) dropped from a section subtitle.
+- **`AssessmentProgress.tsx`**: a subtitle's "see Overview for the
+  headline counts" cross-reference clause dropped.
+- **`DietaryIntake.tsx`**: a section note exposing the raw REDCap field
+  name `die_other_specify` to end users was shortened to plain language
+  with no field-name leak.
+No REDCap mapping, calculation, denominator, or API response changed in
+any of the above - confirmed via `git diff --stat` touching only the
+files listed, none of them backend. Verified: `tsc --noEmit` clean,
+`npm run build` succeeds (JS bundle shrank slightly, consistent with
+removed text); backend 167/167 unaffected (not touched). Live-verified
+via the same Playwright pattern against a real backend + dev server, both
+themes: zero console errors across `/`, `/health-screening`,
+`/study-questionnaires`, `/data-quality`, `/assessment-tool-status`,
+`/dietary-intake`, `/screen-time`, `/neurodevelopment`, `/progress`; zero
+horizontal overflow; Child Health History's rendered page height dropped
+noticeably with no orphaned empty space left behind by the removed
+paragraphs (panels re-flowed to their natural, now-shorter content
+height, nothing hardcoded to a fixed size).
+
 ---
 
 ## STUDY ENROLLMENT HEADLINE - 222 vs 212 (2026-09-17)

@@ -32,8 +32,7 @@ function InstrumentSection({ summary }: { summary: SSRSInstrumentSummary }) {
       {!hasData ? (
         <ChartCard title={`${summary.instrument} - No data available`} subtitle="No completed responses yet for this instrument">
           <p className="chart-card-note" style={{ border: "none", paddingTop: 0, marginTop: 0 }}>
-            0 of {summary.total_registered} registered children have any rating item answered. This will populate
-            automatically once live {summary.instrument} data exists - no value is invented here.
+            0 of {summary.total_registered} registered children have any rating item answered.
           </p>
         </ChartCard>
       ) : (

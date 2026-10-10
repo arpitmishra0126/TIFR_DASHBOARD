@@ -133,7 +133,7 @@ export default function ScreenTime() {
       <PageHeader
         eyebrow="Study Assessment"
         title="Screen Time"
-        subtitle="Digital Screen Exposure Questionnaire (DSEQ) - live REDCap instrument. Average/median minutes below are estimated from DSEQ's banded duration items, converted to each band's midpoint - not an exact measurement."
+        subtitle="Digital Screen Exposure Questionnaire (DSEQ) - minutes are estimated from banded data."
       />
 
       <div className="module-status-line">

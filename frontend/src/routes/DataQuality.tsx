@@ -488,9 +488,6 @@ export default function DataQuality() {
           const done = atsRows.filter((r) => r[test.key]).length;
           return <Row key={test.key} label={test.label} valueText={`${done}/${atsRows.length}`} percent={percentOf(done, atsRows.length)} />;
         })}
-        <p className="monitor-section-footnote">
-          Consistency between this status and the underlying per-field completion data is checked under Cross-Form Consistency above.
-        </p>
       </div>
 
       {/* --- 8. Issues requiring review --- */}
