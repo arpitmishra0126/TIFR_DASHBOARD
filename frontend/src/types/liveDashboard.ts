@@ -582,3 +582,86 @@ export interface ProgressResponse {
   total_registered: number;
   stages: ProgressStage[];
 }
+
+// --- Anthropometry Assessment (2026-10-21) - see
+// module_analytics.build_anthropometry_analysis for the full field mapping
+// and the explicit reason no IAP 2015/WHO growth-reference classification
+// is fabricated here. ---
+export interface MeasurementSummary {
+  valid_n: number;
+  missing_n: number;
+  total: number;
+  percent_valid: number;
+  mean: number | null;
+  std_dev: number | null;
+  median: number | null;
+  q1: number | null;
+  q3: number | null;
+  iqr: number | null;
+  minimum: number | null;
+  maximum: number | null;
+  histogram: CategoryCount[];
+}
+
+export interface AnthropometryClassificationCard {
+  key: string;
+  label: string;
+  status: "pending_reference" | "available";
+  flagged_count: number;
+  denominator: number;
+  reference_standard: string;
+  note: string;
+}
+
+export interface AnthropometryDemographicBucket {
+  label: string;
+  count: number;
+  percent: number;
+}
+
+export interface AnthropometryDataQuality {
+  missing_child_id_count: number;
+  missing_assessment_date_count: number;
+  missing_measurement_counts: Record<string, number>;
+  invalid_measurement_counts: Record<string, number>;
+  possible_duplicate_count: number;
+  possible_duplicate_ids: string[];
+}
+
+export interface AnthropometryChildRow {
+  child_id: string;
+  age_at_assessment: number | null;
+  sex: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  muac_cm: number | null;
+  head_circumference_cm: number | null;
+  waist_circumference_cm: number | null;
+  hip_circumference_cm: number | null;
+  bmi: number | null;
+  classification: string;
+  reference_standard: string;
+  reason: string;
+}
+
+export interface AnthropometryResponse {
+  instrument: string;
+  completion: InstrumentCompletion;
+  unique_children_with_valid_data: number;
+  total_assessment_records: number;
+  latest_assessment_date: string | null;
+  insufficient_for_classification_count: number;
+  insufficient_denominator: number;
+  classifications: AnthropometryClassificationCard[];
+  height: MeasurementSummary;
+  weight: MeasurementSummary;
+  muac: MeasurementSummary;
+  head_circumference: MeasurementSummary;
+  waist_circumference: MeasurementSummary;
+  hip_circumference: MeasurementSummary;
+  sex_distribution: CategoryCount[];
+  age_distribution: AnthropometryDemographicBucket[];
+  data_quality: AnthropometryDataQuality;
+  rows: AnthropometryChildRow[];
+  notes: Record<string, string>;
+}

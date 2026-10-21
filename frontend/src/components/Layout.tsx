@@ -16,18 +16,23 @@ interface HeaderTab {
 }
 
 // Nav updated 2026-09-28 for the Dashboard-as-hub redesign: DSEQ / Screen
-// Time and Child Health History are now featured as their own top-level
-// tabs (they're the two "Key Study Modules" prominently linked from the
-// Dashboard hub) alongside the existing Study Questionnaires/Data Quality
-// tabs. Every other route (Participants/Registry, Assessments hub,
-// Physical Activity, Dietary Intake, Neurodevelopment, etc.) is unchanged
-// and still fully reachable by direct URL, same "reachable by URL, not
-// nav-linked" precedent already used throughout this app - do not
-// reintroduce those tabs here without an explicit instruction.
+// Time and Child Health History are featured as their own top-level tabs
+// (they're "Key Study Modules" prominently linked from the Dashboard hub)
+// alongside the Study Questionnaires/Data Quality tabs. Anthropometry
+// Assessment was added 2026-10-21 as its own featured tab, between Child
+// Health History and Study Questionnaires, per explicit instruction - this
+// is a deliberate addition to the "featured tabs only" set below, not a
+// reintroduction of a previously nav-hidden route. Every other route
+// (Participants/Registry, Assessments hub, Physical Activity, Dietary
+// Intake, Neurodevelopment, etc.) is unchanged and still fully reachable
+// by direct URL, same "reachable by URL, not nav-linked" precedent already
+// used throughout this app - do not add further tabs here without an
+// explicit instruction.
 const HEADER_TABS: HeaderTab[] = [
   { label: "Dashboard", to: "/" },
   { label: "DSEQ / Screen Time", to: "/screen-time" },
   { label: "Child Health History", to: "/health-screening" },
+  { label: "Anthropometry Assessment", to: "/anthropometry" },
   { label: "Study Questionnaires", to: "/study-questionnaires" },
   { label: "Data Quality", to: "/data-quality" },
 ];

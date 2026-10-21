@@ -5682,6 +5682,168 @@ Re-verified again against **live REDCap data** after the refinement pass (2026-0
 
 ---
 
+## ANTHROPOMETRY ASSESSMENT MODULE - IMPLEMENTED 2026-10-21
+
+A full dashboard module (not just a nav label) for the **Anthropometry
+Assessment Form** - the 11th live instrument (completion-only since
+2026-09-12, see "CURRENT REDCAP INSTRUMENTS" above). Added to the top nav
+as its own featured tab, in the exact order requested: **Child Health
+History -> Anthropometry Assessment -> Study Questionnaires**
+(`frontend/src/components/Layout.tsx`'s `HEADER_TABS`). Route: `/anthropometry`
+(`frontend/src/routes/AnthropometryAssessment.tsx`, registered in `App.tsx`).
+
+**Fields confirmed live** via a direct REDCap metadata query filtered to
+`form_name == "anthropometry_assessment_form"` (10 fields: 1 descriptive
+header - confirms the form's own cohort note "Children Aged 8 to 10 Years"
+- plus 9 real fields): `assessment_date` (text/datetime_dmy, raw storage
+`"YYYY-MM-DD HH:MM"`), `sex` (radio, 1=Male/2=Female - a field of its own
+on this form, distinct from `registration_form`'s `baby_gender`),
+`height_cm`, `weight_kg`, `muac_cm`, `head_circumference_cm`,
+`waist_circumference_cm`, `hip_circumference_cm` (all text/number),
+`remarks` (notes, fetched but never rendered - same "no free-text remarks
+exposed" precedent as Child Illness History). All 9 added to
+`ANTHROPOMETRY_FIELDS` in `live_field_map.py` and `LIVE_FIELDS`. The
+pre-existing `ANTHROPOMETRY_COMPLETE_FIELD`/`REGISTRY_INSTRUMENT_ENTRIES`
+Registry/export wiring is unchanged.
+
+**Backend**: `module_analytics.build_anthropometry_analysis()` (reuses
+`registered_records`/`complete_count`/`coverage_tier`/`resolve_value`/
+`ordered_category_counts`/`compute_age_years`/`parse_date`/`parse_float` -
+no parallel calculation engine) + a new `measurement_summary()` helper
+(median/IQR/std-dev/mean/min/max + a data-driven 6-bin histogram, never a
+clinical threshold) for the 6 continuous measurements. New schemas
+(`MeasurementSummary`, `AnthropometryClassificationCard`,
+`AnthropometryDemographicBucket`, `AnthropometryDataQuality`,
+`AnthropometryChildRow`, `AnthropometryResponse`) in `dashboard.py`;
+`LiveDashboardService.get_anthropometry()`; `GET /api/v1/dashboard/anthropometry`.
+
+**Growth/nutritional-status classification - explicitly pending, not
+fabricated**: before implementing, the full repository was searched for
+any IAP growth-chart PDF or WHO growth-standard reference/threshold data
+file - **none exists anywhere in this codebase**. Per the task's own
+explicit fallback instruction ("implement the UI with a clear
+pending-reference state... do not display a fabricated clinical
+classification"), all four classification cards (Stunting, Underweight,
+Wasting, Overweight/Obesity) report `status: "pending_reference"` with
+`flagged_count`/`denominator` held at `0`/`0` - never an approximated
+threshold or a guessed z-score/percentile. The whole live cohort on this
+form is aged 8-10 (per the form's own header text), entirely inside IAP
+2015's 5-18-year range, so WHO's under-5 standards are not applicable and
+are not used. The one real, directly-computed classification-adjacent
+metric is **"Insufficient Data for Classification"** - children who have
+touched this form but are missing height, weight, sex, or age at
+assessment (the minimum inputs any classification would need), computed
+fresh from live data via `_anthro_classification_ready()`. Add real
+classification logic only once an approved IAP 2015 (and, if ever needed,
+WHO) reference table is supplied - do not approximate one from memory.
+
+**Key design decisions**: a record counts as "engaged" with this form if
+it has a parseable `assessment_date` OR at least one valid (strictly
+positive, numeric) measurement - a stored "0"/negative/non-numeric value
+is treated as invalid, never as a real zero measurement. Age at assessment
+is computed from `child_dob` (already in `LIVE_FIELDS`) **as of the
+assessment date**, never current age. Duplicate-record detection
+(`possible_duplicate_ids`) runs over the **raw, pre-dedup** record stream
+(a classic/non-repeating REDCap project structurally has one record per
+`child_id`, so this is a real integrity check, not a no-op). Per the
+task's explicit scope, this module does **not** include repeat-assessment
+coverage or longitudinal repeat-measurement analysis.
+
+**Frontend** (`AnthropometryAssessment.tsx`): Cohort Overview KPI row (4
+cards - unique children with valid data, total assessment records, latest
+assessment date, insufficient-for-classification) -> Growth & Nutritional
+Status (5 `KpiCard`s, the 4 pending ones show a "Pending reference"
+`StatusBadge` and their reference-standard name instead of a number, plus
+an explicit note distinguishing a screening flag from a confirmed
+diagnosis) -> 6 measurement cards (`ChartCard` + a compact histogram via
+the existing `CategoryBarChart`, median/IQR as the primary figure, mean
++-SD secondary, per the task's explicit "median/IQR primary" instruction)
+-> Demographics (sex/age-at-assessment distributions) + a measurement
+completeness table -> Data Quality (missing ID/date/measurement/invalid-
+value/duplicate counts) -> a filterable (search/classification/age-group/
+sex) child-level review table, scrollable with a sticky header, same
+pattern as the existing Assessment Tool Status participant table. New
+scoped CSS only (`.anthro-*` in `app.css`) - no shared component's default
+styling was changed. Reuses `KpiCard`/`ChartCard`/`CategoryBarChart`/
+`StatusBadge`/`DetailDisclosure`/`PageHeader`/`SectionHeader` as-is; no new
+chart library.
+
+Tests: 9 new in `test_module_analytics.py` (datetime parsing, valid-
+measurement validation, field mapping/denominators, insufficient-data
+flagging, pending-reference-row shape, median/IQR/histogram, missing-never-
+zero, sex/age distributions, invalid-value/duplicate detection) + 1 new
+endpoint shape test in `test_dashboard_endpoints.py`. Backend: **177/177
+tests pass** (up from 167). Frontend `tsc --noEmit` and `npm run build`
+both succeed. Live-verified against a local backend hitting live REDCap
+(212 registered, 120/212 complete at time of check): 120 unique children
+with valid data, 119 total assessment records (1 record had measurements
+but no assessment date), latest assessment `2026-10-10`, 1/120 insufficient
+for classification, Male 64/Female 56, age 9 years 98 (81.7%)/10 years 21
+(17.5%)/Unknown 1 - all classification cards correctly showed "Pending"
+with zero fabricated flags. Verified via a headless-browser pass in both
+light and dark themes at 1440px and 390px mobile - zero console errors,
+zero horizontal overflow, nav tab renders in the exact requested order.
+
+**Copy cleanup (2026-10-21, same day - UI text only, no calculation/field
+change):** a long explanatory paragraph under Growth & Nutritional Status
+("Stunting, underweight, wasting, and overweight/obesity classifications
+require an approved IAP 2015...") was removed outright, with no
+replacement paragraph - the existing per-card "Pending reference"
+`StatusBadge` + reference-standard sublabel already concisely communicate
+the same fact. The now-orphaned `.anthro-pending-note` CSS rule was
+removed with it. The "Insufficient Data for Classification" card is kept
+unchanged - it remains a real, directly-computed live count, not a
+placeholder. Every other note/subtitle on the page was already a single
+short line (not a paragraph) and was left as-is. No backend file touched.
+Frontend `tsc --noEmit` and `npm run build` both succeed.
+
+**Growth & Nutritional Status section removed entirely (2026-10-21, same
+day - supersedes the "kept unchanged" decision above for the "Insufficient
+Data for Classification" card; still UI-only, no backend/calculation/
+REDCap change):** a follow-up instruction asked to remove every remaining
+visible placeholder-classification element and "IAP 2015 height-for-age"
+reference from the page, not just the explanatory paragraph. Removed from
+`AnthropometryAssessment.tsx`:
+- The entire "Growth & Nutritional Status" `SectionHeader` + its 5-card
+  `kpi-row` (Stunting/Underweight/Wasting/Overweight-Obesity, each showing
+  "Pending" + a "IAP 2015 <domain>-for-age" sublabel + a "Pending
+  reference" badge, plus the live "Insufficient Data for Classification"
+  card that sat alongside them in that row).
+- The Cohort Overview row's own separate "Insufficient Data for
+  Classification" `KpiCard` (the one kept in the prior pass) - removed per
+  explicit instruction, even though it was a real, directly-computed live
+  value; Cohort Overview is now 3 cards (Unique Children With Valid Data /
+  Total Assessment Records / Latest Recorded Assessment), which reflows
+  cleanly via the existing auto-fit `.kpi-row` grid with no leftover empty
+  space (confirmed via screenshot).
+- The Child-Level Review table's "Classification" column (every row only
+  ever read "Pending reference" or "Insufficient data" - itself placeholder
+  content) and its hover tooltip, which had surfaced `row.reference_standard`
+  text (e.g. "IAP 2015 (not yet integrated)") - removed together with the
+  classification filter dropdown that drove it (age/sex filters and search
+  are unchanged). The table's last column is now BMI (plain arithmetic,
+  not a classification) - the shared `.anthro-table thead th:last-child`
+  left-align override (previously needed for the text-based Classification
+  header) was narrowed to `:first-child` only, so BMI's header correctly
+  right-aligns with its numeric column like every other measurement.
+- Now-unused `IconClipboardAlert`/`IconFlag` imports, the `CLASSIFICATION_TONE`
+  tone map, and the orphaned `.anthro-classification-cell` CSS rule.
+`AnthropometryResponse.classifications`/`insufficient_for_classification_count`/
+`insufficient_denominator` remain unchanged in the API response (backend
+untouched, per instruction not to change calculations/REDCap mappings
+unnecessarily) - they are simply no longer rendered anywhere on this page.
+Every other section (Measurements, Demographics & Completeness, the
+completeness table, Data Quality) is unchanged.
+Verified: `tsc --noEmit` clean, `npm run build` succeeds. Live-verified via
+a headless-browser check against the running dev server + live REDCap data:
+page text contains zero occurrences of "IAP", "Pending", "Insufficient
+Data", or "Growth & Nutritional"; zero console errors; zero horizontal
+overflow; screenshot confirms the 3-card Cohort Overview row is evenly
+balanced with no empty gap and the page flows directly from Cohort
+Overview into Measurements.
+
+---
+
 ## EXISTING VERIFICATION HISTORY
 
 The application has previously been verified with:
@@ -5693,7 +5855,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **164/164 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-09-29 REDCap-Logging-API-backed Assessment Progress timeline). Frontend `npm run build` succeeds.
+Backend test count: **177/177 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-21 Anthropometry Assessment module). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

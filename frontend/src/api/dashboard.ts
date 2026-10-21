@@ -1,5 +1,6 @@
 import { apiDownload, apiGet, withRefresh } from "./client";
 import type {
+  AnthropometryResponse,
   AssessmentTimelineResponse,
   AssessmentToolStatusResponse,
   DemographicsResponse,
@@ -12,6 +13,10 @@ import type {
   RegistryResponse,
   ScreenTimeResponse,
 } from "../types/liveDashboard";
+
+export function getAnthropometry(opts?: { force?: boolean }): Promise<AnthropometryResponse> {
+  return apiGet<AnthropometryResponse>(withRefresh("/dashboard/anthropometry", opts?.force));
+}
 
 export function getOverview(opts?: { force?: boolean }): Promise<OverviewResponse> {
   return apiGet<OverviewResponse>(withRefresh("/dashboard/overview", opts?.force));

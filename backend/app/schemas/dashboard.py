@@ -739,6 +739,110 @@ class ProgressResponse(BaseModel):
     stages: list[ProgressStage]
 
 
+# --- Anthropometry Assessment (2026-10-21) - see
+# module_analytics.build_anthropometry_analysis for the full field mapping,
+# denominator logic, and the explicit reason no IAP 2015/WHO growth-
+# reference classification is fabricated. ---
+class MeasurementSummary(BaseModel):
+    """One continuous anthropometric measurement (height/weight/MUAC/head,
+    waist, hip circumference). Same denominator discipline as ScoreSummary
+    (valid_n + missing_n always sum to total; missing is never treated as
+    zero). median/q1/q3/iqr/std_dev are null below 2 valid values, where
+    they are statistically undefined - never approximated."""
+
+    valid_n: int
+    missing_n: int
+    total: int
+    percent_valid: float
+    mean: float | None
+    std_dev: float | None
+    median: float | None
+    q1: float | None
+    q3: float | None
+    iqr: float | None
+    minimum: float | None
+    maximum: float | None
+    histogram: list[CategoryCount] = []
+
+
+class AnthropometryClassificationCard(BaseModel):
+    """One growth/nutritional-status screening category. `status` is
+    "pending_reference" for every clinical classification (stunting/
+    underweight/wasting/overweight-obesity) until an approved IAP 2015
+    age- and sex-specific reference table is integrated - `flagged_count`/
+    `denominator` stay 0/0 while pending, never an approximated value. The
+    one exception is the "insufficient_data" card, whose `status` is
+    "available" since it is a real, directly-computed data-completeness
+    count, not a clinical classification. This is a screening flag only,
+    never a confirmed diagnosis, once a reference table is integrated."""
+
+    key: str
+    label: str
+    status: str  # "pending_reference" | "available"
+    flagged_count: int
+    denominator: int
+    reference_standard: str
+    note: str
+
+
+class AnthropometryDemographicBucket(BaseModel):
+    label: str
+    count: int
+    percent: float
+
+
+class AnthropometryDataQuality(BaseModel):
+    missing_child_id_count: int
+    missing_assessment_date_count: int
+    missing_measurement_counts: dict[str, int]
+    invalid_measurement_counts: dict[str, int]
+    possible_duplicate_count: int
+    possible_duplicate_ids: list[str] = []
+
+
+class AnthropometryChildRow(BaseModel):
+    """One row of the child-level review table. `classification` is
+    "Pending reference" or "Insufficient data" (see above) - never a
+    fabricated clinical category. `bmi` is plain arithmetic (weight_kg /
+    height_m^2), not itself a classification."""
+
+    child_id: str
+    age_at_assessment: int | None
+    sex: str | None
+    height_cm: float | None
+    weight_kg: float | None
+    muac_cm: float | None
+    head_circumference_cm: float | None
+    waist_circumference_cm: float | None
+    hip_circumference_cm: float | None
+    bmi: float | None
+    classification: str
+    reference_standard: str
+    reason: str
+
+
+class AnthropometryResponse(BaseModel):
+    instrument: str
+    completion: InstrumentCompletion
+    unique_children_with_valid_data: int
+    total_assessment_records: int
+    latest_assessment_date: str | None
+    insufficient_for_classification_count: int
+    insufficient_denominator: int
+    classifications: list[AnthropometryClassificationCard]
+    height: MeasurementSummary
+    weight: MeasurementSummary
+    muac: MeasurementSummary
+    head_circumference: MeasurementSummary
+    waist_circumference: MeasurementSummary
+    hip_circumference: MeasurementSummary
+    sex_distribution: list[CategoryCount]
+    age_distribution: list[AnthropometryDemographicBucket]
+    data_quality: AnthropometryDataQuality
+    rows: list[AnthropometryChildRow]
+    notes: dict[str, str]
+
+
 # OverviewResponse forward-references InstrumentCompletion/ConditionIndicator,
 # which are defined later in this file (after the assessment-module section).
 OverviewResponse.model_rebuild()

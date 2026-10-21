@@ -22,8 +22,8 @@ tier is computed) is identical either way.
 """
 import re
 from collections import Counter
-from datetime import UTC, datetime
-from statistics import mean, median
+from datetime import UTC, date, datetime
+from statistics import mean, median, quantiles, stdev
 from typing import Callable
 
 from app.ingestion.choice_maps import ChoiceMap
@@ -1919,4 +1919,324 @@ def build_assessment_timeline(log_entries: list[dict], records: list[dict]) -> d
         "reconciled": reconciled,
         "series": series,
         "reconciliation": reconciliation,
+    }
+
+
+# --- Anthropometry Assessment (2026-10-21) ---
+#
+# Field names confirmed live via a direct REDCap metadata query against
+# form_name == "anthropometry_assessment_form" (see live_field_map.py's
+# ANTHROPOMETRY_FIELDS comment). The whole live cohort on this form is aged
+# 8-10 years (confirmed via the form's own descriptive header text), which
+# falls entirely inside IAP 2015's 5-18-year range - WHO's under-5 growth
+# standards are therefore not applicable to this cohort and are not used.
+#
+# No IAP 2015 (or WHO) age- and sex-specific growth-reference lookup table
+# (height-for-age / weight-for-age / BMI-for-age z-scores or percentiles)
+# exists anywhere in this repository (confirmed via a full-repo search
+# before implementing this module) and none is fabricated or approximated
+# here. Every stunting/underweight/wasting/overweight-obesity classification
+# card below is therefore reported with status "pending_reference" - a
+# real, zeroed placeholder, never a guessed threshold - until an approved
+# reference table is supplied and wired in. Every other metric in this
+# module (completion, measurement summaries, demographics, data-quality,
+# and the per-child review rows) is computed live from real REDCap data.
+
+ANTHROPOMETRY_SEX_FIELD = "sex"
+ANTHROPOMETRY_DATE_FIELD = "assessment_date"
+
+# (REDCap field, response dict key, display label)
+ANTHROPOMETRY_MEASUREMENT_FIELDS: tuple[tuple[str, str, str], ...] = (
+    ("height_cm", "height", "Height (cm)"),
+    ("weight_kg", "weight", "Weight (kg)"),
+    ("muac_cm", "muac", "MUAC (cm)"),
+    ("head_circumference_cm", "head_circumference", "Head Circumference (cm)"),
+    ("waist_circumference_cm", "waist_circumference", "Waist Circumference (cm)"),
+    ("hip_circumference_cm", "hip_circumference", "Hip Circumference (cm)"),
+)
+
+ANTHROPOMETRY_CLASSIFICATION_DEFS: tuple[tuple[str, str, str], ...] = (
+    ("stunting", "Stunting / Short Stature", "IAP 2015 height-for-age"),
+    ("underweight", "Underweight / Low Weight", "IAP 2015 weight-for-age"),
+    ("wasting", "Wasting / Thinness", "IAP 2015 BMI-for-age"),
+    ("overweight_obesity", "Overweight / Obesity", "IAP 2015 BMI-for-age"),
+)
+
+
+def _parse_anthro_datetime(value: str | None) -> date | None:
+    """REDCap's raw export for this datetime_dmy-validated field is always
+    "YYYY-MM-DD HH:MM" regardless of the dmy display format configured in
+    the REDCap UI (confirmed live). Returns only the date part - this
+    module never infers or displays a time-of-day. Returns None (never a
+    fabricated date) for anything that doesn't parse."""
+    if not value or not value.strip():
+        return None
+    raw = value.strip()
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _anthro_valid_measurement(record: dict, field: str) -> float | None:
+    """A measurement is valid only if it parses as a strictly positive
+    number - no real child has a height/weight/circumference of zero or
+    less, so a stored "0"/negative/non-numeric value is treated as
+    invalid/missing, never as a real measurement."""
+    raw = (record.get(field) or "").strip()
+    if not raw:
+        return None
+    parsed = parse_float(raw)
+    if parsed is None or parsed <= 0:
+        return None
+    return parsed
+
+
+def _anthro_has_any_measurement(record: dict) -> bool:
+    return any(_anthro_valid_measurement(record, field) is not None for field, _key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS)
+
+
+def _anthro_has_engagement(record: dict) -> bool:
+    """True if this child's record touched the Anthropometry Assessment
+    Form at all - a recorded assessment date or at least one valid
+    measurement - independent of whether the instrument itself is marked
+    Complete in REDCap."""
+    return _parse_anthro_datetime(record.get(ANTHROPOMETRY_DATE_FIELD)) is not None or _anthro_has_any_measurement(record)
+
+
+def _anthro_age_at_assessment(record: dict) -> int | None:
+    """Age in whole years AT THE ASSESSMENT DATE (never current age) -
+    requires both child_dob and a parseable assessment_date; returns None
+    (never a guessed age) if either is missing."""
+    dob = parse_date(record.get("child_dob"))
+    assessment_date = _parse_anthro_datetime(record.get(ANTHROPOMETRY_DATE_FIELD))
+    if dob is None or assessment_date is None:
+        return None
+    return compute_age_years(dob, as_of=assessment_date)
+
+
+def _anthro_classification_ready(record: dict) -> bool:
+    """Minimum inputs required for ANY growth/nutritional-status
+    classification: height, weight, sex, and age at assessment."""
+    height = _anthro_valid_measurement(record, "height_cm")
+    weight = _anthro_valid_measurement(record, "weight_kg")
+    sex_value = (record.get(ANTHROPOMETRY_SEX_FIELD) or "").strip()
+    age = _anthro_age_at_assessment(record)
+    return height is not None and weight is not None and sex_value != "" and age is not None
+
+
+def _anthro_histogram(values: list[float], bins: int = 6) -> list[tuple[str, int]]:
+    """A compact, evenly-spaced histogram of the real measured values, for
+    a small distribution visual next to each measurement card. Bin edges
+    are computed purely from the data's own min/max - this is a generic
+    display bucketing, never a clinical classification threshold."""
+    if not values:
+        return []
+    if len(values) == 1 or min(values) == max(values):
+        return [(f"{values[0]:g}", len(values))]
+    lo, hi = min(values), max(values)
+    width = (hi - lo) / bins
+    edges = [lo + width * i for i in range(1, bins + 1)]
+    labels = [f"{lo + width * i:.1f}–{lo + width * (i + 1):.1f}" for i in range(bins)]
+    counts = [0] * bins
+    for value in values:
+        for i, edge in enumerate(edges):
+            if value <= edge or i == bins - 1:
+                counts[i] += 1
+                break
+    return list(zip(labels, counts))
+
+
+def measurement_summary(values: list[float], total: int) -> dict:
+    """Median/IQR-first continuous-measurement summary for a single
+    anthropometric measurement. Same denominator discipline as
+    numeric_summary() (missing is never treated as zero); median/q1/q3/iqr/
+    std_dev are None below 2 valid values, where they are undefined."""
+    valid_n = len(values)
+    if valid_n >= 2:
+        q1, _q2, q3 = quantiles(values, n=4)
+        q1, q3 = round(q1, 2), round(q3, 2)
+        iqr = round(q3 - q1, 2)
+        std_dev = round(stdev(values), 2)
+    else:
+        q1 = q3 = iqr = std_dev = None
+    return {
+        "valid_n": valid_n,
+        "missing_n": max(total - valid_n, 0),
+        "total": total,
+        "percent_valid": percent(valid_n, total),
+        "mean": round(mean(values), 2) if values else None,
+        "std_dev": std_dev,
+        "median": round(median(values), 2) if values else None,
+        "q1": q1,
+        "q3": q3,
+        "iqr": iqr,
+        "minimum": min(values) if values else None,
+        "maximum": max(values) if values else None,
+        "histogram": _anthro_histogram(values),
+    }
+
+
+def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
+    reg = registered_records(records)
+    total = len(reg)
+    completed = complete_count(reg, "anthropometry_assessment_form_complete")
+
+    engaged = [r for r in reg if _anthro_has_engagement(r)]
+    valid_data_children = [r for r in engaged if _anthro_has_any_measurement(r)]
+    dated_records = [r for r in engaged if _parse_anthro_datetime(r.get(ANTHROPOMETRY_DATE_FIELD)) is not None]
+
+    assessment_dates = [d for r in dated_records if (d := _parse_anthro_datetime(r.get(ANTHROPOMETRY_DATE_FIELD))) is not None]
+    latest_date = max(assessment_dates).isoformat() if assessment_dates else None
+
+    def _values_for(field: str) -> list[float]:
+        return [v for r in reg if (v := _anthro_valid_measurement(r, field)) is not None]
+
+    measurements = {key: measurement_summary(_values_for(field), total) for field, key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS}
+
+    insufficient = [r for r in engaged if not _anthro_classification_ready(r)]
+
+    classifications = [
+        {
+            "key": key,
+            "label": label,
+            "status": "pending_reference",
+            "flagged_count": 0,
+            "denominator": 0,
+            "reference_standard": reference,
+            "note": "Pending an approved IAP 2015 age- and sex-specific reference table - no threshold is approximated or invented.",
+        }
+        for key, label, reference in ANTHROPOMETRY_CLASSIFICATION_DEFS
+    ]
+    classifications.append(
+        {
+            "key": "insufficient_data",
+            "label": "Insufficient Data for Classification",
+            "status": "available",
+            "flagged_count": len(insufficient),
+            "denominator": len(engaged),
+            "reference_standard": "N/A",
+            "note": "Missing height, weight, sex, or age at assessment (date of birth and/or assessment date).",
+        }
+    )
+
+    sex_distribution = ordered_category_counts(engaged, ANTHROPOMETRY_SEX_FIELD, choice_maps)
+
+    ages = [_anthro_age_at_assessment(r) for r in engaged]
+    age_bucket_order = ["8 years", "9 years", "10 years", "Other (outside 8-10 years)", "Unknown"]
+
+    def _age_bucket_label(age: int | None) -> str:
+        if age is None:
+            return "Unknown"
+        if age in (8, 9, 10):
+            return f"{age} years"
+        return "Other (outside 8-10 years)"
+
+    age_counter: Counter = Counter(_age_bucket_label(a) for a in ages)
+    age_denominator = len(engaged)
+    age_distribution = [
+        {"label": label, "count": age_counter[label], "percent": percent(age_counter[label], age_denominator)}
+        for label in age_bucket_order
+        if age_counter[label] > 0
+    ]
+
+    missing_measurement_counts = {key: measurements[key]["missing_n"] for _field, key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS}
+
+    invalid_measurement_counts: dict[str, int] = {}
+    for field, key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS:
+        invalid_measurement_counts[key] = sum(
+            1 for r in engaged if (r.get(field) or "").strip() and _anthro_valid_measurement(r, field) is None
+        )
+
+    missing_child_id_count = sum(1 for r in records if _anthro_has_engagement(r) and not child_id(r))
+    missing_assessment_date_count = sum(1 for r in engaged if _parse_anthro_datetime(r.get(ANTHROPOMETRY_DATE_FIELD)) is None)
+
+    id_counts: Counter = Counter(child_id(r) for r in records if child_id(r))
+    duplicate_ids = sorted(cid for cid, count in id_counts.items() if count > 1)
+
+    data_quality = {
+        "missing_child_id_count": missing_child_id_count,
+        "missing_assessment_date_count": missing_assessment_date_count,
+        "missing_measurement_counts": missing_measurement_counts,
+        "invalid_measurement_counts": invalid_measurement_counts,
+        "possible_duplicate_count": len(duplicate_ids),
+        "possible_duplicate_ids": duplicate_ids,
+    }
+
+    rows: list[dict] = []
+    for r in engaged:
+        sex_label = resolve_value(ANTHROPOMETRY_SEX_FIELD, r.get(ANTHROPOMETRY_SEX_FIELD), choice_maps) or None
+        age = _anthro_age_at_assessment(r)
+        height = _anthro_valid_measurement(r, "height_cm")
+        weight = _anthro_valid_measurement(r, "weight_kg")
+        muac = _anthro_valid_measurement(r, "muac_cm")
+        head = _anthro_valid_measurement(r, "head_circumference_cm")
+        waist = _anthro_valid_measurement(r, "waist_circumference_cm")
+        hip = _anthro_valid_measurement(r, "hip_circumference_cm")
+        bmi = round(weight / ((height / 100) ** 2), 2) if height and weight else None
+
+        missing_reasons = []
+        if height is None:
+            missing_reasons.append("missing height")
+        if weight is None:
+            missing_reasons.append("missing weight")
+        if not sex_label:
+            missing_reasons.append("missing sex")
+        if age is None:
+            missing_reasons.append("missing date of birth or assessment date")
+
+        if missing_reasons:
+            classification = "Insufficient data"
+            reference_standard = "N/A"
+            reason = "Cannot classify: " + ", ".join(missing_reasons) + "."
+        else:
+            classification = "Pending reference"
+            reference_standard = "IAP 2015 (not yet integrated)"
+            reason = "All required inputs present; awaiting an approved IAP 2015 age- and sex-specific reference table."
+
+        rows.append(
+            {
+                "child_id": child_id(r),
+                "age_at_assessment": age,
+                "sex": sex_label,
+                "height_cm": height,
+                "weight_kg": weight,
+                "muac_cm": muac,
+                "head_circumference_cm": head,
+                "waist_circumference_cm": waist,
+                "hip_circumference_cm": hip,
+                "bmi": bmi,
+                "classification": classification,
+                "reference_standard": reference_standard,
+                "reason": reason,
+            }
+        )
+
+    return {
+        "instrument": "Anthropometry Assessment Form",
+        "completion": {
+            "instrument": "Anthropometry Assessment Form",
+            "completed": completed,
+            "total_registered": total,
+            "percent": percent(completed, total),
+            "coverage_tier": coverage_tier(completed, total),
+        },
+        "unique_children_with_valid_data": len(valid_data_children),
+        "total_assessment_records": len(dated_records),
+        "latest_assessment_date": latest_date,
+        "insufficient_for_classification_count": len(insufficient),
+        "insufficient_denominator": len(engaged),
+        "classifications": classifications,
+        "height": measurements["height"],
+        "weight": measurements["weight"],
+        "muac": measurements["muac"],
+        "head_circumference": measurements["head_circumference"],
+        "waist_circumference": measurements["waist_circumference"],
+        "hip_circumference": measurements["hip_circumference"],
+        "sex_distribution": sex_distribution,
+        "age_distribution": age_distribution,
+        "data_quality": data_quality,
+        "rows": rows,
     }

@@ -9,6 +9,7 @@ from fastapi.responses import Response
 
 from app.api.deps import get_live_dashboard_service
 from app.schemas.dashboard import (
+    AnthropometryResponse,
     AssessmentTimelineResponse,
     AssessmentToolStatusResponse,
     DemographicsResponse,
@@ -126,6 +127,14 @@ async def get_dietary_intake(
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> DietaryIntakeResponse:
     return await service.get_dietary_intake(force=refresh)
+
+
+@router.get("/anthropometry", response_model=AnthropometryResponse)
+async def get_anthropometry(
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> AnthropometryResponse:
+    return await service.get_anthropometry(force=refresh)
 
 
 @router.get("/assessment-tool-status", response_model=AssessmentToolStatusResponse)

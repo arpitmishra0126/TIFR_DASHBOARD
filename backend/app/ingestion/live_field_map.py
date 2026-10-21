@@ -481,12 +481,31 @@ ASSESSMENT_TOOL_STATUS_ITEM_FIELDS: tuple[str, ...] = (
 # --- Anthropometry Assessment Form (11th live instrument, confirmed
 # 2026-09-12 via the REDCap `instrument` API - `anthropometry_assessment_form`,
 # label "Anthropometry Assessment Form"). Same REDCap auto-derived
-# `<form_name>_complete` convention as every other instrument (confirmed
-# live: currently 0/212 complete, brand new with no data yet). Individual
-# measurement fields are not mapped/used anywhere - only the instrument's
-# own completion field, per instruction not to infer completion from
-# measurement fields when a proper completion field exists.
+# `<form_name>_complete` convention as every other instrument. Used
+# standalone (Registry/export completion-only) since 2026-09-12.
+#
+# Individual measurement fields added 2026-10-21 for the dedicated
+# Anthropometry Assessment dashboard module, confirmed live via a direct
+# REDCap metadata query filtered to form_name == "anthropometry_assessment_form"
+# (10 fields total: 1 descriptive header field "anthro_info" - not data -
+# plus the 9 below). The form's own descriptive header text confirms the
+# cohort is "Children Aged 8 to 10 Years", consistent with this study's
+# existing 8/9/10-year age convention.
 ANTHROPOMETRY_COMPLETE_FIELD = "anthropometry_assessment_form_complete"
+
+ANTHROPOMETRY_FIELDS: tuple[str, ...] = (
+    "assessment_date",  # text/datetime_dmy; raw REDCap storage is "YYYY-MM-DD HH:MM"
+    "sex",  # radio: 1=Male, 2=Female (own field on this form, distinct from registration_form's baby_gender)
+    "height_cm",  # text/number
+    "weight_kg",  # text/number
+    "muac_cm",  # text/number - Mid-Upper Arm Circumference
+    "head_circumference_cm",  # text/number
+    "waist_circumference_cm",  # text/number
+    "hip_circumference_cm",  # text/number
+    "remarks",  # notes (free text) - fetched but never rendered, per the dashboard's
+    # existing "do not expose unnecessary free-text remarks" convention (see
+    # Child Illness History's medicine-name/reason precedent).
+)
 
 # Registry-only extension of ALL_INSTRUMENTS (2026-09-11, Assessment Tool
 # Status; 2026-09-12, Anthropometry Assessment Form) - adds these to the
@@ -522,5 +541,6 @@ LIVE_FIELDS: tuple[str, ...] = (
     ASSESSMENT_TOOL_STATUS_COMPLETE_FIELD,
     *ASSESSMENT_TOOL_STATUS_ITEM_FIELDS,
     ANTHROPOMETRY_COMPLETE_FIELD,
+    *ANTHROPOMETRY_FIELDS,
     *EXPORT_ONLY_FIELDS,
 )

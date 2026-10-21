@@ -5355,3 +5355,148 @@ th.registry-instrument-col-highlighted {
   font-weight: 600;
   color: var(--text-muted);
 }
+
+/* --- Anthropometry Assessment (2026-10-21) --- */
+
+.anthro-measurement-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.anthro-measurement-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.anthro-measurement-stat-secondary {
+  opacity: 0.8;
+}
+
+.anthro-measurement-stat-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.anthro-measurement-stat-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.anthro-completeness-card,
+.anthro-dq-card {
+  margin-bottom: var(--space-4);
+}
+
+.anthro-dq-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.anthro-review-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.anthro-review-search,
+.anthro-review-select {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 5px var(--space-2);
+}
+
+.anthro-review-search {
+  flex: 1 1 40%;
+  min-width: 160px;
+}
+
+.anthro-review-select {
+  flex: 1 1 18%;
+  min-width: 140px;
+  cursor: pointer;
+}
+
+.anthro-review-search:focus,
+.anthro-review-select:focus {
+  outline: 2px solid var(--focus-ring, var(--series-1));
+  outline-offset: 1px;
+}
+
+.anthro-table-wrap {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  background: var(--surface-1);
+  max-height: 420px;
+  overflow: auto;
+}
+
+.anthro-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+}
+
+.anthro-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-size: 0.66rem;
+  text-align: right;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
+  white-space: nowrap;
+}
+
+.anthro-table thead th:first-child {
+  text-align: left;
+}
+
+.anthro-table tbody td {
+  padding: 5px var(--space-2);
+  border-bottom: 1px solid var(--border-hairline);
+  color: var(--text-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.anthro-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.anthro-id-cell {
+  text-align: left !important;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+@media (max-width: 560px) {
+  .anthro-review-controls {
+    flex-direction: column;
+  }
+
+  .anthro-review-search,
+  .anthro-review-select {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+}

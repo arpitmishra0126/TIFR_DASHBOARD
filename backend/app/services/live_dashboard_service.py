@@ -25,6 +25,7 @@ from app.services.export_service import build_active_cases_csv, build_active_cas
 from app.services.module_analytics import (
     SANGIAN_ASSESSMENT_FIELDS,
     VWM_ASSESSMENT_FIELDS,
+    build_anthropometry_analysis,
     build_assessment_timeline,
     build_assessment_tool_status_analysis,
     build_dietary_analysis,
@@ -36,6 +37,11 @@ from app.services.module_analytics import (
 )
 from app.schemas.dashboard import (
     AgeBucket,
+    AnthropometryChildRow,
+    AnthropometryClassificationCard,
+    AnthropometryDataQuality,
+    AnthropometryDemographicBucket,
+    AnthropometryResponse,
     AssessmentDomainStatus,
     AssessmentParticipantStatus,
     AssessmentPooledStatus,
@@ -53,6 +59,7 @@ from app.schemas.dashboard import (
     DseqCodingScores,
     DietaryFoodItem,
     DietaryIntakeResponse,
+    MeasurementSummary,
     OtherFoodEntry,
     OtherFoodSpecifiedSummary,
     GroupedMinutesPoint,
@@ -77,6 +84,28 @@ from app.schemas.dashboard import (
     SSRSInstrumentSummary,
     WeeklyActivityDay,
 )
+
+
+def _build_measurement_summary(data: dict) -> MeasurementSummary:
+    """Converts one module_analytics.measurement_summary() dict (histogram
+    as list[tuple[str, int]]) into the MeasurementSummary schema (histogram
+    as list[CategoryCount]) - the same tuple->CategoryCount conversion used
+    throughout this file for every other category distribution."""
+    return MeasurementSummary(
+        valid_n=data["valid_n"],
+        missing_n=data["missing_n"],
+        total=data["total"],
+        percent_valid=data["percent_valid"],
+        mean=data["mean"],
+        std_dev=data["std_dev"],
+        median=data["median"],
+        q1=data["q1"],
+        q3=data["q3"],
+        iqr=data["iqr"],
+        minimum=data["minimum"],
+        maximum=data["maximum"],
+        histogram=[CategoryCount(code=label, count=count) for label, count in data["histogram"]],
+    )
 
 
 _STUDY_AGE_BUCKETS = [("8 years", 8), ("9 years", 9), ("10 years", 10)]
@@ -626,6 +655,40 @@ class LiveDashboardService:
                 "secondary, purely descriptive categorical cross-checks per the approved 2026-08-26 scope, "
                 "not the primary analysis. Physical activity here is DSEQ's own Section B outdoor-play items "
                 "(q11/q12) - distinct from the separate PAQ-C-based Physical Activity page.",
+            },
+        )
+
+    async def get_anthropometry(self, force: bool = False) -> AnthropometryResponse:
+        records, choice_maps = await self._load(force=force)
+        analysis = build_anthropometry_analysis(records, choice_maps)
+        return AnthropometryResponse(
+            instrument=analysis["instrument"],
+            completion=InstrumentCompletion(**analysis["completion"]),
+            unique_children_with_valid_data=analysis["unique_children_with_valid_data"],
+            total_assessment_records=analysis["total_assessment_records"],
+            latest_assessment_date=analysis["latest_assessment_date"],
+            insufficient_for_classification_count=analysis["insufficient_for_classification_count"],
+            insufficient_denominator=analysis["insufficient_denominator"],
+            classifications=[AnthropometryClassificationCard(**c) for c in analysis["classifications"]],
+            height=_build_measurement_summary(analysis["height"]),
+            weight=_build_measurement_summary(analysis["weight"]),
+            muac=_build_measurement_summary(analysis["muac"]),
+            head_circumference=_build_measurement_summary(analysis["head_circumference"]),
+            waist_circumference=_build_measurement_summary(analysis["waist_circumference"]),
+            hip_circumference=_build_measurement_summary(analysis["hip_circumference"]),
+            sex_distribution=[CategoryCount(code=label, count=count) for label, count in analysis["sex_distribution"]],
+            age_distribution=[AnthropometryDemographicBucket(**b) for b in analysis["age_distribution"]],
+            data_quality=AnthropometryDataQuality(**analysis["data_quality"]),
+            rows=[AnthropometryChildRow(**r) for r in analysis["rows"]],
+            notes={
+                "scope": "Height/weight/MUAC/head/waist/hip circumference measurements, completion, "
+                "demographics, and data quality are computed live from the Anthropometry Assessment Form. "
+                "Growth/nutritional-status classification (stunting, underweight, wasting, overweight/"
+                "obesity) is reported as 'pending_reference': no approved IAP 2015 or WHO age- and "
+                "sex-specific reference table exists in this codebase yet, so no threshold is approximated "
+                "or invented. 'Insufficient Data for Classification' is a real, directly-computed count "
+                "of children missing the inputs any classification would require (height, weight, sex, "
+                "or age at assessment), independent of the pending reference tables.",
             },
         )
 

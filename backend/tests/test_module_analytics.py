@@ -1081,3 +1081,153 @@ def test_build_assessment_timeline_reconciliation_fails_when_live_data_diverges(
     result = ma.build_assessment_timeline(entries, records)
     assert result["reconciliation"]["dccs"] == {"timeline": 1, "live": 0, "matches": False}
     assert result["reconciled"] is False
+
+
+# --- Anthropometry Assessment (2026-10-21) ---
+
+ANTHRO_CHOICE_MAPS = {"sex": {"1": "Male", "2": "Female"}}
+
+
+def _anthro_record(
+    child_id: str,
+    *,
+    dob: str = "2017-06-15",
+    assessment_date: str = "2026-09-10 17:25",
+    sex: str = "1",
+    height_cm: str = "128.0",
+    weight_kg: str = "25.0",
+    muac_cm: str = "17.0",
+    head_circumference_cm: str = "50.0",
+    waist_circumference_cm: str = "56.0",
+    hip_circumference_cm: str = "62.0",
+    complete: str = "2",
+) -> dict:
+    return {
+        "child_id": child_id,
+        "child_dob": dob,
+        "assessment_date": assessment_date,
+        "sex": sex,
+        "height_cm": height_cm,
+        "weight_kg": weight_kg,
+        "muac_cm": muac_cm,
+        "head_circumference_cm": head_circumference_cm,
+        "waist_circumference_cm": waist_circumference_cm,
+        "hip_circumference_cm": hip_circumference_cm,
+        "anthropometry_assessment_form_complete": complete,
+    }
+
+
+def test_parse_anthro_datetime_handles_redcap_datetime_format():
+    assert ma._parse_anthro_datetime("2026-09-10 17:25") == __import__("datetime").date(2026, 9, 10)
+    assert ma._parse_anthro_datetime("") is None
+    assert ma._parse_anthro_datetime(None) is None
+    assert ma._parse_anthro_datetime("not-a-date") is None
+
+
+def test_anthro_valid_measurement_rejects_zero_negative_and_non_numeric():
+    assert ma._anthro_valid_measurement({"height_cm": "128.0"}, "height_cm") == 128.0
+    assert ma._anthro_valid_measurement({"height_cm": "0"}, "height_cm") is None
+    assert ma._anthro_valid_measurement({"height_cm": "-5"}, "height_cm") is None
+    assert ma._anthro_valid_measurement({"height_cm": "abc"}, "height_cm") is None
+    assert ma._anthro_valid_measurement({"height_cm": ""}, "height_cm") is None
+
+
+def test_build_anthropometry_analysis_field_mapping_and_denominators():
+    records = [
+        _anthro_record("A1", dob="2017-09-10"),  # fully valid, age 9 at assessment
+        _anthro_record("A2", dob="2016-01-01", assessment_date="2026-10-01 09:00"),  # age 10
+        {"child_id": "A3", "registration_form_complete": "2"},  # registered but never touched this form
+    ]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+
+    assert result["instrument"] == "Anthropometry Assessment Form"
+    assert result["completion"]["total_registered"] == 3
+    assert result["completion"]["completed"] == 2
+    assert result["unique_children_with_valid_data"] == 2
+    assert result["total_assessment_records"] == 2
+    assert result["latest_assessment_date"] == "2026-10-01"
+    assert result["height"]["valid_n"] == 2
+    assert result["height"]["total"] == 3
+    assert result["height"]["mean"] == 128.0
+    # Classification cards must all be pending_reference except the real,
+    # directly-computed "insufficient_data" card.
+    by_key = {c["key"]: c for c in result["classifications"]}
+    for key in ("stunting", "underweight", "wasting", "overweight_obesity"):
+        assert by_key[key]["status"] == "pending_reference"
+        assert by_key[key]["flagged_count"] == 0
+        assert by_key[key]["denominator"] == 0
+    assert by_key["insufficient_data"]["status"] == "available"
+    assert by_key["insufficient_data"]["denominator"] == 2  # A3 never engaged with the form
+    assert by_key["insufficient_data"]["flagged_count"] == 0  # both A1/A2 have every required input
+
+
+def test_build_anthropometry_analysis_insufficient_data_flags_missing_inputs():
+    records = [
+        _anthro_record("B1", height_cm=""),  # engaged (has other measurements) but missing height
+        _anthro_record("B2", dob=""),  # missing DOB -> cannot compute age at assessment
+    ]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    assert result["insufficient_for_classification_count"] == 2
+    assert result["insufficient_denominator"] == 2
+    rows = {r["child_id"]: r for r in result["rows"]}
+    assert rows["B1"]["classification"] == "Insufficient data"
+    assert "missing height" in rows["B1"]["reason"]
+    assert rows["B2"]["classification"] == "Insufficient data"
+    assert "date of birth" in rows["B2"]["reason"]
+
+
+def test_build_anthropometry_analysis_pending_reference_row_when_all_inputs_present():
+    records = [_anthro_record("C1")]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    row = result["rows"][0]
+    assert row["classification"] == "Pending reference"
+    assert row["reference_standard"] == "IAP 2015 (not yet integrated)"
+    assert row["age_at_assessment"] == 9
+    assert row["sex"] == "Male"
+    assert row["bmi"] == round(25.0 / (1.28**2), 2)
+
+
+def test_build_anthropometry_analysis_measurement_summary_has_median_iqr_and_histogram():
+    records = [_anthro_record(f"D{i}", height_cm=str(120 + i)) for i in range(5)]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    height = result["height"]
+    assert height["valid_n"] == 5
+    assert height["median"] == 122.0
+    assert height["q1"] is not None and height["q3"] is not None
+    assert height["iqr"] == round(height["q3"] - height["q1"], 2)
+    assert height["std_dev"] is not None
+    assert sum(count for _label, count in height["histogram"]) == 5
+
+
+def test_build_anthropometry_analysis_never_treats_missing_measurement_as_zero():
+    records = [_anthro_record("E1", muac_cm="")]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    muac = result["muac"]
+    assert muac["valid_n"] == 0
+    assert muac["missing_n"] == 1
+    assert muac["mean"] is None
+    assert muac["median"] is None
+
+
+def test_build_anthropometry_analysis_sex_and_age_distributions():
+    records = [
+        _anthro_record("F1", sex="1", dob="2017-09-10"),  # age 9
+        _anthro_record("F2", sex="2", dob="2016-09-10"),  # age 10
+        _anthro_record("F3", sex="2", dob="2017-09-10"),  # age 9
+    ]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    assert dict(result["sex_distribution"]) == {"Male": 1, "Female": 2}
+    age_by_label = {b["label"]: b["count"] for b in result["age_distribution"]}
+    assert age_by_label["9 years"] == 2
+    assert age_by_label["10 years"] == 1
+
+
+def test_build_anthropometry_analysis_detects_invalid_values_and_duplicate_ids():
+    records = [
+        _anthro_record("G1", height_cm="-10"),  # present but invalid (negative)
+        _anthro_record("G1"),  # duplicate child_id in the raw record stream
+    ]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    assert result["data_quality"]["possible_duplicate_count"] == 1
+    assert result["data_quality"]["possible_duplicate_ids"] == ["G1"]
+    assert result["data_quality"]["invalid_measurement_counts"]["height"] >= 1

@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
 import { RefreshProvider } from "./context/RefreshContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import AnthropometryAssessment from "./routes/AnthropometryAssessment";
 import AssessmentProgress from "./routes/AssessmentProgress";
 import AssessmentsHub from "./routes/AssessmentsHub";
 import AssessmentToolStatus from "./routes/AssessmentToolStatus";
@@ -27,6 +28,7 @@ export default function App() {
             <Route path="/registry" element={<Registry />} />
             <Route path="/demographics" element={<Demographics />} />
             <Route path="/health-screening" element={<HealthScreening />} />
+            <Route path="/anthropometry" element={<AnthropometryAssessment />} />
             <Route path="/physical-activity" element={<PhysicalActivity />} />
             <Route path="/screen-time" element={<ScreenTime />} />
             <Route path="/dietary-intake" element={<DietaryIntake />} />
