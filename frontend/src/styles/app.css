@@ -5389,15 +5389,8 @@ th.registry-instrument-col-highlighted {
   font-variant-numeric: tabular-nums;
 }
 
-.anthro-completeness-card,
-.anthro-dq-card {
+.anthro-completeness-card {
   margin-bottom: var(--space-4);
-}
-
-.anthro-dq-value {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 .anthro-review-controls {

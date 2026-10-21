@@ -5842,6 +5842,30 @@ overflow; screenshot confirms the 3-card Cohort Overview row is evenly
 balanced with no empty gap and the page flows directly from Cohort
 Overview into Measurements.
 
+**Data Quality section removed (2026-10-21, same day - UI-only, no
+backend/calculation/REDCap change):** the page's own "Data Quality"
+`SectionHeader` + table (Missing Child ID / Missing Assessment Date /
+Possible Duplicate Records) and its conditional "Possible duplicate Child
+IDs" `DetailDisclosure` were removed from `AnthropometryAssessment.tsx` per
+explicit instruction - not to be confused with the separate, unrelated
+`/data-quality` page/nav tab, which is untouched. The now-unused
+`DetailDisclosure` import and the orphaned `.anthro-dq-card`/`.anthro-dq-value`
+CSS rules were removed with it. `AnthropometryResponse.data_quality` is
+unchanged in the API response and is still partially used on this page -
+`invalid_measurement_counts` still feeds the "Invalid" column of the kept
+Measurement Completeness table - only `missing_child_id_count`/
+`missing_assessment_date_count`/`possible_duplicate_count`/
+`possible_duplicate_ids` are no longer rendered anywhere. Every other
+section (Cohort Overview, Measurements, Demographics & Completeness, the
+completeness table, Child-Level Review) is unchanged.
+Verified: `tsc --noEmit` clean, `npm run build` succeeds. Live-verified via
+a headless-browser check against the running dev server + live REDCap
+data: page text contains no "Missing Child ID"/"Possible Duplicate" text
+(the "Data Quality" text match on the page is only the top-nav tab for the
+separate `/data-quality` route); zero console errors; zero horizontal
+overflow; full-page screenshot confirms the completeness table now flows
+directly into Child-Level Review with no leftover empty space.
+
 ---
 
 ## EXISTING VERIFICATION HISTORY

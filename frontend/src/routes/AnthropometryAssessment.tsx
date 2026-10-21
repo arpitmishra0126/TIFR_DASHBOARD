@@ -4,7 +4,6 @@ import { getAnthropometry } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
-import DetailDisclosure from "../components/DetailDisclosure";
 import FullScreenLoader from "../components/FullScreenLoader";
 import { IconActivity, IconCalendar, IconUsers } from "../components/icons";
 import KpiCard from "../components/KpiCard";
@@ -213,31 +212,6 @@ export default function AnthropometryAssessment() {
           </tbody>
         </table>
       </div>
-
-      <SectionHeader title="Data Quality" />
-      <div className="table-card anthro-dq-card">
-        <table className="data-table">
-          <tbody>
-            <tr>
-              <td>Missing Child ID (among records with anthropometry data)</td>
-              <td className="anthro-dq-value">{data.data_quality.missing_child_id_count}</td>
-            </tr>
-            <tr>
-              <td>Missing Assessment Date (among engaged records)</td>
-              <td className="anthro-dq-value">{data.data_quality.missing_assessment_date_count}</td>
-            </tr>
-            <tr>
-              <td>Possible Duplicate Records (by Child ID)</td>
-              <td className="anthro-dq-value">{data.data_quality.possible_duplicate_count}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      {data.data_quality.possible_duplicate_ids.length > 0 && (
-        <DetailDisclosure summary={`Possible duplicate Child IDs (${data.data_quality.possible_duplicate_ids.length})`}>
-          <p className="chart-card-note">{data.data_quality.possible_duplicate_ids.join(", ")}</p>
-        </DetailDisclosure>
-      )}
 
       <SectionHeader title="Child-Level Review" note="For study-team review - no free-text remarks shown" />
       <div className="anthro-review-controls">
