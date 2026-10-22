@@ -456,7 +456,7 @@ export default function AnthropometryAssessment() {
             onChange={(e) => setSexFilter(e.target.value)}
             aria-label="Filter by sex"
           >
-            <option value="all">All sexes</option>
+            <option value="all">Gender</option>
             {sexOptions.map((s) => (
               <option key={s} value={s}>
                 {s}
