@@ -5866,6 +5866,235 @@ separate `/data-quality` route); zero console errors; zero horizontal
 overflow; full-page screenshot confirms the completeness table now flows
 directly into Child-Level Review with no leftover empty space.
 
+**Measurements section refactored for readability (2026-10-21, same day -
+layout/chart-formatting only; no backend/calculation/REDCap change):**
+- **Layout**: the 6 measurement cards moved from `chart-grid three-col` to
+  the existing shared `chart-grid two-col` (already stacks to 1 column at
+  <=760px - no new CSS breakpoint needed), in the exact requested order
+  (Height, Weight, MUAC, Head, Waist, Hip circumference - unchanged from
+  `MEASUREMENT_FIELDS`'s existing order). CSS Grid's default
+  `align-items: stretch` already gives every row equal card height with no
+  extra rule needed.
+- **Bug fixed**: histogram bin labels (e.g. `"114.0–119.4"`) were
+  being hard-split mid-number when they exceeded the chart's
+  `xTickMaxChars={8}` wrap width, since `wrapLabel()`'s word-wrap has
+  nothing to break on inside a dash-joined numeric range (no spaces) - the
+  earlier `three-col` screenshot literally showed `"114.0–11"` /
+  `"9.4"` on two lines. Fixed with a new, frontend-only
+  `formatHistogramBinLabel()` in `AnthropometryAssessment.tsx` that rounds
+  each side of the range to a whole number for display only (e.g.
+  `"114–119"`) - the API's underlying bin boundaries/counts are
+  unchanged, only how the label text is shown. Every shortened label is
+  now well under the chart's `xTickMaxChars={10}`, so `wrapLabel()` never
+  needs to wrap at all; `xTickMaxChars` is kept (not removed) specifically
+  because passing it also sets the shared `CategoryBarChart`'s `interval={0}`,
+  guaranteeing all 6 bins stay visible instead of being auto-skipped at
+  narrow widths.
+- **Chart sizing**: histogram height raised from 120 to 180px (the wider
+  2-column card has the horizontal room to support it); each histogram
+  gained `yAxisLabel="Children"` so the axis states what it's actually
+  counting (same pre-existing `CategoryBarChart` prop already used
+  elsewhere, e.g. Screen Time's charts - no new chart logic).
+- **Card hierarchy**: the median value now renders in a larger, bolder
+  typeface (`.anthro-measurement-stat-value-primary`, 1.1rem/800-weight)
+  than the mean +-SD secondary stat (now 0.88rem base / 0.75 opacity on
+  the secondary block, down slightly from 0.8) - so Median (IQR) reads as
+  the card's primary statistic and Mean +-SD as clearly secondary, per
+  instruction; Valid N/completeness remain in the existing compact
+  `ChartCard` subtitle, unchanged.
+- **Copy cleanup**: the "Measurements" `SectionHeader`'s
+  `note="Median (IQR) primary; mean +-SD secondary"` was removed outright
+  (no replacement text) - the card's own MEDIAN (IQR)/MEAN +-SD labels and
+  the new size hierarchy already communicate this.
+- Gridlines, bar colors/radius, the tooltip, and every other
+  `CategoryBarChart` behavior are unchanged (shared component, used
+  dashboard-wide) - this page passes new prop *values* only
+  (`height`, `xTickMaxChars`, `yAxisLabel`), no component code changed.
+Verified: `tsc --noEmit` clean, `npm run build` succeeds, backend untouched
+(177/177 tests still pass, no backend file changed). Live-verified via a
+headless-browser pass against the running dev server + live REDCap data,
+both themes, at 1440px (2-column) and 390px (1-column stacked): every
+histogram tick now reads as a clean whole-number range with zero mid-word
+wrapping (e.g. Height's bins render `114–119`, `119–125`, ...,
+`141–147`), zero console errors, zero horizontal overflow at either
+width.
+
+**Growth screening implemented - IAP 2015 height/weight/BMI, ages 5-18
+(2026-10-22, real classification, not a placeholder):** following up on
+the "no validated numeric data available" finding above, the study team
+supplied the 8 reference-chart images (WHO under-5, IAP 5-18, Indian
+waist-circumference). Direct extraction of the actual cited IAP 2015
+source paper (Khadilkar et al., Indian Pediatrics 2015;52(1):47-55,
+PMID 25638185, fetched from indianpediatrics.net/jan2015/47.pdf and
+parsed page-by-page with `pypdf`) found that paper's own **Tables II-VII
+do contain the real published numeric centile tables** (height, weight,
+BMI; both sexes; 0.5-year steps, ages 5.0-18.0) - missed in the earlier
+pass, which only sampled the first ~500 characters of each page. These
+were extracted programmatically (regex over the full extracted text, not
+retyped by hand) and cross-verified (27 rows per table, ages exactly
+5.0-18.0 in 0.5 steps, spot-checked against the raw extracted text) before
+being committed.
+
+- **New `backend/app/services/iap_2015_reference.py`** - the whole-year
+  rows (5-18, matching this app's existing whole-year `compute_age_years`
+  convention, so no interpolation is introduced) for `IAP_HEIGHT_CM_BOYS`/
+  `_GIRLS`, `IAP_WEIGHT_KG_BOYS`/`_GIRLS`, `IAP_BMI_BOYS`/`_GIRLS`
+  (3rd/10th/25th/50th/75th/90th/97th height/weight percentiles; 3rd/5th/
+  10th/25th/50th/23-adult-equivalent/27-adult-equivalent BMI percentiles -
+  the 23/27 values are literal cut-offs straight from the paper's own
+  table, not derived), full source attribution in the module docstring,
+  plus `classify_iap_height/weight/bmi()` and matching
+  `iap_*_eligibility_reason()` functions (return the specific missing-input
+  reason, or `None` when eligible). Age range is hard-limited to 5-18
+  inclusive - never extrapolated outside it. "3rd percentile = low-end
+  screening cut-off" is the paper's own stated convention (its own text:
+  "The 3rd percentile was used to define thinness"), applied consistently
+  to height/weight too, not an invented threshold.
+- **`build_anthropometry_analysis()`** (`module_analytics.py`) now computes
+  real `height_screening`/`weight_screening`/`bmi_screening` per engaged
+  child - each independently either a real result ("Normal", "Short
+  stature", "Low weight-for-age", "Thinness", "Overweight", "Obesity") or
+  the literal "Not available" with its own specific reason when that
+  classification's own required inputs (the relevant measurement(s), sex,
+  age within 5-18) aren't all present - missing data is never silently
+  treated as "Normal". `classifications` is now 5 cards, each genuinely
+  implemented (no more `status: "pending_reference"` concept) - Short
+  Stature, Low Weight-for-Age, Thinness, Overweight, Obesity - each with
+  its own correctly-scoped `denominator` (only children with every input
+  that specific classification needs).
+- **What remains explicitly unavailable, by design, not oversight**:
+  - **WHO under-5 standards** - not implemented. This study's entire live
+    cohort is aged 8-10 (confirmed via the REDCap form's own header), so
+    WHO's 0-5y range would never match any current record; implementing it
+    now would be inert code with zero live verification. Revisit if a
+    younger cohort is ever added.
+  - **Waist circumference** (Khadilkar et al., J Pediatr 2014;164:1358-62)
+    - stays purely descriptive. This is a different, paywalled Elsevier
+    journal article; its numeric percentile table could not be obtained.
+    No classification card, no flagging rule.
+  - **MUAC, head circumference, hip circumference** - no validated numeric
+    reference was supplied/found for any of these; they remain purely
+    descriptive measurement cards only (median/IQR/mean/SD/histogram),
+    unchanged.
+- **Frontend** (`AnthropometryAssessment.tsx`): new "Growth Screening"
+  section (5 `KpiCard`s, `flagged/denominator (percent% flagged)`, one
+  short section note "IAP 2015 (ages 5-18) - screening flags, not
+  diagnoses" - no long paragraph). The Child-Level Review table gained
+  three columns (Height/Weight/BMI Screening) - a flagged result renders
+  in a warning color with `cursor: help`; a native `title=""` tooltip shows
+  the specific missing-input reason for "Not available" or the reference
+  citation for a real result. A new "All screening results" filter matches
+  a child flagged on any of the three columns. No "Insufficient Data for
+  Classification" placeholder card was reintroduced (per instruction) -
+  "Not available" now appears per-measurement, per-row, in the table only,
+  never as a standalone headline KPI card.
+Tests: `backend/tests/test_iap_2015_reference.py` (new, 11 tests - known
+reference points cross-checked against the extracted paper values,
+boundary conditions at exactly p3/eq23/eq27, all-6-tables age coverage,
+every eligibility-reason branch) + `test_module_analytics.py` (3
+rewritten, 1 new - real classification results, per-measurement "Not
+available" reasons, and a flagged-case test verifying short
+stature/low-weight/thinness/overweight/obesity all compute correctly
+against the embedded tables) + `test_dashboard_endpoints.py` (1 updated
+for the new classification shape). Backend: **189/189 tests pass** (up
+from 177). Frontend `tsc --noEmit` and `npm run build` both succeed.
+Live-verified against a local backend hitting live REDCap (212
+registered, 120/212 with anthropometry data, 119 IAP-eligible): Short
+Stature 9/119 (7.6%), Low Weight-for-Age 12/119 (10.1%), Thinness 5/119
+(4.2%), Overweight 1/119 (0.8%), Obesity 0/119 - a spot-checked flagged
+child (06IND047B, age 9, height 114.3cm/weight 17.8kg) correctly shows
+"Short stature"/"Low weight-for-age" against the age-9-boy IAP table
+(p3 height 119.0cm, p3 weight 19.1kg). Verified via headless-browser
+screenshots in both themes at 1440px and 390px mobile: zero console
+errors, zero horizontal overflow, table correctly scrolls horizontally at
+its new wider width (13 columns) rather than overflowing the page.
+
+**Page visually restructured to match a supplied reference mockup (2026-10-22,
+same day - layout/presentation only; every calculation, denominator, and
+REDCap mapping from the IAP 2015 pass above is unchanged):**
+
+- **New backend aggregate - BMI as a 7th measurement**: `_anthro_bmi(record)`
+  (shared helper, also reused by the per-row BMI calculation, replacing a
+  duplicate inline formula) + `measurements["bmi"] = measurement_summary
+  (bmi_values, total)` in `build_anthropometry_analysis()` - a genuine
+  cohort-level median/IQR/mean/SD/histogram aggregate over every child
+  with both height and weight valid, computed the exact same way as the
+  other six measurements (reusing `measurement_summary()`, no new
+  calculation method). `AnthropometryResponse.bmi: MeasurementSummary` is
+  additive; `height`/`weight`/`muac`/`head_circumference`/
+  `waist_circumference`/`hip_circumference` and every classification/row
+  field are byte-for-byte unchanged. BMI has no raw REDCap field of its
+  own, so it's intentionally excluded from `data_quality
+  .invalid_measurement_counts` - the frontend shows "-" for its Invalid
+  column rather than a fabricated count.
+- **`KpiCard.tsx` (shared component) gained one opt-in prop**: `progress?:
+  { value, total, color }`, rendering the existing shared `ProportionBar`
+  between the value and sublabel row - every other caller across the app
+  omits it and renders exactly as before.
+- **`AnthropometryAssessment.tsx` restructured end-to-end** to match the
+  supplied mockup's section order/visual language:
+  - **"Cohort at a Glance"**: 4 KPI cards - Children Assessed (now with a
+    real progress bar via the new `KpiCard` prop), Assessment Records, and
+    two new cards, Median Height and Median Weight (pulled directly from
+    the already-fetched `height`/`weight` measurement summaries - no new
+    calculation).
+  - **"Growth Profile"**: a two-column row replacing the old separate
+    completeness table - left is a new "Anthropometric Summary" table (all
+    7 measurements - Median (IQR), Mean ± SD, Valid N, a `ProportionBar`+
+    percent Completeness column); right is an "Age and Sex Distribution"
+    card combining the existing sex donut (now using the shared
+    `DonutChart` component, centered count + legend with per-sex
+    `ProportionBar`s, matching the mockup) and the existing age-at-
+    assessment bar chart, stacked in one card instead of two side-by-side
+    `ChartCard`s.
+  - **"Growth Screening"**: the 5 classification cards are now a bespoke
+    `ScreeningCard` (icon chip, two-line label split from the existing
+    backend label string, big flagged/denominator value, percent
+    sub-label, a chevron) instead of the shared `KpiCard`, needed for the
+    mockup's 2-line title + chevron + a 5th distinct tone (green/red,
+    which the shared `KpiTone` type doesn't have) - new
+    `.anthro-screening-tone-{blue,violet,amber,green,red}` CSS classes
+    resolve through the app's existing `--series-1`/`--series-violet`/
+    `--series-4`/`--status-good`/`--status-critical` tokens via
+    `color-mix()` (already an established pattern in this file, not a new
+    one). **Each card is now clickable** - clicking sets the existing
+    `screeningFilter` state to that card's flagged value and smooth-
+    scrolls to the Child-Level Review table (a `ref` on its wrapping
+    `<div>`), reusing state/filtering logic that already existed - no new
+    filtering mechanism.
+  - **"Explore Measurements" replaces the old 2-column grid of 6 (now 7)
+    separate measurement cards**: a tab bar (one button per measurement,
+    including the new BMI) plus a single `MeasurementDetail` panel showing
+    only the selected measurement - same median/IQR/mean/SD/histogram
+    content as before, just one at a time instead of a dense grid, per the
+    mockup's "Explore measurements" section.
+  - **"Measurement Completeness"**: unchanged in content (now 7 rows,
+    including BMI) but the Completeness column is now a `ProportionBar` +
+    percent instead of bare percent text, matching the mockup and the new
+    Growth Profile table's own Completeness column.
+  - **"Child-Level Review"**: unchanged (search/age/sex/screening-result
+    filters, the same 13-column table) - only now reachable via the
+    screening cards' scroll-and-filter action in addition to manual use.
+- No REDCap mapping, classification rule, denominator, or IAP reference
+  value was touched - confirmed via `git diff --stat` (only
+  `AnthropometryAssessment.tsx`/`KpiCard.tsx`/`app.css`/
+  `types/liveDashboard.ts` on the frontend, plus the additive backend BMI
+  aggregate above).
+Tests: 1 new backend test (`test_build_anthropometry_analysis_bmi_is_a_
+real_aggregate_measurement`) + the existing measurement-key-loop endpoint
+test extended to include `"bmi"`. Backend: **190/190 tests pass** (up from
+189). Frontend `tsc --noEmit` and `npm run build` both succeed.
+Live-verified against a local backend hitting live REDCap, both themes, at
+1440px and 390px mobile: zero console errors, zero horizontal overflow at
+either width; BMI's live cohort aggregate (median 13.8, IQR 13.2-14.7,
+n=120/212) renders correctly in both the new Anthropometric Summary table
+and its own Explore-Measurements tab; clicking the "Short Stature" card
+correctly scrolled to and filtered the review table to exactly its 9
+flagged children (cross-checked against the card's own 9/119 count);
+mobile screenshot confirms all new sections (KPI row, Growth Profile
+two-column grid, screening card grid, measurement tabs, completeness
+table) reflow to a clean single column with no clipping.
+
 ---
 
 ## EXISTING VERIFICATION HISTORY
@@ -5879,7 +6108,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **177/177 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-21 Anthropometry Assessment module). Frontend `npm run build` succeeds.
+Backend test count: **190/190 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-22 Anthropometry page restructure/BMI aggregate). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

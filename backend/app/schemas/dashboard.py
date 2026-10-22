@@ -766,19 +766,18 @@ class MeasurementSummary(BaseModel):
 
 
 class AnthropometryClassificationCard(BaseModel):
-    """One growth/nutritional-status screening category. `status` is
-    "pending_reference" for every clinical classification (stunting/
-    underweight/wasting/overweight-obesity) until an approved IAP 2015
-    age- and sex-specific reference table is integrated - `flagged_count`/
-    `denominator` stay 0/0 while pending, never an approximated value. The
-    one exception is the "insufficient_data" card, whose `status` is
-    "available" since it is a real, directly-computed data-completeness
-    count, not a clinical classification. This is a screening flag only,
-    never a confirmed diagnosis, once a reference table is integrated."""
+    """One real, implemented growth/nutritional-status screening category,
+    backed by the validated IAP 2015 numeric reference tables
+    (app.services.iap_2015_reference) - a screening flag only, never a
+    confirmed diagnosis. `denominator` is the count of engaged children
+    who had every input this specific classification needs (the relevant
+    measurement(s), sex, and an age within the reference's 5-18y range) -
+    children missing an input are excluded from the denominator, never
+    counted as "normal". A classification with no validated reference
+    (e.g. waist circumference, MUAC) simply has no card here at all."""
 
     key: str
     label: str
-    status: str  # "pending_reference" | "available"
     flagged_count: int
     denominator: int
     reference_standard: str
@@ -801,10 +800,14 @@ class AnthropometryDataQuality(BaseModel):
 
 
 class AnthropometryChildRow(BaseModel):
-    """One row of the child-level review table. `classification` is
-    "Pending reference" or "Insufficient data" (see above) - never a
-    fabricated clinical category. `bmi` is plain arithmetic (weight_kg /
-    height_m^2), not itself a classification."""
+    """One row of the child-level review table. `height_screening`/
+    `weight_screening`/`bmi_screening` are each independently either a real
+    IAP 2015 classification result (e.g. "Short stature", "Normal",
+    "Overweight") or the literal "Not available" when that specific
+    classification's own required inputs weren't all present - never a
+    fabricated result. `bmi` is plain arithmetic (weight_kg / height_m^2),
+    not itself a classification. `screening_note` explains any
+    "Not available" result(s) concisely (e.g. "Height: Missing sex")."""
 
     child_id: str
     age_at_assessment: int | None
@@ -816,9 +819,11 @@ class AnthropometryChildRow(BaseModel):
     waist_circumference_cm: float | None
     hip_circumference_cm: float | None
     bmi: float | None
-    classification: str
-    reference_standard: str
-    reason: str
+    height_screening: str
+    weight_screening: str
+    bmi_screening: str
+    reference_used: str
+    screening_note: str
 
 
 class AnthropometryResponse(BaseModel):
@@ -827,11 +832,10 @@ class AnthropometryResponse(BaseModel):
     unique_children_with_valid_data: int
     total_assessment_records: int
     latest_assessment_date: str | None
-    insufficient_for_classification_count: int
-    insufficient_denominator: int
     classifications: list[AnthropometryClassificationCard]
     height: MeasurementSummary
     weight: MeasurementSummary
+    bmi: MeasurementSummary
     muac: MeasurementSummary
     head_circumference: MeasurementSummary
     waist_circumference: MeasurementSummary

@@ -606,7 +606,6 @@ export interface MeasurementSummary {
 export interface AnthropometryClassificationCard {
   key: string;
   label: string;
-  status: "pending_reference" | "available";
   flagged_count: number;
   denominator: number;
   reference_standard: string;
@@ -639,9 +638,11 @@ export interface AnthropometryChildRow {
   waist_circumference_cm: number | null;
   hip_circumference_cm: number | null;
   bmi: number | null;
-  classification: string;
-  reference_standard: string;
-  reason: string;
+  height_screening: string;
+  weight_screening: string;
+  bmi_screening: string;
+  reference_used: string;
+  screening_note: string;
 }
 
 export interface AnthropometryResponse {
@@ -650,11 +651,10 @@ export interface AnthropometryResponse {
   unique_children_with_valid_data: number;
   total_assessment_records: number;
   latest_assessment_date: string | null;
-  insufficient_for_classification_count: number;
-  insufficient_denominator: number;
   classifications: AnthropometryClassificationCard[];
   height: MeasurementSummary;
   weight: MeasurementSummary;
+  bmi: MeasurementSummary;
   muac: MeasurementSummary;
   head_circumference: MeasurementSummary;
   waist_circumference: MeasurementSummary;

@@ -667,11 +667,10 @@ class LiveDashboardService:
             unique_children_with_valid_data=analysis["unique_children_with_valid_data"],
             total_assessment_records=analysis["total_assessment_records"],
             latest_assessment_date=analysis["latest_assessment_date"],
-            insufficient_for_classification_count=analysis["insufficient_for_classification_count"],
-            insufficient_denominator=analysis["insufficient_denominator"],
             classifications=[AnthropometryClassificationCard(**c) for c in analysis["classifications"]],
             height=_build_measurement_summary(analysis["height"]),
             weight=_build_measurement_summary(analysis["weight"]),
+            bmi=_build_measurement_summary(analysis["bmi"]),
             muac=_build_measurement_summary(analysis["muac"]),
             head_circumference=_build_measurement_summary(analysis["head_circumference"]),
             waist_circumference=_build_measurement_summary(analysis["waist_circumference"]),
@@ -683,12 +682,14 @@ class LiveDashboardService:
             notes={
                 "scope": "Height/weight/MUAC/head/waist/hip circumference measurements, completion, "
                 "demographics, and data quality are computed live from the Anthropometry Assessment Form. "
-                "Growth/nutritional-status classification (stunting, underweight, wasting, overweight/"
-                "obesity) is reported as 'pending_reference': no approved IAP 2015 or WHO age- and "
-                "sex-specific reference table exists in this codebase yet, so no threshold is approximated "
-                "or invented. 'Insufficient Data for Classification' is a real, directly-computed count "
-                "of children missing the inputs any classification would require (height, weight, sex, "
-                "or age at assessment), independent of the pending reference tables.",
+                "Growth-screening classification (short stature, low weight-for-age, thinness, overweight, "
+                "obesity) uses the validated IAP 2015 numeric reference tables (Khadilkar et al., Indian "
+                "Pediatrics 2015;52:47-55, ages 5-18) - see app.services.iap_2015_reference for the exact "
+                "published values and app.services.module_analytics.build_anthropometry_analysis for the "
+                "classification rules. Waist circumference, MUAC, head circumference, and hip circumference "
+                "remain purely descriptive - no validated numeric reference was available for them. WHO's "
+                "under-5 growth standards were not implemented since this cohort is aged 8-10 and none of "
+                "those standards' age range applies to any current record.",
             },
         )
 

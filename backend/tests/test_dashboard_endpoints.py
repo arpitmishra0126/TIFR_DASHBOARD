@@ -155,13 +155,13 @@ def test_dietary_intake_endpoint_returns_per_food_group_distribution():
     assert body["other_food_specified"]["total"] == 6
 
 
-def test_anthropometry_endpoint_shape_and_pending_reference_state():
+def test_anthropometry_endpoint_shape_and_iap_classification_state():
     response = client.get("/api/v1/dashboard/anthropometry")
     assert response.status_code == 200
     body = response.json()
     assert body["instrument"] == "Anthropometry Assessment Form"
     assert body["completion"]["total_registered"] == 6
-    for key in ("height", "weight", "muac", "head_circumference", "waist_circumference", "hip_circumference"):
+    for key in ("height", "weight", "bmi", "muac", "head_circumference", "waist_circumference", "hip_circumference"):
         assert key in body
         assert body[key]["total"] == 6
         # The shared live-shaped fixture has no anthropometry measurement data
@@ -169,12 +169,11 @@ def test_anthropometry_endpoint_shape_and_pending_reference_state():
         assert body[key]["valid_n"] == 0
         assert body[key]["mean"] is None
     by_key = {c["key"]: c for c in body["classifications"]}
-    for key in ("stunting", "underweight", "wasting", "overweight_obesity"):
-        assert by_key[key]["status"] == "pending_reference"
+    assert set(by_key.keys()) == {"short_stature", "low_weight", "thinness", "overweight", "obesity"}
+    for key in by_key:
         assert by_key[key]["flagged_count"] == 0
-        assert by_key[key]["denominator"] == 0
-    assert by_key["insufficient_data"]["status"] == "available"
-    assert body["rows"] == []  # no child has touched this instrument in the fixture
+        assert by_key[key]["denominator"] == 0  # no child has touched this instrument in the fixture
+    assert body["rows"] == []
 
 
 def test_assessment_tool_status_endpoint_shape_and_denominators():

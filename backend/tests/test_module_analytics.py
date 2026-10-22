@@ -3,6 +3,7 @@ dashboard assessment modules and the Active Cases Excel export. Uses small,
 hand-built record sets (rather than the shared live-shaped fixture) so each
 calculation can be reasoned about precisely.
 """
+from app.services import iap_2015_reference as iap
 from app.services import module_analytics as ma
 
 CHOICE_MAPS = {
@@ -1149,42 +1150,77 @@ def test_build_anthropometry_analysis_field_mapping_and_denominators():
     assert result["height"]["valid_n"] == 2
     assert result["height"]["total"] == 3
     assert result["height"]["mean"] == 128.0
-    # Classification cards must all be pending_reference except the real,
-    # directly-computed "insufficient_data" card.
+    # Classification cards are now real, IAP-2015-backed results - every
+    # card is implemented (no "pending"/"status" concept any more).
     by_key = {c["key"]: c for c in result["classifications"]}
-    for key in ("stunting", "underweight", "wasting", "overweight_obesity"):
-        assert by_key[key]["status"] == "pending_reference"
+    assert set(by_key.keys()) == {"short_stature", "low_weight", "thinness", "overweight", "obesity"}
+    for key in ("short_stature", "low_weight", "thinness", "overweight", "obesity"):
         assert by_key[key]["flagged_count"] == 0
-        assert by_key[key]["denominator"] == 0
-    assert by_key["insufficient_data"]["status"] == "available"
-    assert by_key["insufficient_data"]["denominator"] == 2  # A3 never engaged with the form
-    assert by_key["insufficient_data"]["flagged_count"] == 0  # both A1/A2 have every required input
+        assert by_key[key]["denominator"] == 2  # A1/A2 both have every IAP input; A3 never engaged
 
 
-def test_build_anthropometry_analysis_insufficient_data_flags_missing_inputs():
+def test_build_anthropometry_analysis_marks_each_screening_not_available_on_missing_inputs():
     records = [
-        _anthro_record("B1", height_cm=""),  # engaged (has other measurements) but missing height
-        _anthro_record("B2", dob=""),  # missing DOB -> cannot compute age at assessment
+        _anthro_record("B1", height_cm=""),  # missing height -> height & BMI screening unavailable
+        _anthro_record("B2", dob=""),  # missing DOB -> age unknown -> every screening unavailable
     ]
     result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
-    assert result["insufficient_for_classification_count"] == 2
-    assert result["insufficient_denominator"] == 2
     rows = {r["child_id"]: r for r in result["rows"]}
-    assert rows["B1"]["classification"] == "Insufficient data"
-    assert "missing height" in rows["B1"]["reason"]
-    assert rows["B2"]["classification"] == "Insufficient data"
-    assert "date of birth" in rows["B2"]["reason"]
+
+    assert rows["B1"]["height_screening"] == "Not available"
+    assert rows["B1"]["weight_screening"] == "Normal"  # weight/sex/age all present for B1
+    assert rows["B1"]["bmi_screening"] == "Not available"
+    assert "Missing height" in rows["B1"]["screening_note"]
+
+    assert rows["B2"]["height_screening"] == "Not available"
+    assert rows["B2"]["weight_screening"] == "Not available"
+    assert rows["B2"]["bmi_screening"] == "Not available"
+    assert "Missing age at assessment" in rows["B2"]["screening_note"]
+    assert rows["B2"]["reference_used"] == "Not available"
 
 
-def test_build_anthropometry_analysis_pending_reference_row_when_all_inputs_present():
+def test_build_anthropometry_analysis_row_classifies_against_iap_2015_when_all_inputs_present():
     records = [_anthro_record("C1")]
     result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
     row = result["rows"][0]
-    assert row["classification"] == "Pending reference"
-    assert row["reference_standard"] == "IAP 2015 (not yet integrated)"
+    assert row["height_screening"] == "Normal"
+    assert row["weight_screening"] == "Normal"
+    assert row["bmi_screening"] == "Normal"
+    assert row["reference_used"] == iap.IAP_CITATION
     assert row["age_at_assessment"] == 9
     assert row["sex"] == "Male"
     assert row["bmi"] == round(25.0 / (1.28**2), 2)
+
+
+def test_build_anthropometry_analysis_flags_short_stature_low_weight_and_bmi_categories():
+    # Boy, age 9: IAP height p3=119.0, weight p3=19.1, BMI p3=12.7/eq23=17.3/eq27=19.6.
+    records = [
+        _anthro_record("G1", height_cm="110", weight_kg="15"),  # below both p3s -> flagged height+weight
+        _anthro_record(
+            "G2", height_cm="140", weight_kg="38",
+        ),  # BMI 38/1.4^2 = 19.39 -> between eq23 and eq27 -> Overweight
+        _anthro_record(
+            "G3", height_cm="140", weight_kg="42",
+        ),  # BMI 42/1.4^2 = 21.43 -> >= eq27 -> Obesity
+    ]
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    rows = {r["child_id"]: r for r in result["rows"]}
+
+    assert rows["G1"]["height_screening"] == "Short stature"
+    assert rows["G1"]["weight_screening"] == "Low weight-for-age"
+    # G1's BMI (15 / 1.1^2 = 12.4) is also below the age-9 thinness cut-off
+    # (p3 = 12.7) - a real, independently-derived third flag for the same
+    # child, not a duplicate of the height/weight flags.
+    assert rows["G1"]["bmi_screening"] == "Thinness"
+    assert rows["G2"]["bmi_screening"] == "Overweight"
+    assert rows["G3"]["bmi_screening"] == "Obesity"
+
+    by_key = {c["key"]: c for c in result["classifications"]}
+    assert by_key["short_stature"]["flagged_count"] == 1
+    assert by_key["low_weight"]["flagged_count"] == 1
+    assert by_key["thinness"]["flagged_count"] == 1
+    assert by_key["overweight"]["flagged_count"] == 1
+    assert by_key["obesity"]["flagged_count"] == 1
 
 
 def test_build_anthropometry_analysis_measurement_summary_has_median_iqr_and_histogram():
@@ -1197,6 +1233,19 @@ def test_build_anthropometry_analysis_measurement_summary_has_median_iqr_and_his
     assert height["iqr"] == round(height["q3"] - height["q1"], 2)
     assert height["std_dev"] is not None
     assert sum(count for _label, count in height["histogram"]) == 5
+
+
+def test_build_anthropometry_analysis_bmi_is_a_real_aggregate_measurement():
+    # Default fixture: height 128.0, weight 25.0 -> bmi = 25/1.28^2 = 15.26.
+    records = [_anthro_record("H1"), _anthro_record("H2", weight_kg="")]  # H2 missing weight -> no bmi
+    result = ma.build_anthropometry_analysis(records, ANTHRO_CHOICE_MAPS)
+    bmi = result["bmi"]
+    assert bmi["valid_n"] == 1
+    assert bmi["missing_n"] == 1
+    assert bmi["mean"] == round(25.0 / (1.28**2), 2)
+    rows = {r["child_id"]: r for r in result["rows"]}
+    assert rows["H1"]["bmi"] == round(25.0 / (1.28**2), 2)
+    assert rows["H2"]["bmi"] is None
 
 
 def test_build_anthropometry_analysis_never_treats_missing_measurement_as_zero():

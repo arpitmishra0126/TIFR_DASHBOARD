@@ -28,6 +28,7 @@ from typing import Callable
 
 from app.ingestion.choice_maps import ChoiceMap
 from app.ingestion.normalize import compute_age_years, parse_complete_flag, parse_date, parse_float
+from app.services import iap_2015_reference as iap
 
 # --- Field lists (single source of truth - approved 2026-08-26) ---
 
@@ -1955,12 +1956,6 @@ ANTHROPOMETRY_MEASUREMENT_FIELDS: tuple[tuple[str, str, str], ...] = (
     ("hip_circumference_cm", "hip_circumference", "Hip Circumference (cm)"),
 )
 
-ANTHROPOMETRY_CLASSIFICATION_DEFS: tuple[tuple[str, str, str], ...] = (
-    ("stunting", "Stunting / Short Stature", "IAP 2015 height-for-age"),
-    ("underweight", "Underweight / Low Weight", "IAP 2015 weight-for-age"),
-    ("wasting", "Wasting / Thinness", "IAP 2015 BMI-for-age"),
-    ("overweight_obesity", "Overweight / Obesity", "IAP 2015 BMI-for-age"),
-)
 
 
 def _parse_anthro_datetime(value: str | None) -> date | None:
@@ -1994,6 +1989,17 @@ def _anthro_valid_measurement(record: dict, field: str) -> float | None:
     return parsed
 
 
+def _anthro_bmi(record: dict) -> float | None:
+    """BMI = weight(kg) / height(m)^2 - plain arithmetic from the two raw
+    measurements, computed only when both are individually valid. Never a
+    classification by itself."""
+    height = _anthro_valid_measurement(record, "height_cm")
+    weight = _anthro_valid_measurement(record, "weight_kg")
+    if height is None or weight is None:
+        return None
+    return round(weight / ((height / 100) ** 2), 2)
+
+
 def _anthro_has_any_measurement(record: dict) -> bool:
     return any(_anthro_valid_measurement(record, field) is not None for field, _key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS)
 
@@ -2015,16 +2021,6 @@ def _anthro_age_at_assessment(record: dict) -> int | None:
     if dob is None or assessment_date is None:
         return None
     return compute_age_years(dob, as_of=assessment_date)
-
-
-def _anthro_classification_ready(record: dict) -> bool:
-    """Minimum inputs required for ANY growth/nutritional-status
-    classification: height, weight, sex, and age at assessment."""
-    height = _anthro_valid_measurement(record, "height_cm")
-    weight = _anthro_valid_measurement(record, "weight_kg")
-    sex_value = (record.get(ANTHROPOMETRY_SEX_FIELD) or "").strip()
-    age = _anthro_age_at_assessment(record)
-    return height is not None and weight is not None and sex_value != "" and age is not None
 
 
 def _anthro_histogram(values: list[float], bins: int = 6) -> list[tuple[str, int]]:
@@ -2095,32 +2091,8 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
         return [v for r in reg if (v := _anthro_valid_measurement(r, field)) is not None]
 
     measurements = {key: measurement_summary(_values_for(field), total) for field, key, _label in ANTHROPOMETRY_MEASUREMENT_FIELDS}
-
-    insufficient = [r for r in engaged if not _anthro_classification_ready(r)]
-
-    classifications = [
-        {
-            "key": key,
-            "label": label,
-            "status": "pending_reference",
-            "flagged_count": 0,
-            "denominator": 0,
-            "reference_standard": reference,
-            "note": "Pending an approved IAP 2015 age- and sex-specific reference table - no threshold is approximated or invented.",
-        }
-        for key, label, reference in ANTHROPOMETRY_CLASSIFICATION_DEFS
-    ]
-    classifications.append(
-        {
-            "key": "insufficient_data",
-            "label": "Insufficient Data for Classification",
-            "status": "available",
-            "flagged_count": len(insufficient),
-            "denominator": len(engaged),
-            "reference_standard": "N/A",
-            "note": "Missing height, weight, sex, or age at assessment (date of birth and/or assessment date).",
-        }
-    )
+    bmi_values = [v for r in reg if (v := _anthro_bmi(r)) is not None]
+    measurements["bmi"] = measurement_summary(bmi_values, total)
 
     sex_distribution = ordered_category_counts(engaged, ANTHROPOMETRY_SEX_FIELD, choice_maps)
 
@@ -2166,6 +2138,9 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
     }
 
     rows: list[dict] = []
+    height_flagged = height_elig = weight_flagged = weight_elig = 0
+    thinness_flagged = overweight_flagged = obesity_flagged = bmi_elig = 0
+
     for r in engaged:
         sex_label = resolve_value(ANTHROPOMETRY_SEX_FIELD, r.get(ANTHROPOMETRY_SEX_FIELD), choice_maps) or None
         age = _anthro_age_at_assessment(r)
@@ -2175,26 +2150,47 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
         head = _anthro_valid_measurement(r, "head_circumference_cm")
         waist = _anthro_valid_measurement(r, "waist_circumference_cm")
         hip = _anthro_valid_measurement(r, "hip_circumference_cm")
-        bmi = round(weight / ((height / 100) ** 2), 2) if height and weight else None
+        bmi = _anthro_bmi(r)
 
-        missing_reasons = []
-        if height is None:
-            missing_reasons.append("missing height")
-        if weight is None:
-            missing_reasons.append("missing weight")
-        if not sex_label:
-            missing_reasons.append("missing sex")
-        if age is None:
-            missing_reasons.append("missing date of birth or assessment date")
-
-        if missing_reasons:
-            classification = "Insufficient data"
-            reference_standard = "N/A"
-            reason = "Cannot classify: " + ", ".join(missing_reasons) + "."
+        height_reason = iap.iap_height_eligibility_reason(height, age, sex_label)
+        if height_reason is None:
+            height_screening = iap.classify_iap_height(height, age, sex_label)
+            height_elig += 1
+            if height_screening == "Short stature":
+                height_flagged += 1
         else:
-            classification = "Pending reference"
-            reference_standard = "IAP 2015 (not yet integrated)"
-            reason = "All required inputs present; awaiting an approved IAP 2015 age- and sex-specific reference table."
+            height_screening = "Not available"
+
+        weight_reason = iap.iap_weight_eligibility_reason(weight, age, sex_label)
+        if weight_reason is None:
+            weight_screening = iap.classify_iap_weight(weight, age, sex_label)
+            weight_elig += 1
+            if weight_screening == "Low weight-for-age":
+                weight_flagged += 1
+        else:
+            weight_screening = "Not available"
+
+        bmi_reason = iap.iap_bmi_eligibility_reason(height, weight, age, sex_label)
+        if bmi_reason is None:
+            bmi_screening = iap.classify_iap_bmi(bmi, age, sex_label)
+            bmi_elig += 1
+            if bmi_screening == "Thinness":
+                thinness_flagged += 1
+            elif bmi_screening == "Overweight":
+                overweight_flagged += 1
+            elif bmi_screening == "Obesity":
+                obesity_flagged += 1
+        else:
+            bmi_screening = "Not available"
+
+        reference_used = iap.IAP_CITATION if height_reason is None or weight_reason is None or bmi_reason is None else "Not available"
+        screening_note = "; ".join(
+            note for note in (
+                f"Height: {height_reason}" if height_reason else None,
+                f"Weight: {weight_reason}" if weight_reason else None,
+                f"BMI: {bmi_reason}" if bmi_reason and bmi_reason not in (height_reason, weight_reason) else None,
+            ) if note
+        )
 
         rows.append(
             {
@@ -2208,11 +2204,56 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
                 "waist_circumference_cm": waist,
                 "hip_circumference_cm": hip,
                 "bmi": bmi,
-                "classification": classification,
-                "reference_standard": reference_standard,
-                "reason": reason,
+                "height_screening": height_screening,
+                "weight_screening": weight_screening,
+                "bmi_screening": bmi_screening,
+                "reference_used": reference_used,
+                "screening_note": screening_note,
             }
         )
+
+    classifications = [
+        {
+            "key": "short_stature",
+            "label": "Short Stature (Height-for-Age)",
+            "flagged_count": height_flagged,
+            "denominator": height_elig,
+            "reference_standard": iap.IAP_CITATION,
+            "note": "Below the 3rd percentile for age and sex - a screening flag, not a diagnosis.",
+        },
+        {
+            "key": "low_weight",
+            "label": "Low Weight-for-Age",
+            "flagged_count": weight_flagged,
+            "denominator": weight_elig,
+            "reference_standard": iap.IAP_CITATION,
+            "note": "Below the 3rd percentile for age and sex - a screening flag, not a diagnosis.",
+        },
+        {
+            "key": "thinness",
+            "label": "Thinness (BMI-for-Age)",
+            "flagged_count": thinness_flagged,
+            "denominator": bmi_elig,
+            "reference_standard": iap.IAP_CITATION,
+            "note": "BMI below the 3rd percentile for age and sex - a screening flag, not a diagnosis.",
+        },
+        {
+            "key": "overweight",
+            "label": "Overweight (BMI-for-Age)",
+            "flagged_count": overweight_flagged,
+            "denominator": bmi_elig,
+            "reference_standard": f"{iap.IAP_CITATION} - 23 adult-equivalent cut-off",
+            "note": "BMI at or above the 23 adult-equivalent cut-off - a screening flag, not a diagnosis.",
+        },
+        {
+            "key": "obesity",
+            "label": "Obesity (BMI-for-Age)",
+            "flagged_count": obesity_flagged,
+            "denominator": bmi_elig,
+            "reference_standard": f"{iap.IAP_CITATION} - 27 adult-equivalent cut-off",
+            "note": "BMI at or above the 27 adult-equivalent cut-off - a screening flag, not a diagnosis.",
+        },
+    ]
 
     return {
         "instrument": "Anthropometry Assessment Form",
@@ -2226,11 +2267,10 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
         "unique_children_with_valid_data": len(valid_data_children),
         "total_assessment_records": len(dated_records),
         "latest_assessment_date": latest_date,
-        "insufficient_for_classification_count": len(insufficient),
-        "insufficient_denominator": len(engaged),
         "classifications": classifications,
         "height": measurements["height"],
         "weight": measurements["weight"],
+        "bmi": measurements["bmi"],
         "muac": measurements["muac"],
         "head_circumference": measurements["head_circumference"],
         "waist_circumference": measurements["waist_circumference"],

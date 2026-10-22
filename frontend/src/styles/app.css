@@ -1911,6 +1911,10 @@ button.stat-block {
   color: var(--text-primary);
 }
 
+.kpi-card .proportion-bar {
+  margin-top: var(--space-2);
+}
+
 .kpi-sublabel-row {
   display: flex;
   align-items: center;
@@ -5372,7 +5376,7 @@ th.registry-instrument-col-highlighted {
 }
 
 .anthro-measurement-stat-secondary {
-  opacity: 0.8;
+  opacity: 0.75;
 }
 
 .anthro-measurement-stat-label {
@@ -5383,14 +5387,232 @@ th.registry-instrument-col-highlighted {
 }
 
 .anthro-measurement-stat-value {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
+.anthro-measurement-stat-value-primary {
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
 .anthro-completeness-card {
   margin-bottom: var(--space-4);
+}
+
+.anthro-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.anthro-latest-assessment {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.anthro-completeness-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.anthro-completeness-cell .proportion-bar {
+  flex: 1 1 60px;
+  min-width: 48px;
+  max-width: 90px;
+}
+
+.anthro-completeness-cell span {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.anthro-profile-summary-card {
+  margin-bottom: 0;
+}
+
+.anthro-profile-summary-card table.data-table {
+  margin-top: var(--space-3);
+}
+
+.anthro-profile-subsection + .anthro-profile-subsection {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-hairline);
+}
+
+.anthro-profile-subheading {
+  margin: 0 0 var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+/* --- Growth Screening cards --- */
+
+.anthro-screening-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.anthro-screening-card {
+  position: relative;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  background: var(--tone-surface, var(--surface-1));
+  border: 1px solid var(--tone-border, var(--border-hairline));
+  border-radius: var(--radius-sharp);
+  padding: var(--space-3) var(--space-4);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.anthro-screening-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--tone-accent, var(--series-1));
+}
+
+.anthro-screening-card:focus-visible {
+  outline: 2px solid var(--tone-accent, var(--series-1));
+  outline-offset: 2px;
+}
+
+.anthro-screening-tone-blue {
+  --tone-accent: var(--series-1);
+  --tone-accent-soft: color-mix(in srgb, var(--series-1) 16%, var(--surface-1));
+  --tone-surface: color-mix(in srgb, var(--series-1) 7%, var(--surface-1));
+  --tone-border: color-mix(in srgb, var(--series-1) 24%, var(--border-hairline));
+}
+
+.anthro-screening-tone-violet {
+  --tone-accent: var(--series-violet);
+  --tone-accent-soft: color-mix(in srgb, var(--series-violet) 16%, var(--surface-1));
+  --tone-surface: color-mix(in srgb, var(--series-violet) 7%, var(--surface-1));
+  --tone-border: color-mix(in srgb, var(--series-violet) 24%, var(--border-hairline));
+}
+
+.anthro-screening-tone-amber {
+  --tone-accent: var(--series-4);
+  --tone-accent-soft: color-mix(in srgb, var(--series-4) 18%, var(--surface-1));
+  --tone-surface: color-mix(in srgb, var(--series-4) 8%, var(--surface-1));
+  --tone-border: color-mix(in srgb, var(--series-4) 26%, var(--border-hairline));
+}
+
+.anthro-screening-tone-green {
+  --tone-accent: var(--status-good);
+  --tone-accent-soft: color-mix(in srgb, var(--status-good) 16%, var(--surface-1));
+  --tone-surface: color-mix(in srgb, var(--status-good) 7%, var(--surface-1));
+  --tone-border: color-mix(in srgb, var(--status-good) 24%, var(--border-hairline));
+}
+
+.anthro-screening-tone-red {
+  --tone-accent: var(--status-critical);
+  --tone-accent-soft: color-mix(in srgb, var(--status-critical) 16%, var(--surface-1));
+  --tone-surface: color-mix(in srgb, var(--status-critical) 7%, var(--surface-1));
+  --tone-border: color-mix(in srgb, var(--status-critical) 24%, var(--border-hairline));
+}
+
+.anthro-screening-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.anthro-screening-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  background: var(--tone-accent-soft, var(--surface-2));
+  color: var(--tone-accent, var(--text-secondary));
+}
+
+.anthro-screening-card-label {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.anthro-screening-card-label-main {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.anthro-screening-card-label-sub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.anthro-screening-card-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.anthro-screening-card-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.anthro-screening-card-sublabel {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* --- Explore Measurements tabs --- */
+
+.anthro-measure-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: var(--space-2);
+}
+
+.anthro-measure-tab {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 6px var(--space-3);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.anthro-measure-tab:hover {
+  color: var(--text-primary);
+  border-color: var(--series-1);
+}
+
+.anthro-measure-tab-active {
+  background: var(--series-1);
+  border-color: var(--series-1);
+  color: var(--surface-1);
 }
 
 .anthro-review-controls {
@@ -5439,7 +5661,7 @@ th.registry-instrument-col-highlighted {
 
 .anthro-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 1040px;
   border-collapse: collapse;
   font-size: 0.76rem;
 }
@@ -5480,6 +5702,24 @@ th.registry-instrument-col-highlighted {
   text-align: left !important;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.anthro-table th.anthro-screening-cell,
+.anthro-table td.anthro-screening-cell {
+  text-align: left;
+  font-variant-numeric: normal;
+}
+
+.anthro-screening-flag {
+  color: var(--status-warning);
+  font-weight: 700;
+  cursor: help;
+}
+
+.anthro-screening-na {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: help;
 }
 
 @media (max-width: 560px) {
