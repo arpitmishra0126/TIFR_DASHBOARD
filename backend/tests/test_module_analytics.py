@@ -324,13 +324,45 @@ def test_build_dietary_analysis_reports_per_food_group_distribution():
     records = [
         {"child_id": "A", "dietary_intake_complete": "2", "die_grains_freq": "1"},
         {"child_id": "B", "dietary_intake_complete": "0", "die_grains_freq": ""},
+        # An out-of-range/invalid stored code - must be excluded from both
+        # the segment counts and the valid-response denominator, never
+        # silently folded into any category.
+        {"child_id": "C", "dietary_intake_complete": "0", "die_grains_freq": "9"},
     ]
     result = ma.build_dietary_analysis(records, choice_maps)
     assert result["completion"]["completed"] == 1
     grains = next(i for i in result["items"] if i["field_label"] == "Grains / Roots / Tubers")
-    assert dict(grains["distribution"])["Daily"] == 1
+    segments_by_code = {s["code"]: s for s in grains["segments"]}
+    assert segments_by_code["1"]["label"] == "Daily"
+    assert segments_by_code["1"]["count"] == 1
+    assert segments_by_code["1"]["percent"] == ma.percent(1, 1)
+    assert segments_by_code["2"]["count"] == 0
+    assert segments_by_code["2"]["percent"] == 0.0
     assert grains["valid_n"] == 1
-    assert grains["missing_n"] == 1
+    assert grains["missing_n"] == 2
+
+
+def test_dietary_frequency_segments_excludes_invalid_code_from_denominator():
+    choice_maps = {"die_eggs_freq": {"1": "Daily", "8": "Rarely/Never"}}
+    records = [
+        {"child_id": "A", "die_eggs_freq": "1"},
+        {"child_id": "B", "die_eggs_freq": "8"},
+        {"child_id": "C", "die_eggs_freq": "99"},  # not a defined choice
+        {"child_id": "D", "die_eggs_freq": ""},  # blank
+    ]
+    segments, valid_n = ma.dietary_frequency_segments(records, "die_eggs_freq", choice_maps)
+    assert valid_n == 2
+    by_code = {s["code"]: s for s in segments}
+    assert set(by_code) == {"1", "8"}
+    assert by_code["1"]["count"] == 1 and by_code["1"]["percent"] == 50.0
+    assert by_code["8"]["count"] == 1 and by_code["8"]["percent"] == 50.0
+
+
+def test_dietary_frequency_segments_handles_zero_valid_responses_without_error():
+    choice_maps = {"die_eggs_freq": {"1": "Daily", "8": "Rarely/Never"}}
+    segments, valid_n = ma.dietary_frequency_segments([{"child_id": "A", "die_eggs_freq": ""}], "die_eggs_freq", choice_maps)
+    assert valid_n == 0
+    assert all(s["count"] == 0 and s["percent"] == 0.0 for s in segments)
 
 
 def test_build_other_food_specified_records_real_entries_and_respects_skip_logic():

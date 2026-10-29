@@ -552,9 +552,21 @@ class NeurodevelopmentResponse(BaseModel):
 
 
 # --- Dietary Intake ---
+class DietaryFrequencySegment(BaseModel):
+    """One of a food group's 8 frequency categories, in REDCap-choice-code
+    order. `percent` is this segment's share of that food group's own
+    valid-response total (`DietaryFoodItem.valid_n`), never of the full
+    registered cohort - the correct denominator for a 100% stacked bar."""
+
+    code: str
+    label: str
+    count: int
+    percent: float
+
+
 class DietaryFoodItem(BaseModel):
     field_label: str
-    distribution: list[CategoryCount]
+    segments: list[DietaryFrequencySegment]
     valid_n: int
     missing_n: int
     percent_valid: float

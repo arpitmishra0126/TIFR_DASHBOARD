@@ -27,6 +27,7 @@
   --series-5: #e87ba4;
   --series-violet: #4a3aa7;
   --series-cyan: #0e88a3;
+  --series-6: #a6472e;
 
   --status-good: #0ca30c;
   --status-good-bg: #d9f2d9;
@@ -588,14 +589,189 @@ a, button {
   margin-bottom: 0;
 }
 
-/* Dietary Intake only - tightens the gap between the Instrument Completion
-   badge and the first section heading to match the compact vertical
-   spacing already applied dashboard-wide (see .app-content/.page-header/
-   .section-header:first-of-type). Scoped to this page rather than editing
-   the shared .module-status-line rule, which the other 3 assessment-module
-   pages (Health & Screening, Physical Activity, Screen Time) also use. */
-.dietary-intake-page .module-status-line {
+/* Dietary Intake - secondary completion metric, deliberately plain text
+   (not a KpiCard/StatusBadge) so it reads as a footnote beneath the page
+   title rather than competing with the food-consumption-frequency charts
+   below, which are this page's primary content. */
+.dietary-completion-note {
+  margin: 0 0 var(--space-3);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Shared legend for every food-group's 100% stacked frequency bar - one
+   legend for the whole section since the category->color mapping is fixed
+   dashboard-wide (see lib/dietaryFrequency.ts), not repeated per bar. */
+.freq-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.freq-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.freq-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.freq-food-group-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.freq-food-group {
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.freq-food-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-3);
+}
+
+.freq-food-group-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.freq-food-group-n {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* The 100% stacked horizontal frequency bar - thin, square-ended, a 2px
+   surface gap between segments (not a rounded/pill shape). */
+.freq-stacked-bar {
+  display: flex;
+  width: 100%;
+  height: 30px;
+  border-radius: var(--radius-sharp);
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border-hairline);
+}
+
+.freq-stacked-segment {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 2px solid var(--surface-1);
+  cursor: default;
+}
+
+.freq-stacked-segment:last-child {
+  border-right: none;
+}
+
+.freq-stacked-segment-value {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.freq-stacked-empty {
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-hairline);
+  border-radius: var(--radius-control);
+  text-align: center;
+}
+
+.freq-stacked-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  min-width: 170px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-card);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 20;
+}
+
+.freq-stacked-segment:hover .freq-stacked-tooltip,
+.freq-stacked-segment:focus-visible .freq-stacked-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.freq-stacked-tooltip-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.freq-stacked-tooltip-category {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.freq-stacked-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.freq-stacked-tooltip-row strong {
+  color: var(--text-primary);
+}
+
+.freq-detail-table tfoot td {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-hairline);
+}
+
+@media (max-width: 640px) {
+  .freq-legend {
+    gap: var(--space-2) var(--space-3);
+  }
+  .freq-stacked-segment-value {
+    display: none;
+  }
 }
 
 /* Physical Activity (PAQ-C) only - matches Dietary Intake's compact
@@ -3446,6 +3622,7 @@ table.data-table tbody tr:hover {
   --series-5: #d55181;
   --series-violet: #9085e9;
   --series-cyan: #22d3ee;
+  --series-6: #c25a3f;
 
   --status-good: #0ca30c;
   --status-good-bg: rgba(12, 163, 12, 0.2);

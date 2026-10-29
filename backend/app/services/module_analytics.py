@@ -1466,6 +1466,43 @@ def build_other_food_specified(reg: list[dict], choice_maps: dict[str, ChoiceMap
     }
 
 
+def dietary_frequency_segments(
+    records: list[dict], field: str, choice_maps: dict[str, ChoiceMap],
+) -> tuple[list[dict], int]:
+    """One food group's 8-point frequency distribution as REDCap-code-
+    ordered segments (code, label, count, percent-of-valid), for a 100%
+    stacked bar. A raw stored value is counted as valid only when it
+    matches one of the field's own defined choice codes - a blank,
+    missing, or genuinely invalid/unmapped code is excluded from both the
+    segment counts and the valid-response denominator, never silently
+    folded into any category (in particular, never counted as
+    "Rarely/Never"). Every code the field's own REDCap metadata defines is
+    always included, even at zero count, so the full 8-category scale and
+    legend never depend on which categories happen to have live
+    responses yet."""
+    field_choices = choice_maps.get(field, {})
+    ordered_codes = sorted(
+        field_choices.keys(), key=lambda c: (parse_float(c) if parse_float(c) is not None else 0.0, c),
+    )
+    raw_counts: Counter = Counter()
+    valid_n = 0
+    for record in records:
+        raw = (record.get(field) or "").strip()
+        if raw and raw in field_choices:
+            raw_counts[raw] += 1
+            valid_n += 1
+    segments = [
+        {
+            "code": code,
+            "label": field_choices[code],
+            "count": raw_counts.get(code, 0),
+            "percent": percent(raw_counts.get(code, 0), valid_n),
+        }
+        for code in ordered_codes
+    ]
+    return segments, valid_n
+
+
 def build_dietary_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap]) -> dict:
     reg = registered_records(records)
     total = len(reg)
@@ -1473,12 +1510,11 @@ def build_dietary_analysis(records: list[dict], choice_maps: dict[str, ChoiceMap
 
     items = []
     for field, label in DIETARY_LABELS:
-        distribution = ordered_category_counts(reg, field, choice_maps)
-        valid_n = sum(count for _, count in distribution)
+        segments, valid_n = dietary_frequency_segments(reg, field, choice_maps)
         items.append(
             {
                 "field_label": label,
-                "distribution": distribution,
+                "segments": segments,
                 "valid_n": valid_n,
                 "missing_n": max(total - valid_n, 0),
                 "percent_valid": percent(valid_n, total),

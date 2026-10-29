@@ -1014,6 +1014,103 @@ excessive whitespace the earlier density pass had removed. Frontend
 `tsc --noEmit` and `npm run build` both succeed; no backend files touched
 (backend: 143/143 tests still pass, unaffected).
 
+**Rebuilt around 100% stacked frequency bars, replacing the Instrument
+Completion heading (2026-10-29):** per a senior spec, the page's primary
+visualization changed from 10 plain horizontal bar charts (one bar per
+category, sorted by REDCap choice-code order) to **one 100% stacked
+horizontal bar per food group** - all 8 frequency categories shown as
+proportional segments of that food group's own valid-response total, with
+a shared legend, a hover/focus tooltip per segment, and a collapsed-by-
+default expandable breakdown table (all 8 rows, including zero-count ones,
+plus the valid-response/missing counts) below each bar. The page's old
+"Instrument Completion: n/N (%)" `StatusBadge` was removed from the
+primary visual position; a plain secondary line, "Dietary Intake
+Questionnaires Completed: {completed}/{total_registered}", now sits just
+below the page subtitle instead - completion is no longer used as a proxy
+for consumption frequency anywhere on this page.
+- **Backend (additive/restructuring, not a new calculation)**: `module_
+  analytics.py` gained `dietary_frequency_segments(records, field,
+  choice_maps)` - computes each food group's 8 segments **directly from
+  the field's own REDCap choice codes** (not by matching resolved label
+  text), returning `{code, label, count, percent}` per category, ordered
+  by ascending numeric code, with every code the field's metadata defines
+  always present (zero-count included). `percent` is `count/valid_n*100`
+  - the correct per-category denominator for a 100%-stacked bar, never
+  `count/total_registered`. A raw stored value is counted as valid **only**
+  when it matches one of the field's own defined choice codes - a blank,
+  missing, or unmapped/invalid code is excluded from both the segment
+  counts and `valid_n`, never folded into any category (in particular,
+  never silently counted as "Rarely/Never"). `build_dietary_analysis()`
+  now calls this per food group instead of the generic `ordered_category_
+  counts()`; `DietaryFoodItem.distribution` (schema) was replaced with
+  `segments: list[DietaryFrequencySegment]` (`code`/`label`/`count`/
+  `percent`) - `valid_n`/`missing_n`/`percent_valid` (coverage: valid_n/
+  total_registered) are unchanged, so `StudyQuestionnaires.tsx`'s Dietary
+  domain card (which only reads `field_label`/`valid_n`/`percent_valid`)
+  needed no change. `live_dashboard_service.py` updated to construct
+  `DietaryFrequencySegment` instead of `CategoryCount` for this response
+  only - every other module's use of `CategoryCount`/`ordered_category_
+  counts()` is untouched. Tests: `test_dietary_frequency_segments_
+  excludes_invalid_code_from_denominator`, `test_dietary_frequency_
+  segments_handles_zero_valid_responses_without_error` (new), `test_build_
+  dietary_analysis_reports_per_food_group_distribution` (updated for the
+  new shape + an invalid-code case) + a `segments` shape assertion on the
+  existing `/dietary-intake` endpoint test. Backend: **192/192 tests
+  pass** (up from 190).
+- **Frequency-category color/label mapping moved to a shared, code-keyed
+  source of truth**: new `frontend/src/lib/dietaryFrequency.ts` -
+  `FREQUENCY_CATEGORIES` (8 entries, `{code, label, color}`) maps each
+  REDCap choice **code** ("1".."8") to its English label and a fixed
+  color, reusing 6 of the app's existing `--series-*` tokens plus one new
+  token, **`--series-6`** (light `#a6472e` / dark `#c25a3f`, a rust/brick
+  hue - added to both theme blocks in `app.css`, validated colorblind-safe
+  via the dataviz skill's `validate_palette.js` alongside the other 7
+  series colors). Mapping by the segment's own `code` (not by matching the
+  backend's resolved Hindi label text, which the page's existing, unrelated
+  `FREQUENCY_LABEL_EN` dictionary still does for the separate "Other Food
+  Specified" table only) is the reliable source of truth - the 1-8 code
+  convention across every `die_*_freq`/`die_other_freq` field was already
+  confirmed live in this file's dietary-intake history (`_DIETARY_RARELY_
+  NEVER_CODE = "8"`).
+- **New component**: `frontend/src/components/StackedFrequencyBar.tsx` - a
+  plain CSS flex bar (not recharts, matching the project's existing
+  `ProportionBar`/`SplitBar`/`MonitorBar` convention for simple proportional
+  bars), one `<div>` segment per non-zero category sized by its real
+  `percent`, a 2px surface gap between segments, a value label shown only
+  on segments >=9% wide (avoiding clutter on narrow slivers), and a hover/
+  focus-triggered tooltip (CSS-only, `:hover`/`:focus-visible`, so it's
+  reachable by keyboard too) showing the food group, category, child
+  count, and percent. A food group with zero valid responses renders an
+  explicit "No valid responses recorded yet" empty state instead of a
+  blank/fabricated bar.
+- **`DietaryIntake.tsx` rebuilt**: one shared `FrequencyLegend` (all 8
+  categories, including zero-count ones, same fixed order/colors as every
+  bar) rendered once above the food-group list rather than repeated per
+  bar; each food group is a card with its label, `n = {valid_n} ·
+  {missing_n} missing/no response` (missing reported separately, never
+  folded into "Rarely/Never"), the stacked bar, and a `DetailDisclosure`-
+  wrapped breakdown table (Frequency Category | Children | % of Valid
+  Responses, all 8 rows always present, plus a footer row cross-checking
+  the valid-response total against the registered cohort). The "Other Food
+  Specified" section (separate open-ended item, already distinct from the
+  "Other Vegetables"/"Other Fruits" standard food groups) is unchanged.
+  Removed imports: `ChartCard`, `HorizontalBarChart`/`compute
+  HorizontalBarChartHeight`, `StatusBadge` (all now unused on this page).
+- **Food-group aggregation verified, not assumed**: confirmed live via
+  `live_field_map.py`'s `DIETARY_EXPORT_FIELDS` that each of the 10
+  standard food groups has exactly **one** `die_*_freq` field of its own
+  (no multi-item food groups exist on this instrument) - so no aggregation
+  rule was needed or invented; each group's bar/table reads that one
+  field's own distribution directly.
+Verified live against REDCap (213 registered, 155/213 Dietary Intake
+complete at time of check): Grains 150/1/2/2/0/0/0/0 (sums to valid_n=155,
+percentages 96.8/0.6/1.3/1.3/0/0/0/0 reconcile to ~100%); every one of the
+10 bars/tables cross-checked the same way via a live `curl` + the UI's own
+expandable table. Frontend `tsc --noEmit` and `npm run build` both
+succeed. Verified via headless-browser screenshots in both light and dark
+theme at 1440px (zero console errors) and 390px mobile (zero horizontal
+overflow, legend wraps cleanly, bars/labels reflow without clipping).
+
 ---
 
 ## FRONTEND STRUCTURE
@@ -6108,7 +6205,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **190/190 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-22 Anthropometry page restructure/BMI aggregate). Frontend `npm run build` succeeds.
+Backend test count: **192/192 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-29 Dietary Intake 100%-stacked-bar rebuild). Frontend `npm run build` succeeds.
 
 Do not assume this remains true after changes - run the tests.
 

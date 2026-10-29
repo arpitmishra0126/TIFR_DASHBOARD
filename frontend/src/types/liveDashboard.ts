@@ -446,9 +446,16 @@ export interface NeurodevelopmentResponse {
   notes: Record<string, string>;
 }
 
+export interface DietaryFrequencySegment {
+  code: string;
+  label: string;
+  count: number;
+  percent: number;
+}
+
 export interface DietaryFoodItem {
   field_label: string;
-  distribution: CategoryCount[];
+  segments: DietaryFrequencySegment[];
   valid_n: number;
   missing_n: number;
   percent_valid: number;

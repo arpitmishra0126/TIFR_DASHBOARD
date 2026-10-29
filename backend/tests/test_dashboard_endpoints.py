@@ -153,6 +153,9 @@ def test_dietary_intake_endpoint_returns_per_food_group_distribution():
     assert len(body["items"]) == 10
     assert "other_food_specified" in body
     assert body["other_food_specified"]["total"] == 6
+    grains = next(i for i in body["items"] if i["field_label"] == "Grains / Roots / Tubers")
+    assert len(grains["segments"]) >= 1
+    assert {"code", "label", "count", "percent"} <= set(grains["segments"][0].keys())
 
 
 def test_anthropometry_endpoint_shape_and_iap_classification_state():

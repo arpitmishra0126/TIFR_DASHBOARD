@@ -1,37 +1,24 @@
 import { useEffect, useState } from "react";
 
 import { getDietaryIntake } from "../api/dashboard";
-import ChartCard from "../components/ChartCard";
 import DataLoadError from "../components/DataLoadError";
+import DetailDisclosure from "../components/DetailDisclosure";
 import FullScreenLoader from "../components/FullScreenLoader";
-import HorizontalBarChart, { computeHorizontalBarChartHeight } from "../components/HorizontalBarChart";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
-import StatusBadge from "../components/StatusBadge";
+import StackedFrequencyBar from "../components/StackedFrequencyBar";
+import { FREQUENCY_CATEGORIES } from "../lib/dietaryFrequency";
 import { useRefresh } from "../context/RefreshContext";
-import type { DietaryIntakeResponse } from "../types/liveDashboard";
+import type { DietaryFoodItem, DietaryIntakeResponse } from "../types/liveDashboard";
 
-const TIER_BADGE_TONE: Record<string, "good" | "neutral" | "warning"> = {
-  High: "good",
-  Partial: "warning",
-  "No Data": "neutral",
-};
-
-// Wide enough for the longest known REDCap frequency choice labels without
-// truncating; shared by every food-group chart so their y-axis columns
-// line up.
-const FOOD_GROUP_LABEL_WIDTH = 190;
-
-// Display-only English labels for the 10 die_*_freq fields' Hindi-only
-// REDCap choices (confirmed live, e.g. die_grains_freq: "1, प्रतिदिन | 2,
-// सप्ताह में 3-6 बार | ..." - see CLAUDE.md's "Known data characteristic"
-// note) and the separate die_other_freq item, which shares the identical
-// 8-level scale. This is a presentation mapping only, applied just before
-// charting/table rendering - the REDCap choice codes, the resolved label
-// text returned by the API, and every calculation/denominator/ordering
-// upstream of this file are completely unchanged. A label with no match
-// here (should never occur for these known 8 categories) renders as-is
-// rather than disappearing.
+// Display-only English labels for the separate "Other Food Specified" open-
+// ended item's own die_other_freq value (resolved by the backend as
+// REDCap's Hindi-only choice text - see CLAUDE.md's "Known data
+// characteristic" note). The 10 standard food-group bars/tables below use
+// FREQUENCY_CATEGORIES (lib/dietaryFrequency.ts), keyed by REDCap's own
+// stored code - the reliable source of truth; this dictionary exists only
+// because the "Other Food Specified" table has no segment/code of its own
+// to key off, just the backend's resolved label text.
 const FREQUENCY_LABEL_EN: Record<string, string> = {
   "प्रतिदिन": "Daily",
   "सप्ताह में 3-6 बार": "3–6 times/week",
@@ -45,6 +32,69 @@ const FREQUENCY_LABEL_EN: Record<string, string> = {
 
 function toEnglishFrequencyLabel(label: string): string {
   return FREQUENCY_LABEL_EN[label] ?? label;
+}
+
+function FrequencyLegend() {
+  return (
+    <div className="freq-legend" role="list" aria-label="Consumption frequency categories">
+      {FREQUENCY_CATEGORIES.map((cat) => (
+        <div className="freq-legend-item" role="listitem" key={cat.code}>
+          <span className="freq-legend-dot" style={{ background: cat.color }} />
+          {cat.label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FoodGroupCard({ item, totalRegistered }: { item: DietaryFoodItem; totalRegistered: number }) {
+  return (
+    <div className="freq-food-group">
+      <div className="freq-food-group-head">
+        <h3 className="freq-food-group-title">{item.field_label}</h3>
+        <span className="freq-food-group-n">
+          n = {item.valid_n}
+          {item.missing_n > 0 && ` · ${item.missing_n} missing/no response`}
+        </span>
+      </div>
+      <StackedFrequencyBar foodGroupLabel={item.field_label} segments={item.segments} />
+      <DetailDisclosure summary="View breakdown table">
+        <table className="data-table freq-detail-table">
+          <thead>
+            <tr>
+              <th>Frequency Category</th>
+              <th>Children</th>
+              <th>% of Valid Responses</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FREQUENCY_CATEGORIES.map((cat) => {
+              const seg = item.segments.find((s) => s.code === cat.code);
+              return (
+                <tr key={cat.code}>
+                  <td>{cat.label}</td>
+                  <td>{seg?.count ?? 0}</td>
+                  <td>{seg?.percent ?? 0}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Valid responses (denominator)</td>
+              <td>{item.valid_n}</td>
+              <td>{totalRegistered > 0 ? `${((item.valid_n / totalRegistered) * 100).toFixed(1)}% of cohort` : "—"}</td>
+            </tr>
+            <tr>
+              <td>Missing / no response</td>
+              <td>{item.missing_n}</td>
+              <td>—</td>
+            </tr>
+          </tfoot>
+        </table>
+      </DetailDisclosure>
+    </div>
+  );
 }
 
 export default function DietaryIntake() {
@@ -65,49 +115,33 @@ export default function DietaryIntake() {
 
   const { completion } = data;
   const otherFood = data.other_food_specified;
-  const distributions = data.items.map((item) =>
-    item.distribution.map((c) => ({ label: toEnglishFrequencyLabel(c.code), count: c.count })),
-  );
-  const sharedChartHeight = computeHorizontalBarChartHeight(distributions, FOOD_GROUP_LABEL_WIDTH, true);
 
   return (
     <section className="dietary-intake-page">
       <PageHeader
         eyebrow="Study Assessment"
         title="Dietary Intake"
-        subtitle="Food-group consumption frequency - live REDCap instrument."
+        subtitle="How often each food group is consumed, reported directly by the study's live REDCap data."
       />
 
-      <div className="module-status-line">
-        <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
-          tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
-        />
-      </div>
+      <p className="dietary-completion-note">
+        Dietary Intake Questionnaires Completed: {completion.completed}/{completion.total_registered}
+      </p>
 
-      <SectionHeader title="Consumption frequency by food group" />
-      <div className="chart-grid two-col">
-        {data.items.map((item, index) => (
-          <ChartCard
-            key={item.field_label}
-            title={item.field_label}
-            subtitle={`n=${item.valid_n}/${completion.total_registered} answered (${item.percent_valid}%)`}
-            compact
-          >
-            <HorizontalBarChart
-              data={distributions[index]}
-              mode="categorical"
-              labelWidth={FOOD_GROUP_LABEL_WIDTH}
-              height={sharedChartHeight}
-              dense
-            />
-          </ChartCard>
+      <SectionHeader
+        title="Food Consumption Frequency"
+        note="Each bar = 100% of children with a valid response for that food group"
+      />
+      <FrequencyLegend />
+      <div className="freq-food-group-grid">
+        {data.items.map((item) => (
+          <FoodGroupCard key={item.field_label} item={item} totalRegistered={completion.total_registered} />
         ))}
       </div>
 
       <SectionHeader
         title="Other Food Specified"
-        note="Separate from 'Other Vegetables'/'Other Fruits' above"
+        note="Separate from 'Other Vegetables'/'Other Fruits' above - one open-ended item, not aggregated"
       />
       <div className="table-card">
         <p className="chart-card-subtitle" style={{ padding: "var(--space-4) var(--space-4) 0" }}>

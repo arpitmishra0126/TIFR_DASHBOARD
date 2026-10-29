@@ -58,6 +58,7 @@ from app.schemas.dashboard import (
     DeviceMinutes,
     DseqCodingScores,
     DietaryFoodItem,
+    DietaryFrequencySegment,
     DietaryIntakeResponse,
     MeasurementSummary,
     OtherFoodEntry,
@@ -702,7 +703,7 @@ class LiveDashboardService:
             items=[
                 DietaryFoodItem(
                     field_label=item["field_label"],
-                    distribution=[CategoryCount(code=label, count=count) for label, count in item["distribution"]],
+                    segments=[DietaryFrequencySegment(**segment) for segment in item["segments"]],
                     valid_n=item["valid_n"],
                     missing_n=item["missing_n"],
                     percent_valid=item["percent_valid"],
