@@ -14,6 +14,7 @@ import ProportionBar from "../components/ProportionBar";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
 import { useRefresh } from "../context/RefreshContext";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import type {
   AnthropometryChildRow,
   AnthropometryClassificationCard,
@@ -118,8 +119,16 @@ function splitClassificationLabel(label: string): [string, string] {
 
 function MeasurementDetail({ field, summary }: { field: { key: MeasurementKey; label: string; unit: string }; summary: MeasurementSummary }) {
   const histogram = summary.histogram.map((c) => ({ label: formatHistogramBinLabel(c.code), count: c.count }));
+  // Denominated against the study's overall enrolled cohort (222,
+  // STUDY_ORIGINAL_ENROLLMENT) rather than the backend's own `total`
+  // (= live REDCap total_registered) - same dashboard-wide "denominate
+  // against 222" rule applied to Overview/Health History/Dietary Intake.
+  const percentValid = percentOf(summary.valid_n, STUDY_ORIGINAL_ENROLLMENT);
   return (
-    <ChartCard title={`${field.label} (${field.unit})`} subtitle={`n=${summary.valid_n}/${summary.total} valid (${summary.percent_valid}%)`}>
+    <ChartCard
+      title={`${field.label} (${field.unit})`}
+      subtitle={`n=${summary.valid_n}/${STUDY_ORIGINAL_ENROLLMENT} valid (${percentValid ?? 0}%)`}
+    >
       <div className="anthro-measurement-stats">
         <div className="anthro-measurement-stat">
           <span className="anthro-measurement-stat-label">Median (IQR)</span>
@@ -238,7 +247,13 @@ export default function AnthropometryAssessment() {
   const sexTotal = sexDistribution.reduce((s, c) => s + c.count, 0);
   const ageDistribution = data.age_distribution.map((b) => ({ label: `${b.label} (${b.percent}%)`, count: b.count }));
   const ageTotal = data.age_distribution.reduce((s, b) => s + b.count, 0);
-  const assessedPercent = percentOf(data.unique_children_with_valid_data, completion.total_registered);
+  // Denominated against the study's overall enrolled cohort (222,
+  // STUDY_ORIGINAL_ENROLLMENT), not the live REDCap `total_registered`
+  // count - senior instruction, same convention already applied to
+  // Overview/Health History/Dietary Intake. Every count below is still
+  // the real, unmodified live value; only what it's shown against changed.
+  const assessedPercent = percentOf(data.unique_children_with_valid_data, STUDY_ORIGINAL_ENROLLMENT);
+  const completionPercent = percentOf(completion.completed, STUDY_ORIGINAL_ENROLLMENT);
   const selectedField = MEASUREMENT_FIELDS.find((f) => f.key === selectedMeasurement) ?? MEASUREMENT_FIELDS[0];
 
   return (
@@ -251,7 +266,7 @@ export default function AnthropometryAssessment() {
 
       <div className="module-status-line anthro-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          label={`Instrument Completion: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${completionPercent ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
         {data.latest_assessment_date && (
@@ -267,8 +282,8 @@ export default function AnthropometryAssessment() {
         <KpiCard
           icon={IconUsers}
           label="Children Assessed"
-          value={`${data.unique_children_with_valid_data} / ${completion.total_registered}`}
-          progress={{ value: data.unique_children_with_valid_data, total: completion.total_registered }}
+          value={`${data.unique_children_with_valid_data} / ${STUDY_ORIGINAL_ENROLLMENT}`}
+          progress={{ value: data.unique_children_with_valid_data, total: STUDY_ORIGINAL_ENROLLMENT }}
           sublabel={assessedPercent !== null ? `${assessedPercent}% of registered cohort` : undefined}
           tone="blue"
         />
@@ -335,8 +350,8 @@ export default function AnthropometryAssessment() {
                     </td>
                     <td>{s.valid_n}</td>
                     <td className="anthro-completeness-cell">
-                      <ProportionBar value={s.valid_n} total={s.total} />
-                      <span>{s.percent_valid}%</span>
+                      <ProportionBar value={s.valid_n} total={STUDY_ORIGINAL_ENROLLMENT} />
+                      <span>{percentOf(s.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%</span>
                     </td>
                   </tr>
                 );
@@ -409,15 +424,19 @@ export default function AnthropometryAssessment() {
             {MEASUREMENT_FIELDS.map((field) => {
               const summary = data[field.key];
               const invalid = field.key === "bmi" ? null : data.data_quality.invalid_measurement_counts[field.key] ?? 0;
+              // Missing N recomputed against the 222 cohort denominator
+              // (not the backend's own total_registered-based missing_n),
+              // so valid_n + missing always sums to exactly 222 here too.
+              const missing = Math.max(STUDY_ORIGINAL_ENROLLMENT - summary.valid_n, 0);
               return (
                 <tr key={field.key}>
                   <td>{field.label}</td>
                   <td>{summary.valid_n}</td>
-                  <td>{summary.missing_n}</td>
+                  <td>{missing}</td>
                   <td>{invalid === null ? "—" : invalid}</td>
                   <td className="anthro-completeness-cell">
-                    <ProportionBar value={summary.valid_n} total={summary.total} />
-                    <span>{summary.percent_valid}%</span>
+                    <ProportionBar value={summary.valid_n} total={STUDY_ORIGINAL_ENROLLMENT} />
+                    <span>{percentOf(summary.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%</span>
                   </td>
                 </tr>
               );

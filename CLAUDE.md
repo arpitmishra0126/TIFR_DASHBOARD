@@ -6229,6 +6229,41 @@ mobile screenshot confirms all new sections (KPI row, Growth Profile
 two-column grid, screening card grid, measurement tabs, completeness
 table) reflow to a clean single column with no clipping.
 
+**Denominator switched to the overall cohort (222) throughout the page
+(2026-10-30, `AnthropometryAssessment.tsx` only - frontend display change,
+no backend file touched, 192/192 backend tests unaffected):** per senior
+instruction (same rule already applied to Overview/Health History/Dietary
+Intake), every place on this page that displayed a count against the live
+REDCap `total_registered`/`MeasurementSummary.total` figure (212/213 at
+various points) now displays it against `STUDY_ORIGINAL_ENROLLMENT` (222,
+`lib/studyCohort.ts`) instead - `percentOf(count, 222)` computed locally
+in place of the backend's own `percent_valid`/`missing_n` (which remain
+`total_registered`-based internally, unchanged in the API response).
+- "Instrument Completion" status badge and the "Children Assessed" KPI
+  card (value, progress-bar total, and percent sublabel) now read
+  `/222`.
+- `MeasurementDetail`'s subtitle (`n=valid/total valid (pct%)`, shown above
+  the Explore Measurements histogram) now reads `/222`.
+- The Growth Profile "Anthropometric Summary" table's Completeness column
+  (`ProportionBar` + percent) is now denominated by 222 for all 7
+  measurements.
+- The Measurement Completeness table's Missing N is now recomputed locally
+  as `222 - valid_n` (not the backend's own `total_registered`-based
+  `missing_n`) and its Completeness column denominated by 222, so
+  Valid N + Missing N always sums to exactly 222 per row.
+- **Not touched, correctly**: the 5 Growth Screening cards' own
+  `flagged/denominator` figures (e.g. "10/149") - that denominator is the
+  IAP-2015-eligible-children count (`card.denominator`, a genuinely
+  different, smaller population than total_registered), not a
+  `total_registered`/212/213 value, so this instruction doesn't apply to
+  it; left exactly as the backend computes it.
+Verified live: a full-page text scan (`body.innerText.match(/\b212\b/)`,
+`/\b213\b/`) returned zero matches; "Instrument Completion: 149/222
+(67.1%)", "Children Assessed 149/222", Height's Measurement Completeness
+row showed "149 / 73 / 67.1%" (149+73=222), MUAC/Head/Waist/Hip showed
+"148 / 74 / 66.7%" (148+74=222). `tsc --noEmit` clean, `npm run build`
+succeeds, zero console errors, screenshot confirmed at 1440px.
+
 ---
 
 ## EXISTING VERIFICATION HISTORY
