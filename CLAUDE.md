@@ -1111,6 +1111,43 @@ succeed. Verified via headless-browser screenshots in both light and dark
 theme at 1440px (zero console errors) and 390px mobile (zero horizontal
 overflow, legend wraps cleanly, bars/labels reflow without clipping).
 
+**Denominator switched to the overall cohort (222), label changed to
+"Assessment Status" (2026-10-30, `DietaryIntake.tsx` only - frontend
+display change, no backend file touched, 192/192 backend tests
+unaffected):** per senior instruction, every place on this page that
+displayed a count against the live REDCap `total_registered` figure (212
+or 213 at various points) now displays it against
+`STUDY_ORIGINAL_ENROLLMENT` (222, `lib/studyCohort.ts` - same constant and
+precedent as Overview/Health History's "denominate against the enrolled
+cohort, not the live active count" rule) instead - same convention as
+`percentOf(count, studyDenominator)` used elsewhere in the app, not a new
+pattern.
+- The secondary completion line was relabeled from "Dietary Intake
+  Questionnaires Completed: {completed}/{total_registered}" to
+  **"Assessment Status: {completed}/222"**.
+- Each food group's "n = {valid_n} · {missing} missing/no response" line
+  and its breakdown table's footer rows ("Valid responses (denominator)" /
+  "Missing / no response") now compute `missing` locally as
+  `222 - valid_n` (not the backend's own `missing_n`, which is still
+  `total_registered - valid_n` internally) and their percentages via
+  `percentOf(count, 222)` - so `valid_n + missing` always sums to exactly
+  222 on this page. `item.missing_n`/`item.percent_valid` themselves are
+  unchanged in the API response, simply no longer read for display here.
+- "Other Food Specified"'s summary line ("N/total registered children
+  specified...") now reads `{otherFood.valid_n}/222 (...%)`, recomputed
+  locally instead of using `otherFood.total`/`otherFood.percent_valid`
+  directly.
+- The 100%-stacked-bar segment percentages themselves (each category's
+  share of that food group's own `valid_n`) are **unchanged** - they were
+  never denominated by `total_registered` in the first place, so this
+  instruction doesn't apply to them.
+Verified live: a full-page text scan (`body.innerText.match(/\b212\b/)`,
+`/\b213\b/`) returned zero matches; "Assessment Status: 157/222" rendered
+correctly; Grains' breakdown table footer showed "157 · 70.7% of cohort" /
+"65 · 29.3% of cohort" (157+65=222); "Other Food Specified" showed
+"1/222 (0.5%)". `tsc --noEmit` clean, `npm run build` succeeds, zero
+console errors, zero horizontal overflow at 1440px.
+
 ---
 
 ## FRONTEND STRUCTURE

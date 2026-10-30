@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getDietaryIntake } from "../api/dashboard";
+import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import DetailDisclosure from "../components/DetailDisclosure";
 import FullScreenLoader from "../components/FullScreenLoader";
@@ -8,6 +9,7 @@ import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StackedFrequencyBar from "../components/StackedFrequencyBar";
 import { FREQUENCY_CATEGORIES } from "../lib/dietaryFrequency";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import { useRefresh } from "../context/RefreshContext";
 import type { DietaryFoodItem, DietaryIntakeResponse } from "../types/liveDashboard";
 
@@ -47,14 +49,22 @@ function FrequencyLegend() {
   );
 }
 
-function FoodGroupCard({ item, totalRegistered }: { item: DietaryFoodItem; totalRegistered: number }) {
+function FoodGroupCard({ item }: { item: DietaryFoodItem }) {
+  // Denominated against the study's overall enrolled cohort (222,
+  // STUDY_ORIGINAL_ENROLLMENT - senior-confirmed static figure, see
+  // lib/studyCohort.ts), not the live REDCap `total_registered` count -
+  // same dashboard-wide "denominate against 222" rule already applied to
+  // Overview/Health History. `missing` is recomputed locally against that
+  // same 222 (never the backend's own total_registered-based missing_n),
+  // so valid_n + missing always sums to exactly 222.
+  const missing = Math.max(STUDY_ORIGINAL_ENROLLMENT - item.valid_n, 0);
   return (
     <div className="freq-food-group">
       <div className="freq-food-group-head">
         <h3 className="freq-food-group-title">{item.field_label}</h3>
         <span className="freq-food-group-n">
           n = {item.valid_n}
-          {item.missing_n > 0 && ` · ${item.missing_n} missing/no response`}
+          {missing > 0 && ` · ${missing} missing/no response`}
         </span>
       </div>
       <StackedFrequencyBar foodGroupLabel={item.field_label} segments={item.segments} />
@@ -83,12 +93,12 @@ function FoodGroupCard({ item, totalRegistered }: { item: DietaryFoodItem; total
             <tr>
               <td>Valid responses (denominator)</td>
               <td>{item.valid_n}</td>
-              <td>{totalRegistered > 0 ? `${((item.valid_n / totalRegistered) * 100).toFixed(1)}% of cohort` : "—"}</td>
+              <td>{percentOf(item.valid_n, STUDY_ORIGINAL_ENROLLMENT)}% of cohort</td>
             </tr>
             <tr>
               <td>Missing / no response</td>
-              <td>{item.missing_n}</td>
-              <td>—</td>
+              <td>{missing}</td>
+              <td>{percentOf(missing, STUDY_ORIGINAL_ENROLLMENT)}% of cohort</td>
             </tr>
           </tfoot>
         </table>
@@ -125,7 +135,7 @@ export default function DietaryIntake() {
       />
 
       <p className="dietary-completion-note">
-        Dietary Intake Questionnaires Completed: {completion.completed}/{completion.total_registered}
+        Assessment Status: {completion.completed}/{STUDY_ORIGINAL_ENROLLMENT}
       </p>
 
       <SectionHeader
@@ -135,7 +145,7 @@ export default function DietaryIntake() {
       <FrequencyLegend />
       <div className="freq-food-group-grid">
         {data.items.map((item) => (
-          <FoodGroupCard key={item.field_label} item={item} totalRegistered={completion.total_registered} />
+          <FoodGroupCard key={item.field_label} item={item} />
         ))}
       </div>
 
@@ -145,7 +155,8 @@ export default function DietaryIntake() {
       />
       <div className="table-card">
         <p className="chart-card-subtitle" style={{ padding: "var(--space-4) var(--space-4) 0" }}>
-          {otherFood.valid_n}/{otherFood.total} registered children specified an additional food ({otherFood.percent_valid}%)
+          {otherFood.valid_n}/{STUDY_ORIGINAL_ENROLLMENT} registered children specified an additional food (
+          {percentOf(otherFood.valid_n, STUDY_ORIGINAL_ENROLLMENT)}%)
         </p>
         {otherFood.entries.length === 0 ? (
           <p className="chart-card-note" style={{ padding: "0 var(--space-4) var(--space-4)" }}>
