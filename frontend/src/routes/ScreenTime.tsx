@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { getScreenTime } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
+import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import DonutChart from "../components/DonutChart";
 import FullScreenLoader from "../components/FullScreenLoader";
 import { IconBrain, IconCalendar, IconClipboardAlert, IconClipboardCheck, IconMonitor } from "../components/icons";
 import KpiCard from "../components/KpiCard";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -41,9 +43,18 @@ function codingScoreValue(summary: ScoreSummary): string {
   return summary.mean !== null ? summary.mean.toFixed(2) : "-";
 }
 
-function codingScoreSublabel(summary: ScoreSummary, range: string): string {
-  if (summary.valid_n === 0) return `${range} · no data (0/${summary.total})`;
-  return `${range} · n=${summary.valid_n}/${summary.total} (${summary.percent_valid}%)`;
+// Frequency/Duration are genuinely pooled denominators (completed children
+// x field_count - e.g. 44x3, 44x4), NOT the live total_registered count -
+// those stay exactly as the backend computes them. Supervision/Household
+// Rules are single-field scores, so their own `.total` IS the live
+// total_registered count - pass `useStudyCohort` for those two so they
+// denominate against the 222 cohort instead, same senior instruction
+// applied everywhere else on this page.
+function codingScoreSublabel(summary: ScoreSummary, range: string, useStudyCohort = false): string {
+  const total = useStudyCohort ? STUDY_ORIGINAL_ENROLLMENT : summary.total;
+  const percent = useStudyCohort ? (percentOf(summary.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0) : summary.percent_valid;
+  if (summary.valid_n === 0) return `${range} · no data (0/${total})`;
+  return `${range} · n=${summary.valid_n}/${total} (${percent}%)`;
 }
 
 function pairedToGrouped(points: PairedMinutesPoint[]) {
@@ -100,6 +111,15 @@ export default function ScreenTime() {
   if (!data) return <FullScreenLoader message="Loading Screen Time..." />;
 
   const { completion } = data;
+  // Denominated against the study's overall enrolled cohort (222,
+  // STUDY_ORIGINAL_ENROLLMENT), not the live REDCap total_registered count
+  // (MinutesSummary.total is backend-computed from total_registered) -
+  // senior instruction, same convention applied dashboard-wide.
+  const studyDenominator = STUDY_ORIGINAL_ENROLLMENT;
+  // Recomputed against the same 222 denominator, so Completed + Missing
+  // always sums to 222 here (not the backend's own total_registered-based
+  // missing_count).
+  const missingDseq = Math.max(studyDenominator - completion.completed, 0);
   const avg = data.average_daily_summary;
   const school = data.school_day_summary;
   const weekend = data.weekend_summary;
@@ -126,7 +146,7 @@ export default function ScreenTime() {
   const paAnyData = paSchool.valid_n > 0 || paWeekend.valid_n > 0;
   const scatterAnyData = data.screen_vs_activity_scatter.length > 0;
 
-  const summaryOf = (m: MinutesSummary) => `n=${m.valid_n}/${m.total} · median ${minutesLabel(m.median)}`;
+  const summaryOf = (m: MinutesSummary) => `n=${m.valid_n}/${studyDenominator} · median ${minutesLabel(m.median)}`;
 
   return (
     <section className="screen-time-page">
@@ -138,7 +158,7 @@ export default function ScreenTime() {
 
       <div className="module-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          label={`Assessment Status: ${completion.completed}/${studyDenominator} (${percentOf(completion.completed, studyDenominator) ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
       </div>
@@ -162,13 +182,13 @@ export default function ScreenTime() {
           tone="aqua"
           label="Supervision Score"
           value={codingScoreValue(data.coding_scores.supervision)}
-          sublabel={codingScoreSublabel(data.coding_scores.supervision, "Range 0–3")}
+          sublabel={codingScoreSublabel(data.coding_scores.supervision, "Range 0–3", true)}
         />
         <KpiCard
           tone="amber"
           label="Household Rules Score"
           value={codingScoreValue(data.coding_scores.household_rules)}
-          sublabel={codingScoreSublabel(data.coding_scores.household_rules, "Range 0–1")}
+          sublabel={codingScoreSublabel(data.coding_scores.household_rules, "Range 0–1", true)}
         />
       </div>
 
@@ -179,8 +199,8 @@ export default function ScreenTime() {
           icon={IconClipboardCheck}
           tone="blue"
           label="DSEQ Assessments Completed"
-          value={`${completion.completed}/${completion.total_registered}`}
-          sublabel={`${completion.percent}% of registered`}
+          value={`${completion.completed}/${studyDenominator}`}
+          sublabel={`${percentOf(completion.completed, studyDenominator) ?? 0}% of registered`}
         />
         <KpiCard
           icon={IconMonitor}
@@ -194,28 +214,28 @@ export default function ScreenTime() {
           tone="violet"
           label="Median Daily Screen Time (est.)"
           value={minutesLabel(avg.median)}
-          sublabel={`n=${avg.valid_n}/${avg.total} valid`}
+          sublabel={`n=${avg.valid_n}/${studyDenominator} valid`}
         />
         <KpiCard
           icon={IconCalendar}
           tone="aqua"
           label="School-Day Screen Time (est.)"
           value={minutesLabel(school.mean)}
-          sublabel={`Median ${minutesLabel(school.median)} · n=${school.valid_n}/${school.total}`}
+          sublabel={`Median ${minutesLabel(school.median)} · n=${school.valid_n}/${studyDenominator}`}
         />
         <KpiCard
           icon={IconCalendar}
           tone="amber"
           label="Weekend Screen Time (est.)"
           value={minutesLabel(weekend.mean)}
-          sublabel={`Median ${minutesLabel(weekend.median)} · n=${weekend.valid_n}/${weekend.total}`}
+          sublabel={`Median ${minutesLabel(weekend.median)} · n=${weekend.valid_n}/${studyDenominator}`}
         />
         <KpiCard
           icon={IconClipboardAlert}
           tone="neutral"
           label="Missing DSEQ Data"
-          value={`${data.missing_count}/${completion.total_registered}`}
-          sublabel={`${data.missing_percent}% of registered`}
+          value={`${missingDseq}/${studyDenominator}`}
+          sublabel={`${percentOf(missingDseq, studyDenominator) ?? 0}% of registered`}
         />
       </div>
 
@@ -227,7 +247,7 @@ export default function ScreenTime() {
         </ChartCard>
         <ChartCard
           title="Weekend − School-Day Difference"
-          subtitle={`Mean ${minutesLabel(diff.mean)} · valid n=${diff.valid_n}/${diff.total}`}
+          subtitle={`Mean ${minutesLabel(diff.mean)} · valid n=${diff.valid_n}/${studyDenominator}`}
           note="Weekend minutes minus school-day minutes, per child; histogram of the derived difference"
         >
           <CategoryBarChart data={diffDistribution} mode="sequential" xTickMaxChars={9} />
@@ -237,7 +257,7 @@ export default function ScreenTime() {
       {/* --- Screen-Time Distribution --- */}
       <SectionHeader title="Screen-Time Distribution" note="Estimated average daily minutes, bucketed - primary continuous variable" />
       <div className="chart-grid two-col">
-        <ChartCard title="Distribution of Estimated Average Daily Screen Time" subtitle={`n=${avg.valid_n}/${avg.total} valid observations`}>
+        <ChartCard title="Distribution of Estimated Average Daily Screen Time" subtitle={`n=${avg.valid_n}/${studyDenominator} valid observations`}>
           <CategoryBarChart data={distributionMinutes} mode="sequential" />
         </ChartCard>
         <ChartCard title="Distribution of Total Daily Screen Time (DSEQ Q10)" subtitle="Secondary, self-reported category - descriptive only">
@@ -271,7 +291,7 @@ export default function ScreenTime() {
         <ChartCard title="Parental Supervision" subtitle="DSEQ Q8, ordered Never → Always">
           <CategoryBarChart data={supervisionBar} mode="sequential" />
         </ChartCard>
-        <ChartCard title="Household Screen Rules" subtitle={`DSEQ Q9 · n=${data.household_rules_valid_n}/${completion.total_registered}`}>
+        <ChartCard title="Household Screen Rules" subtitle={`DSEQ Q9 · n=${data.household_rules_valid_n}/${studyDenominator}`}>
           <DonutChart data={householdDonut} />
         </ChartCard>
       </div>

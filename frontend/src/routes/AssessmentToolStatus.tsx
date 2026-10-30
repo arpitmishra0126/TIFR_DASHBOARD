@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getAssessmentToolStatus } from "../api/dashboard";
+import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import FullScreenLoader from "../components/FullScreenLoader";
 import { IconChevron } from "../components/icons";
 import KpiCard from "../components/KpiCard";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -165,9 +167,13 @@ function domainValue(domain: AssessmentDomainStatus): string {
   return domain.mean_done !== null ? `${domain.mean_done}/${domain.field_count}` : "-";
 }
 
+// Denominated against the study's overall enrolled cohort (222,
+// STUDY_ORIGINAL_ENROLLMENT) rather than the backend's own `total`
+// (= live REDCap total_registered) - senior instruction, same convention
+// applied dashboard-wide.
 function domainSublabel(domain: AssessmentDomainStatus): string {
-  if (domain.valid_n === 0) return `No data (0/${domain.total})`;
-  return `${domain.completion_percent}% avg completion · n=${domain.valid_n}/${domain.total} (${domain.percent_valid}%)`;
+  if (domain.valid_n === 0) return `No data (0/${STUDY_ORIGINAL_ENROLLMENT})`;
+  return `${domain.completion_percent}% avg completion · n=${domain.valid_n}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(domain.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`;
 }
 
 export default function AssessmentToolStatus() {
@@ -198,7 +204,7 @@ export default function AssessmentToolStatus() {
 
       <div className="module-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          label={`Assessment Status: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(completion.completed, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
       </div>

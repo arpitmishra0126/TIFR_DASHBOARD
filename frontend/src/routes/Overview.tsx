@@ -298,12 +298,12 @@ function ModuleCompletionDonut({ count, total, label }: { count: number; total: 
   // at (190-260px, see app.css), 18 viewBox units yields a genuinely thin
   // ~10.7-14.6px physical stroke, not a bulky ring.
   return (
-    <DonutRing percent={percent} size={320} strokeWidth={18} color="var(--tone-accent)" variant="large" ariaLabel={`${label} instrument completion: ${count} of ${total}, ${percent}%`}>
+    <DonutRing percent={percent} size={320} strokeWidth={18} color="var(--tone-accent)" variant="large" ariaLabel={`${label} assessment status: ${count} of ${total}, ${percent}%`}>
       <span className="kmp-donut-value">
         {count} / {total}
       </span>
       <span className="kmp-donut-percent">{percent}%</span>
-      <span className="kmp-donut-caption">Instrument completion</span>
+      <span className="kmp-donut-caption">Assessment status</span>
     </DonutRing>
   );
 }

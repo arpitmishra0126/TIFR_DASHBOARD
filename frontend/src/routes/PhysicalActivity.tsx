@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { getPhysicalActivity } from "../api/dashboard";
 import CategoryBarChart from "../components/CategoryBarChart";
 import ChartCard from "../components/ChartCard";
+import { percentOf } from "../components/charts/chartHelpers";
 import ConditionCompositionChart from "../components/charts/ConditionCompositionChart";
 import ItemScoreBarChart from "../components/charts/ItemScoreBarChart";
 import DataLoadError from "../components/DataLoadError";
 import FullScreenLoader from "../components/FullScreenLoader";
 import KpiCard from "../components/KpiCard";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import PageHeader from "../components/PageHeader";
 import SectionHeader from "../components/SectionHeader";
 import StatusBadge from "../components/StatusBadge";
@@ -32,9 +34,13 @@ function scoreValue(summary: ScoreSummary): string {
 // intentionally show the same figure rather than a second calculation.
 const PAQC_SCORE_RANGE = "Range 1–5";
 
+// Denominated against the study's overall enrolled cohort (222,
+// STUDY_ORIGINAL_ENROLLMENT) rather than the backend's own `total`
+// (= live REDCap total_registered) - senior instruction, same convention
+// applied dashboard-wide.
 function keyScoreSublabel(summary: ScoreSummary): string {
-  if (summary.valid_n === 0) return `${PAQC_SCORE_RANGE} · no data (0/${summary.total})`;
-  return `${PAQC_SCORE_RANGE} · n=${summary.valid_n}/${summary.total} (${summary.percent_valid}%)`;
+  if (summary.valid_n === 0) return `${PAQC_SCORE_RANGE} · no data (0/${STUDY_ORIGINAL_ENROLLMENT})`;
+  return `${PAQC_SCORE_RANGE} · n=${summary.valid_n}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(summary.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`;
 }
 
 function itemScoresToChart(items: ScoredItemSummary[]) {
@@ -42,7 +48,7 @@ function itemScoresToChart(items: ScoredItemSummary[]) {
     label: item.label.replace(/^Item \d+(\/\d+)? - /, ""),
     mean: item.mean,
     validN: item.valid_n,
-    total: item.total,
+    total: STUDY_ORIGINAL_ENROLLMENT,
   }));
 }
 
@@ -51,7 +57,7 @@ function weeklyActivityToChart(days: WeeklyActivityDay[]) {
     label: day.day,
     mean: day.mean,
     validN: day.valid_n,
-    total: day.total,
+    total: STUDY_ORIGINAL_ENROLLMENT,
   }));
 }
 
@@ -80,7 +86,7 @@ export default function PhysicalActivity() {
 
       <div className="module-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          label={`Assessment Status: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(completion.completed, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
       </div>
@@ -106,7 +112,7 @@ export default function PhysicalActivity() {
       <div className="chart-grid">
         <ChartCard
           title="Final PAQ-C Score"
-          subtitle={`n=${data.total_summary.valid_n}/${data.total_summary.total} (${data.total_summary.percent_valid}%)`}
+          subtitle={`n=${data.total_summary.valid_n}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(data.total_summary.valid_n, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`}
           compact
         >
           <CategoryBarChart data={distribution} mode="categorical" height={200} />

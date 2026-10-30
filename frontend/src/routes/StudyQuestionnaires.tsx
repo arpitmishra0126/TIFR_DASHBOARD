@@ -14,6 +14,7 @@ import { percentOf } from "../components/charts/chartHelpers";
 import DataLoadError from "../components/DataLoadError";
 import FullScreenLoader from "../components/FullScreenLoader";
 import { IconChevron } from "../components/icons";
+import { STUDY_ORIGINAL_ENROLLMENT } from "../lib/studyCohort";
 import PageHeader from "../components/PageHeader";
 import type {
   ChhCompositeIndicator,
@@ -26,39 +27,7 @@ import type {
   ScreenTimeResponse,
 } from "../types/liveDashboard";
 
-/** "Study Questionnaires" - a questionnaire-domain explorer, distinct from
- * the Dashboard (study-level monitoring) and Data Quality (integrity/QC).
- * Every figure below is read directly from the existing
- * `/dashboard/demographics`, `/dashboard/health`, `/dashboard/screen-time`,
- * `/dashboard/physical-activity`, `/dashboard/dietary-intake`,
- * `/dashboard/neurodevelopment`, and `/dashboard/registry` (for
- * Anthropometry - see note below) responses - no new backend endpoint,
- * field, or calculation was added. Assessment Tool Status (SANGIAN/VWM/
- * DCCS/CD) is deliberately NOT repeated here - it already has one primary
- * home, the Dashboard's Assessment Progress section.
- *
- * A supplied `dashboard-data.json` (explicitly marked "FICTIONAL
- * DEMONSTRATION DATA - NOT STUDY RESULTS") was reviewed for module/item
- * *labels and structure* only (e.g. "Current health", "Recent illness",
- * "Television", "Home media environment") - its wording is reused below
- * where it matches our real fields, but none of its numbers were used;
- * every count/percent here is computed from the live endpoints above.
- *
- * SES scope note: a live-code audit found 8 Udai Pareek sub-items (head of
- * family occupation, social participation, house type, farm animals,
- * education, land, assets, household-size band) exist only inside the
- * Excel/CSV export's own tables, never in a JSON dashboard endpoint, and
- * caste is excluded everywhere by an explicit data-sensitivity policy in
- * `export_service.py`. This page shows only the 4 SES indicators genuinely
- * available here (Udai Pareek category, BG Prasad category, per-capita
- * income, household size) - the sub-items are not fabricated.
- *
- * Anthropometry has no dedicated measurement summary endpoint (only its
- * own completion field, per CLAUDE.md) - its card shows real completion
- * coverage (aggregated client-side from the existing `/dashboard/registry`
- * per-child `instrument_status.anthropometry`, same aggregation pattern
- * already used by the Data Quality page) and an explicit "data available
- * for detailed analysis" note instead of a fabricated measurement metric. */
+
 
 type Tone = "blue" | "teal" | "violet" | "amber";
 
@@ -120,7 +89,11 @@ function buildDomains(
   neuro: NeurodevelopmentResponse,
   registry: RegistryChild[],
 ): QuestionnaireDomain[] {
-  const total = demo.total_registered;
+  // Denominated against the study's overall enrolled cohort (222,
+  // STUDY_ORIGINAL_ENROLLMENT) rather than the live REDCap
+  // `total_registered` count - senior instruction, same convention already
+  // applied to Overview/Health History/Dietary Intake/Anthropometry.
+  const total = STUDY_ORIGINAL_ENROLLMENT;
   const chh = health.chh;
 
   // --- 01 SES ---------------------------------------------------------
@@ -411,18 +384,18 @@ function buildDomains(
   const paqRows: QuestionnaireRow[] = [
     {
       id: "01",
-      name: "Instrument Completion",
+      name: "Assessment Status",
       descriptor: "PAQ-C questionnaire completion",
-      valueText: `${paq.completion.completed}/${paq.completion.total_registered}`,
-      percent: paq.completion.percent,
-      detailRows: [{ label: "Completed", value: `${paq.completion.completed}`, percent: paq.completion.percent }],
+      valueText: `${paq.completion.completed}/${total}`,
+      percent: percentOf(paq.completion.completed, total),
+      detailRows: [{ label: "Completed", value: `${paq.completion.completed}`, percent: percentOf(paq.completion.completed, total) }],
     },
     {
       id: "02",
       name: "Final PAQ-C Score",
       descriptor: "Items 1-8 composite (excludes item 9)",
       valueText: paq.total_summary.mean !== null ? `mean ${paq.total_summary.mean.toFixed(2)} (n=${paq.total_summary.valid_n})` : "No data",
-      percent: percentOf(paq.total_summary.valid_n, paq.completion.total_registered),
+      percent: percentOf(paq.total_summary.valid_n, total),
       detailRows: paq.item_scores.map((it) => ({ label: it.label, value: it.mean !== null ? it.mean.toFixed(2) : "No data" })),
     },
   ];
@@ -431,11 +404,11 @@ function buildDomains(
   const dietaryRows: QuestionnaireRow[] = [
     {
       id: "01",
-      name: "Instrument Completion",
+      name: "Assessment Status",
       descriptor: "Dietary Intake questionnaire completion",
-      valueText: `${dietary.completion.completed}/${dietary.completion.total_registered}`,
-      percent: dietary.completion.percent,
-      detailRows: dietary.items.map((it) => ({ label: it.field_label, value: `n=${it.valid_n}`, percent: it.percent_valid })),
+      valueText: `${dietary.completion.completed}/${total}`,
+      percent: percentOf(dietary.completion.completed, total),
+      detailRows: dietary.items.map((it) => ({ label: it.field_label, value: `n=${it.valid_n}`, percent: percentOf(it.valid_n, total) })),
     },
   ];
 
@@ -444,7 +417,7 @@ function buildDomains(
   const anthroRows: QuestionnaireRow[] = [
     {
       id: "01",
-      name: "Instrument Completion",
+      name: "Assessment Status",
       descriptor: "Anthropometry Assessment Form completion",
       valueText: `${anthroCompleted}/${total}`,
       percent: percentOf(anthroCompleted, total),
@@ -456,11 +429,11 @@ function buildDomains(
   const ssrsRow = (id: string, name: string, s: NeurodevelopmentResponse["parent"]): QuestionnaireRow => ({
     id,
     name,
-    descriptor: "Instrument completion, avg frequency/importance rating",
-    valueText: `${s.completed_count}/${s.total_registered}`,
-    percent: s.percent,
+    descriptor: "Assessment status, avg frequency/importance rating",
+    valueText: `${s.completed_count}/${total}`,
+    percent: percentOf(s.completed_count, total),
     detailRows: [
-      { label: "Completed", value: `${s.completed_count}`, percent: s.percent },
+      { label: "Completed", value: `${s.completed_count}`, percent: percentOf(s.completed_count, total) },
       { label: "Children with any data", value: `${s.children_with_any_data}` },
       { label: "Avg frequency rating", value: s.avg_frequency_summary.mean !== null ? s.avg_frequency_summary.mean.toFixed(2) : "No data" },
       { label: "Avg importance rating", value: s.avg_importance_summary.mean !== null ? s.avg_importance_summary.mean.toFixed(2) : "No data" },
@@ -679,7 +652,8 @@ export default function StudyQuestionnaires() {
   }
 
   const domains = buildDomains(demographics, health, screen, paq, dietary, neuro, registry);
-  const total = demographics.total_registered;
+  // Same 222-cohort denominator rule as buildDomains() above.
+  const total = STUDY_ORIGINAL_ENROLLMENT;
 
   const toggleRow = (domainKey: string, rowId: string) => {
     setExpanded((current) => (current?.domain === domainKey && current.rowId === rowId ? null : { domain: domainKey, rowId }));

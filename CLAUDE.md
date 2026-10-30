@@ -6264,6 +6264,143 @@ row showed "149 / 73 / 67.1%" (149+73=222), MUAC/Head/Waist/Hip showed
 "148 / 74 / 66.7%" (148+74=222). `tsc --noEmit` clean, `npm run build`
 succeeds, zero console errors, screenshot confirmed at 1440px.
 
+**Study Questionnaires page - same 222 denominator fix (2026-10-30,
+`StudyQuestionnaires.tsx` only - frontend display change, no backend file
+touched, 192/192 backend tests unaffected):** this page (route
+`/study-questionnaires`) had its own separate `const total =
+demo.total_registered`/`demographics.total_registered` local variable
+(used throughout `buildDomains()` for the SES/DSEQ/Anthropometry rows and
+again in the component for the top KPI strip), plus several places reading
+a REDCap-instrument-completion object's own `total_registered`/`percent`
+directly (`paq.completion`, `dietary.completion`, each SSRS rater's
+`s.total_registered`/`s.percent` in `ssrsRow()`) - all of these displayed
+the live count (212/213), separate from the Dietary Intake and
+Anthropometry pages' own copies of the same bug already fixed above.
+Fixed the same way: both `const total = ...` assignments now read
+`STUDY_ORIGINAL_ENROLLMENT` (222) directly instead of `total_registered`,
+and the PAQ-C/Dietary Intake/SSRS-Parent/SSRS-Child/SSRS-Teacher rows'
+`valueText`/`percent`/detail-row percentages were all switched from the
+backend's own `total_registered`/`percent` fields to `total`/
+`percentOf(count, total)` (recomputed locally, consistent with the rest of
+this file's existing `percentOf()` pattern) - including the Dietary Intake
+row's per-food-item detail percentages (`it.percent_valid` →
+`percentOf(it.valid_n, total)`). **Not touched, correctly**: "Current
+Health Concern" and "High Daily Screen Time" on the top KPI strip, and
+every `*.valid_n`-denominated percent inside the Health/DSEQ domain rows
+(e.g. `currentlyIll.percent_yes`) - these were never `total_registered`-
+based in the first place (they're denominated by their own question's
+valid-respondent count), so this fix doesn't apply to them.
+Verified live: a full-page text scan returned zero `212`/`213` matches;
+"Children in Selection: 222", "Udai Pareek Scored: 162/222"; every domain
+row (SES, PAQ-C, Anthropometry, Dietary Intake, SSRS Parent/Child/Teacher)
+showed `/222` with a correctly recomputed percent (e.g. PAQ-C "157/222
+70.7%", SSRS Teacher "94/222 42.3%"). `tsc --noEmit` clean, `npm run
+build` succeeds, zero console errors.
+
+**"Instrument Completion" relabeled to "Assessment Status" + same 222
+denominator fix swept across every remaining assessment page (2026-10-30,
+same day - frontend-only, no backend file touched, 192/192 backend tests
+unaffected):** per senior instruction ("wherever you see instrument,
+replace it with Assessment Status"), the `"Instrument Completion: X/Y
+(Z%)"` `StatusBadge` label - previously fixed only on Dietary Intake/
+Anthropometry/Health History - is now **"Assessment Status: X/222"**
+everywhere it appears: `HealthScreening.tsx`, `ScreenTime.tsx`,
+`PhysicalActivity.tsx`, `AssessmentToolStatus.tsx`,
+`AnthropometryAssessment.tsx` (label only - denominator already fixed).
+Every other visible `total_registered`-denominated number on these same
+pages was swept to `STUDY_ORIGINAL_ENROLLMENT` (222) in the same pass,
+not just the badge, since a renamed label next to a stale `/213` would
+immediately contradict itself:
+- **ScreenTime.tsx**: `summaryOf()` (Estimated/Median Daily sublabels),
+  "DSEQ Assessments Completed"/"Missing DSEQ Data" KPI cards (Missing
+  recomputed locally as `222 - completed`, not the backend's own
+  `total_registered`-based `missing_count`, so the two always sum to
+  222), School-Day/Weekend/Difference KPI sublabels, the Screen-Time-
+  Distribution chart subtitle, and the Household Screen Rules chart
+  subtitle - all switched from `completion.total_registered`/
+  `MinutesSummary.total` to `STUDY_ORIGINAL_ENROLLMENT`. **DSEQ Coding
+  Scores - handled carefully, not uniformly**: `codingScoreSublabel()`
+  gained an opt-in `useStudyCohort` param - Frequency/Duration Score are
+  genuinely **pooled** denominators (completed children x field_count,
+  e.g. live 474/639 = 213x3, 632/852 = 213x4) and were left reading the
+  backend's own `summary.total` unchanged; Supervision/Household Rules
+  Score are single-field summaries whose `summary.total` **is** the live
+  `total_registered` (confirmed live: both exactly 213), so only those two
+  cards pass `useStudyCohort={true}` and now read `/222`. Conflating these
+  would have silently corrupted the genuinely pooled Frequency/Duration
+  denominators - verified live before/after that `474/639`/`632/852` are
+  unchanged while Supervision/Household Rules moved from `158/213` to
+  `158/222`.
+- **PhysicalActivity.tsx**: the badge, `keyScoreSublabel()` (Final PAQ-C
+  Score/Item 9/Daily Activity Score cards - `ScoreSummary.total` here is a
+  single-field `numeric_summary()`, genuinely `total_registered`, unlike
+  DSEQ's pooled coding scores), the Final PAQ-C Score Distribution chart
+  subtitle, and `itemScoresToChart()`/`weeklyActivityToChart()`'s `total`
+  field (feeds `ItemScoreBarChart`'s hover-tooltip "Valid N: x/total") -
+  all switched to 222.
+- **AssessmentToolStatus.tsx**: the badge and `domainSublabel()` (SANGIAN/
+  VWM/Overall KPI cards' `AssessmentDomainStatus.total`, confirmed backend-
+  side to be `total_registered`) switched to 222. The "Assessment
+  Breakdown" table's per-field Valid N/Completion % (`AssessmentToolItemStatus
+  .valid_n`/`.completion_percent`) were **not** touched - that denominator
+  is "children who answered this specific field" (done+not_done), a
+  genuinely different, smaller count, not `total_registered`.
+- **StudyQuestionnaires.tsx**: the 3 "Instrument Completion" row names
+  (PAQ-C/Anthropometry/Dietary Intake) and the SSRS descriptor
+  ("Instrument completion, avg frequency/importance rating") relabeled to
+  "Assessment Status"/"Assessment status, ..." (denominators were already
+  fixed to 222 in the prior same-day pass).
+- **`Overview.tsx`**: the Key Study Modules donut's caption text and
+  `aria-label` changed from "Instrument completion" to "Assessment
+  status" (the donut's own `count`/`total` values were already
+  `studyDenominator`-based from the 2026-09-28 Dashboard redesign,
+  unaffected).
+- **`AssessmentProgress.tsx`** (route `/progress`, nav-hidden but
+  reachable by direct URL) - this page's own `ChartCard`/`SectionHeader`
+  titles ("Instrument completion pipeline" -> "Assessment status
+  pipeline", "Instrument-level completion" -> "Assessment status by
+  instrument") and its two `overview.total_registered` usages (the
+  "Core REDCap Instruments Completed - by instrument" subtitle and each
+  `CoverageBar`'s `total`/`percent`) were also fixed to 222 - this page
+  had never been touched by any of the prior same-day 222-denominator
+  passes, since it isn't linked from the current nav. The funnel's own
+  `ProgressStage[]` array (from `GET /dashboard/progress`, backend
+  unchanged) is remapped locally before rendering: the "Registered"
+  stage's `count` is shown as 222 (same "Registration/Cohort node reads
+  222/222" precedent as the Dashboard's own Study Progress pipeline) and
+  every stage's `percent_of_registered` is recomputed as
+  `percentOf(<that stage's own real or 222-overridden count>, 222)` -
+  `percent_of_previous_stage` (stage-to-stage, not `total_registered`-
+  based) is untouched. **Bug caught and fixed before considering this
+  done**: the first version computed `percent_of_registered` from the
+  original (pre-override) `stage.count` inside the same object-literal
+  spread, which correctly fixed every stage except "Registered" itself -
+  that one showed "222 / 95.9% of registered" (213÷222) instead of "222 /
+  100%", since the denominator-independent numerator hadn't been
+  re-read after its own override. Fixed by computing the (possibly
+  overridden) `count` as its own local first, then deriving
+  `percent_of_registered` from that same value - re-verified live,
+  "Registered" now correctly shows "222 / 100% of registered".
+- **Deliberately not touched** (confirmed, not assumed, via live `curl`
+  cross-checks before editing): any denominator that is genuinely *not*
+  `total_registered` under a different name - DSEQ's pooled Frequency/
+  Duration coding scores, Assessment Tool Status's per-field Valid N,
+  Registry's "Instrument" filter-dropdown labels (picking which
+  instrument to filter by, unrelated to completion counts), the Data
+  Quality page's own "Instrument Completeness" section (a distinct QC-
+  page concept, not renamed), and every `*.valid_n`-denominated percent
+  throughout (e.g. Health History's `currentlyIll.percent_yes`).
+Verified live across all 6 affected routes (`/health-screening`,
+`/screen-time`, `/physical-activity`, `/assessment-tool-status`,
+`/progress`, `/`) plus a regression re-check of the 3 pages fixed earlier
+the same day (`/study-questionnaires`, `/dietary-intake`, `/anthropometry`):
+a full-page text scan on every route returned **zero** matches for `212`
+or `213`, zero occurrences of the literal string "Instrument Completion"
+anywhere, and zero browser console errors. `tsc --noEmit` clean, `npm run
+build` succeeds. Backend untouched and re-run to confirm (192/192 tests
+still pass) - no backend file appears in `git diff --stat` for this
+entire pass.
+
 ---
 
 ## EXISTING VERIFICATION HISTORY

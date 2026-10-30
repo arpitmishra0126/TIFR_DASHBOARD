@@ -266,7 +266,7 @@ export default function AnthropometryAssessment() {
 
       <div className="module-status-line anthro-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${completionPercent ?? 0}%)`}
+          label={`Assessment Status: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${completionPercent ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
         {data.latest_assessment_date && (

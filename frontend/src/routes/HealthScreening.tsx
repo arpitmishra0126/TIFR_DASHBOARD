@@ -361,7 +361,7 @@ export default function HealthScreening() {
 
       <div className="module-status-line">
         <StatusBadge
-          label={`Instrument Completion: ${completion.completed}/${completion.total_registered} (${completion.percent}%)`}
+          label={`Assessment Status: ${completion.completed}/${STUDY_ORIGINAL_ENROLLMENT} (${percentOf(completion.completed, STUDY_ORIGINAL_ENROLLMENT) ?? 0}%)`}
           tone={TIER_BADGE_TONE[completion.coverage_tier] ?? "neutral"}
         />
       </div>
@@ -375,8 +375,7 @@ export default function HealthScreening() {
           </span>
           <span className="stat-block-footnote">
             {percentOf(completion.completed, STUDY_ORIGINAL_ENROLLMENT)}% of the original {STUDY_ORIGINAL_ENROLLMENT}-child
-            cohort · {completion.completed}/{completion.total_registered} ({completion.percent}%) of currently active
-            children
+            cohort
           </span>
         </div>
         <div className="stat-block">
