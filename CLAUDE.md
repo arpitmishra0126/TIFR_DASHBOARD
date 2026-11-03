@@ -6403,6 +6403,145 @@ entire pass.
 
 ---
 
+## SSRS DASHBOARD MODULE - IMPLEMENTED 2026-11-03
+
+A new top-nav tab, **"SSRS"**, between "Anthropometry Assessment" and "Study
+Questionnaires" (`frontend/src/components/Layout.tsx`'s `HEADER_TABS`),
+route `/ssrs` (`frontend/src/routes/Ssrs.tsx`, `App.tsx`). Built from the
+SSRS Parent/Child/Teacher REDCap instruments (already partially mapped for
+Neurodevelopment's cohort-level averages - this module is additive, does
+not change `build_neurodevelopment_analysis()`/`/dashboard/neurodevelopment`).
+
+**New live fields fetched** (`SSRS_DASHBOARD_FIELDS` in `live_field_map.py`,
+added to `LIVE_FIELDS`, 542 total fields, confirmed live - no duplicates,
+REDCap accepted the full list): `parent_child_id`/`parent_date`,
+`teacher_child_id`/`teacher_date`, `t43_rating`..`t51_rating` (9 Teacher
+academic-competence rating fields), and every `p*_comment`/`c*_comment`/
+`t*_comment` field (fetched only to compute an item's "has a comment"
+count - the free-text content itself is never rendered anywhere, per
+explicit instruction not to show comments or child names).
+
+**Field-count discrepancies vs. the task's own stated "data facts" -
+verified against live REDCap metadata, not assumed**: Parent's `_imp`
+(importance) fields exist only for **p1-p40**, not the full p1-p52 (all 52
+items have `_freq`/`_comment`; only 40 have a paired `_imp`). Teacher's
+`_imp` fields exist only for **t1-t30**, not t1-t42 (same pattern - all 42
+items have `_freq`/`_comment`, only 30 have `_imp`). These match the
+*existing* codebase's pre-existing `SSRS_PARENT_IMP_FIELDS`/
+`SSRS_TEACHER_IMP_FIELDS` constants exactly (already correct from an
+earlier session) - live metadata was trusted over the pasted spec, per
+CLAUDE.md's "never assume a variable exists without checking metadata"
+rule; nothing was "fixed." Teacher's 9 academic-competence rating fields
+are `t43_rating`..`t51_rating` (not a 4-item set). The Child form has no
+child-ID or date field of its own (links to a registered child only via
+the REDCap record key) and has an unrelated extra field,
+`combined_questionnaire`, not used by this feature.
+
+**Backend** (`module_analytics.py`, new section after
+`build_neurodevelopment_analysis()`): `parse_ssrs_item_label()`/
+`build_ssrs_item_label_map()` (strips Hindi + the "(Frequency)" suffix
+from REDCap's bilingual field labels, English-only display text);
+`coded_item_segments()` (generic, code-ordered, zero-count-inclusive,
+percent-of-valid-responses distribution per item - reused for both the
+0=Never/1=Sometimes/2=Very Often frequency scale and the
+0=Not Important/1=Important/2=Critical importance scale; returns
+`importance: None`, never a fabricated distribution, for the 12 Parent
+and 12 Teacher items that have no paired `_imp` field);
+`_ssrs_item_responses()`; `_ssrs_teacher_competence()` (the 9
+`t43-51_rating` items, 1-5 Lowest10%..Highest10% scale, code-ordered);
+`_ssrs_age_band()` (**age at the respondent's own form-date `visit_date`
+analogue, not today's age** - computed via the existing
+`compute_age_years(dob, as_of=...)`, locked in by a dedicated test);
+`_ssrs_completion_by_age_band()`; `_ssrs_id_not_found_count()` (flags a
+`parent_child_id`/`teacher_child_id` that, after trim + case-normalize,
+doesn't match any registered `child_id` - a real live data-entry typo was
+found this way: `teacher_child_id='06IND30G'` vs. the real
+`child_id='06IND030G'`); `_ssrs_form_date_missing_count()`;
+`_ssrs_required_items_blank_count()`; `_ssrs_data_quality()`;
+`_ssrs_filter_base()`/`_ssrs_filter_by_date()`; `build_ssrs_analysis()`
+(age band / sex / village / respondent / form-date-range filters - the
+form-date filter is **respondent-scoped**: selecting Parent and a date
+range filters only by `parent_date`, leaving Child/Teacher data on the
+full age/sex/village-filtered population, since Child has no date field
+and filtering Teacher by Parent's date field would be meaningless).
+
+**No "screening period" concept exists anywhere in this codebase** - the
+task's "form date missing or outside the screening period" check was
+implemented as "form date missing" only; "outside the screening period"
+was not implementable without fabricating a period definition, and was
+explicitly left out rather than guessed at.
+
+**Domain Scores and Respondent Agreement - explicitly not implemented**,
+per instruction not to invent clinical scoring: `backend/app/services
+/ssrs_scoring_key.py` (new) holds `SSRS_DOMAIN_SCORING_KEY: dict = {}` (an
+empty, documented placeholder for a future real scoring key).
+`SsrsResponse.domain_scores_available = bool(SSRS_DOMAIN_SCORING_KEY)` is
+currently `False`; the frontend renders a disabled "Pending scoring key"
+tile for this panel instead of any computed domain score. Populate
+`SSRS_DOMAIN_SCORING_KEY` with a real, approved domain-to-item mapping to
+activate this panel - no other code change should be needed.
+
+New schemas (`dashboard.py`): `SsrsFrequencySegment`, `SsrsItemDistribution`,
+`SsrsItemResponse`, `SsrsTeacherCompetenceItem`, `SsrsInstrumentSummary`,
+`SsrsAgeBandCompletion`, `SsrsDataQuality`, `SsrsResponse`. New
+`LiveDashboardService.get_ssrs()` (fetches metadata alongside the
+standard `_load()`), new `GET /api/v1/dashboard/ssrs` endpoint (standard
+`?refresh=true` support, filters as query params).
+
+**Frontend** (`Ssrs.tsx`, new `PercentStackedBar.tsx` reusing the
+Dietary-Intake-era `.freq-stacked-*`/`.freq-legend*` CSS classes - already
+generically named, not food-specific, confirmed before reusing): filter
+bar (age band/sex/village/respondent/form-date-range + Reset) -> 4 KPI
+cards (Parent/Child/Teacher `completed/STUDY_ORIGINAL_ENROLLMENT`, "All
+Three Forms" n) -> Completion by
+Age Band grouped-bar chart + Data Quality Checks table (two-column
+`chart-grid`) -> Item Responses (respondent tabs, paired frequency/
+importance 100%-stacked bars per item with an "n answered" subtitle -
+blanks excluded from every distribution, never counted as 0 - sortable by
+Very-Often share, an explicit "No importance data for this question" state
+for items with no `_imp` field) -> Teacher Academic Competence table (5
+rating bands x 9 items) -> Domain Scores pending tile -> a field-reference
+`DetailDisclosure`. KPI/chart denominators use `STUDY_ORIGINAL_ENROLLMENT`
+(222), consistent with the dashboard-wide 2026-10-30 denominator rule.
+New CSS block in `app.css` (`.ssrs-*`), inserted after Dietary Intake's
+`.freq-stacked-*` media query.
+
+Tests: 19 new in `test_module_analytics.py` (label parsing, `coded_item_
+segments` zero-count/no-paired-importance handling, `_ssrs_age_band` uses
+visit date not today, ID-not-found/form-date-missing/required-blank data
+quality counts, respondent-scoped date filtering, and a full
+`build_ssrs_analysis` integration test) + 1 endpoint shape/filter test in
+`test_dashboard_endpoints.py`. Backend: **211/211 tests pass** (up from
+192). Frontend `tsc -b`/`npm run build` succeed (no separate `lint` script
+exists in this project). Live-verified via a headless-browser pass against
+a local backend + live frontend dev server, both themes, at 1440px and
+390px mobile: zero console errors, zero horizontal overflow
+(`scrollWidth === clientWidth` at 390px), all 6 wireframe panels render
+correctly in both themes, the respondent/form-date filter interaction
+correctly narrows displayed data (live: Parent 166, Child 163, Teacher 95,
+All Three Forms 93, Data Quality "Child ID not found in registration:
+26").
+
+**KPI denominator switched to 222 (2026-11-03, same day):** the 3 form-
+completion KPI cards (Parent/Child/Teacher) initially showed
+`completed/data.parent.total` etc., where `SsrsInstrumentSummary.total`
+is the backend's own live `total_registered` (213) - inconsistent with
+the dashboard-wide 2026-10-30 rule that every visible denominator reads
+`STUDY_ORIGINAL_ENROLLMENT` (222) instead. Fixed by importing
+`STUDY_ORIGINAL_ENROLLMENT` into `Ssrs.tsx` and using it directly in place
+of `data.{parent,child,teacher}.total` on those 3 cards - the backend
+field itself is unchanged (still used internally for the API's own
+percent calculations, just not read for this display). Every other number
+on the page (per-item `valid_n`, age-band raw counts, Data Quality counts)
+is denominated by something other than `total_registered` and was left
+untouched, consistent with the established "only swap genuine
+`total_registered` denominators" rule. Live-verified: a full-page text
+scan after the fix returned zero matches for `212` or `213` anywhere on
+the page; KPI cards now read `166/222`, `163/222`, `95/222`. Frontend
+`tsc -b`/`npm run build` succeed; backend untouched.
+
+---
+
 ## EXISTING VERIFICATION HISTORY
 
 The application has previously been verified with:
@@ -6414,7 +6553,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **192/192 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-10-29 Dietary Intake 100%-stacked-bar rebuild). Frontend `npm run build` succeeds.
+Backend test count: **211/211 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-11-03 SSRS dashboard module). Frontend `npm run build` succeeds (no `lint` script exists in this project - `npm run build` already runs `tsc -b` + `vite build`).
 
 Do not assume this remains true after changes - run the tests.
 

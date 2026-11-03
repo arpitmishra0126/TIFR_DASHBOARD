@@ -1571,6 +1571,332 @@ def build_neurodevelopment_analysis(
     }
 
 
+# --- SSRS panel (/ssrs, added 2026-11-03) - a dedicated item-level view of
+# the three SSRS forms (Parent/Child/Teacher), distinct from the cohort-
+# level averages Neurodevelopment.tsx already shows via
+# build_neurodevelopment_analysis() above (unchanged, byte-for-byte).
+
+# REDCap's own field_label for every SSRS freq/imp/rating item follows one
+# of two confirmed-live formats:
+#   "{n}. {English text}. (Frequency|Importance)<br>{n}. {Hindi text}"
+#   "{n}. {English text}.<br>{n}. {Hindi text}"                (rating items)
+# Only the English segment (before "<br>") is ever shown; the leading
+# "{n}. " item number and the trailing "(Frequency)"/"(Importance)"
+# annotation are stripped for display - never the Hindi text, never
+# guessed if the format doesn't match (falls back to the raw field name).
+_SSRS_LABEL_PREFIX_RE = re.compile(r"^\d+\.\s*")
+_SSRS_LABEL_SUFFIX_RE = re.compile(r"\s*\((Frequency|Importance)\)\s*$")
+
+
+def parse_ssrs_item_label(raw_label: str | None) -> str:
+    if not raw_label:
+        return ""
+    english = raw_label.split("<br>")[0].strip()
+    english = _SSRS_LABEL_SUFFIX_RE.sub("", english)
+    english = _SSRS_LABEL_PREFIX_RE.sub("", english)
+    return english.strip()
+
+
+def build_ssrs_item_label_map(metadata: list[dict], fields: tuple[str, ...]) -> dict[str, str]:
+    """{field_name: clean English item text} for exactly the given SSRS
+    fields - built once from REDCap metadata, never re-derived from choice
+    text (items have no REDCap choice list of their own; the label lives on
+    the field itself)."""
+    wanted = set(fields)
+    return {
+        f["field_name"]: parse_ssrs_item_label(f.get("field_label"))
+        for f in metadata
+        if f.get("field_name") in wanted
+    }
+
+
+def coded_item_segments(records: list[dict], field: str, choice_maps: dict[str, ChoiceMap]) -> tuple[list[dict], int]:
+    """Ordered (by ascending REDCap choice code) segment breakdown for one
+    small fixed-scale coded field (SSRS frequency/importance/rating items
+    reuse this for their 3- or 5-level scales) - same code-keyed,
+    percent-of-valid-responses shape as dietary_frequency_segments() above,
+    generalized to an arbitrary field rather than the dietary 8-point scale.
+    A raw stored value counts as valid only when it matches one of the
+    field's own defined choice codes; blank/invalid values are excluded
+    from both segment counts and valid_n, never folded into any category."""
+    field_choices = choice_maps.get(field, {})
+    ordered_codes = sorted(
+        field_choices.keys(), key=lambda c: (parse_float(c) if parse_float(c) is not None else 0.0, c),
+    )
+    raw_counts: Counter = Counter()
+    valid_n = 0
+    for record in records:
+        raw = (record.get(field) or "").strip()
+        if raw and raw in field_choices:
+            raw_counts[raw] += 1
+            valid_n += 1
+    segments = [
+        {
+            "code": code,
+            "label": field_choices[code],
+            "count": raw_counts.get(code, 0),
+            "percent": percent(raw_counts.get(code, 0), valid_n),
+        }
+        for code in ordered_codes
+    ]
+    return segments, valid_n
+
+
+_SSRS_VERY_OFTEN_CODE = "2"  # confirmed live: 0=Never, 1=Sometimes, 2=Very Often on every SSRS frequency item
+
+
+def _ssrs_item_responses(
+    reg: list[dict],
+    freq_fields: tuple[str, ...],
+    imp_fields: tuple[str, ...],
+    choice_maps: dict[str, ChoiceMap],
+    item_labels: dict[str, str],
+) -> list[dict]:
+    imp_set = set(imp_fields)
+    items = []
+    for freq_field in freq_fields:
+        base = freq_field.rsplit("_freq", 1)[0]
+        imp_field = f"{base}_imp"
+        freq_segments, freq_valid_n = coded_item_segments(reg, freq_field, choice_maps)
+        if imp_field in imp_set:
+            imp_segments, imp_valid_n = coded_item_segments(reg, imp_field, choice_maps)
+            importance: dict | None = {"segments": imp_segments, "valid_n": imp_valid_n}
+        else:
+            # Confirmed live: not every item has a paired _imp field (e.g.
+            # SSRS Parent has 52 frequency items but only 40 importance
+            # items) - never fabricated, importance is simply absent here.
+            importance = None
+        very_often = next((s["percent"] for s in freq_segments if s["code"] == _SSRS_VERY_OFTEN_CODE), 0.0)
+        items.append(
+            {
+                "item_key": base,
+                "label": item_labels.get(freq_field) or base,
+                "frequency": {"segments": freq_segments, "valid_n": freq_valid_n},
+                "importance": importance,
+                "very_often_percent": very_often,
+            }
+        )
+    return items
+
+
+def _ssrs_teacher_competence(
+    reg: list[dict], rating_fields: tuple[str, ...], choice_maps: dict[str, ChoiceMap], item_labels: dict[str, str],
+) -> list[dict]:
+    items = []
+    for field in rating_fields:
+        segments, valid_n = coded_item_segments(reg, field, choice_maps)
+        items.append({"item_key": field, "label": item_labels.get(field) or field, "bands": segments, "valid_n": valid_n})
+    return items
+
+
+_SSRS_AGE_BAND_ORDER = ("8 years", "9 years", "10 years")
+
+
+def _ssrs_age_band(record: dict) -> str:
+    """Age band at the child's own registration visit_date (not today) -
+    per the approved SSRS panel spec. A blank visit_date falls back to
+    today via compute_age_years()'s own default, documented there."""
+    dob = parse_date(record.get("child_dob"))
+    if dob is None:
+        return "Unknown"
+    visit = parse_date(record.get("visit_date"))
+    age = compute_age_years(dob, as_of=visit)
+    if age is None:
+        return "Unknown"
+    if age in (8, 9, 10):
+        return f"{age} years"
+    return "Other"
+
+
+def _ssrs_completion_by_age_band(reg: list[dict]) -> list[dict]:
+    bands: dict[str, dict[str, int]] = {}
+    for r in reg:
+        band = _ssrs_age_band(r)
+        bucket = bands.setdefault(band, {"parent": 0, "child": 0, "teacher": 0})
+        if parse_complete_flag(r.get("ssrs_parent_complete")):
+            bucket["parent"] += 1
+        if parse_complete_flag(r.get("ssrs_child_complete")):
+            bucket["child"] += 1
+        if parse_complete_flag(r.get("ssrs_teacher_complete")):
+            bucket["teacher"] += 1
+    ordered = [(b, bands[b]) for b in _SSRS_AGE_BAND_ORDER if b in bands]
+    for b in ("Other", "Unknown"):
+        if b in bands and sum(bands[b].values()) > 0:
+            ordered.append((b, bands[b]))
+    return [{"band": b, **counts} for b, counts in ordered]
+
+
+def _ssrs_id_not_found_count(reg: list[dict], id_field: str, reg_ids_norm: set[str]) -> int:
+    return sum(
+        1
+        for r in reg
+        if (raw := (r.get(id_field) or "").strip()) and raw.strip().upper() not in reg_ids_norm
+    )
+
+
+def _ssrs_form_date_missing_count(reg: list[dict], complete_field: str, date_field: str) -> int:
+    return sum(
+        1
+        for r in reg
+        if parse_complete_flag(r.get(complete_field)) and not (r.get(date_field) or "").strip()
+    )
+
+
+def _ssrs_required_items_blank_count(reg: list[dict], complete_field: str, freq_fields: tuple[str, ...]) -> int:
+    return sum(
+        1
+        for r in reg
+        if parse_complete_flag(r.get(complete_field)) and any(not (r.get(f) or "").strip() for f in freq_fields)
+    )
+
+
+def _ssrs_data_quality(
+    reg: list[dict],
+    parent_id_field: str,
+    teacher_id_field: str,
+    parent_date_field: str,
+    teacher_date_field: str,
+    parent_freq_fields: tuple[str, ...],
+    child_freq_fields: tuple[str, ...],
+    teacher_freq_fields: tuple[str, ...],
+    comment_fields: tuple[str, ...],
+) -> dict:
+    reg_ids_norm = {cid.strip().upper() for r in reg if (cid := child_id(r))}
+    child_id_not_found = _ssrs_id_not_found_count(reg, parent_id_field, reg_ids_norm) + _ssrs_id_not_found_count(
+        reg, teacher_id_field, reg_ids_norm,
+    )
+    # The Child form has neither its own ID nor date field (confirmed live)
+    # - it is linked only through the shared REDCap record, so it has
+    # nothing to contribute to either of these two checks.
+    form_date_missing = _ssrs_form_date_missing_count(
+        reg, "ssrs_parent_complete", parent_date_field,
+    ) + _ssrs_form_date_missing_count(reg, "ssrs_teacher_complete", teacher_date_field)
+    required_items_blank = (
+        _ssrs_required_items_blank_count(reg, "ssrs_parent_complete", parent_freq_fields)
+        + _ssrs_required_items_blank_count(reg, "ssrs_child_complete", child_freq_fields)
+        + _ssrs_required_items_blank_count(reg, "ssrs_teacher_complete", teacher_freq_fields)
+    )
+    items_with_comment = sum(1 for r in reg for f in comment_fields if (r.get(f) or "").strip())
+    return {
+        "child_id_not_found_count": child_id_not_found,
+        "form_date_missing_count": form_date_missing,
+        "required_items_blank_count": required_items_blank,
+        "items_with_comment_count": items_with_comment,
+    }
+
+
+def _ssrs_filter_base(
+    reg: list[dict],
+    choice_maps: dict[str, ChoiceMap],
+    *,
+    age_band: str | None,
+    sex: str | None,
+    village: str | None,
+) -> list[dict]:
+    if sex:
+        reg = [r for r in reg if resolve_value("baby_gender", r.get("baby_gender"), choice_maps).strip().lower() == sex.strip().lower()]
+    if village:
+        reg = [r for r in reg if (r.get("village_name") or "").strip().lower() == village.strip().lower()]
+    if age_band:
+        reg = [r for r in reg if _ssrs_age_band(r) == age_band]
+    return reg
+
+
+def _ssrs_filter_by_date(reg: list[dict], date_field: str, date_from: str | None, date_to: str | None) -> list[dict]:
+    out = []
+    for r in reg:
+        value = (r.get(date_field) or "").strip()
+        if date_from and (not value or value < date_from):
+            continue
+        if date_to and (not value or value > date_to):
+            continue
+        out.append(r)
+    return out
+
+
+def build_ssrs_analysis(
+    records: list[dict],
+    choice_maps: dict[str, ChoiceMap],
+    item_labels: dict[str, str],
+    *,
+    parent_freq_fields: tuple[str, ...],
+    parent_imp_fields: tuple[str, ...],
+    child_freq_fields: tuple[str, ...],
+    child_imp_fields: tuple[str, ...],
+    teacher_freq_fields: tuple[str, ...],
+    teacher_imp_fields: tuple[str, ...],
+    teacher_rating_fields: tuple[str, ...],
+    parent_id_field: str,
+    teacher_id_field: str,
+    parent_date_field: str,
+    teacher_date_field: str,
+    comment_fields: tuple[str, ...],
+    domain_scores_available: bool,
+    age_band: str | None = None,
+    sex: str | None = None,
+    village: str | None = None,
+    respondent: str | None = None,
+    form_date_from: str | None = None,
+    form_date_to: str | None = None,
+) -> dict:
+    reg = registered_records(records)
+    reg = _ssrs_filter_base(reg, choice_maps, age_band=age_band, sex=sex, village=village)
+    total = len(reg)
+
+    # "Form date" filtering only applies to the respondent explicitly
+    # selected (its own date field) - Parent and Teacher each have their own
+    # genuine date field; Child has none (see _ssrs_data_quality's note), so
+    # the filter is inapplicable there regardless of `respondent`. Every
+    # other respondent's data is unaffected by a date range meant for a
+    # different form's own date field.
+    has_date_range = bool(form_date_from or form_date_to)
+
+    def eligible(resp: str, date_field: str | None) -> list[dict]:
+        if respondent != resp or not has_date_range or date_field is None:
+            return reg
+        return _ssrs_filter_by_date(reg, date_field, form_date_from, form_date_to)
+
+    parent_reg = eligible("parent", parent_date_field)
+    child_reg = eligible("child", None)
+    teacher_reg = eligible("teacher", teacher_date_field)
+
+    all_three_ids = {
+        cid
+        for r in reg
+        if (cid := child_id(r))
+        and parse_complete_flag(r.get("ssrs_parent_complete"))
+        and parse_complete_flag(r.get("ssrs_child_complete"))
+        and parse_complete_flag(r.get("ssrs_teacher_complete"))
+    }
+
+    return {
+        "total_registered": total,
+        "parent": {"completed": complete_count(parent_reg, "ssrs_parent_complete"), "total": total, "label": "SSRS Parent"},
+        "child": {"completed": complete_count(child_reg, "ssrs_child_complete"), "total": total, "label": "SSRS Child"},
+        "teacher": {"completed": complete_count(teacher_reg, "ssrs_teacher_complete"), "total": total, "label": "SSRS Teacher"},
+        "all_three_complete_count": len(all_three_ids),
+        "completion_by_age_band": _ssrs_completion_by_age_band(reg),
+        "data_quality": _ssrs_data_quality(
+            reg,
+            parent_id_field,
+            teacher_id_field,
+            parent_date_field,
+            teacher_date_field,
+            parent_freq_fields,
+            child_freq_fields,
+            teacher_freq_fields,
+            comment_fields,
+        ),
+        "item_responses": {
+            "parent": _ssrs_item_responses(parent_reg, parent_freq_fields, parent_imp_fields, choice_maps, item_labels),
+            "child": _ssrs_item_responses(child_reg, child_freq_fields, child_imp_fields, choice_maps, item_labels),
+            "teacher": _ssrs_item_responses(teacher_reg, teacher_freq_fields, teacher_imp_fields, choice_maps, item_labels),
+        },
+        "teacher_competence": _ssrs_teacher_competence(teacher_reg, teacher_rating_fields, choice_maps, item_labels),
+        "domain_scores_available": domain_scores_available,
+    }
+
+
 # --- Assessment Tool Status (10th live instrument, confirmed 2026-09-11) ---
 # A simple administration/status tracker: each field is an independent
 # `radio` coded 1=Done/2=Not Done (confirmed identical live choice string

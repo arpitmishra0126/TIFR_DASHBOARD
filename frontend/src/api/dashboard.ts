@@ -12,6 +12,7 @@ import type {
   ProgressResponse,
   RegistryResponse,
   ScreenTimeResponse,
+  SsrsResponse,
 } from "../types/liveDashboard";
 
 export function getAnthropometry(opts?: { force?: boolean }): Promise<AnthropometryResponse> {
@@ -56,6 +57,28 @@ export function getRegistry(query: RegistryQuery = {}): Promise<RegistryResponse
   params.set("limit", String(query.limit ?? 50));
   params.set("offset", String(query.offset ?? 0));
   return apiGet<RegistryResponse>(withRefresh(`/dashboard/registry?${params.toString()}`, query.force));
+}
+
+export interface SsrsQuery {
+  ageBand?: string;
+  sex?: string;
+  village?: string;
+  respondent?: string;
+  formDateFrom?: string;
+  formDateTo?: string;
+  force?: boolean;
+}
+
+export function getSsrs(query: SsrsQuery = {}): Promise<SsrsResponse> {
+  const params = new URLSearchParams();
+  if (query.ageBand) params.set("age_band", query.ageBand);
+  if (query.sex) params.set("sex", query.sex);
+  if (query.village) params.set("village", query.village);
+  if (query.respondent) params.set("respondent", query.respondent);
+  if (query.formDateFrom) params.set("form_date_from", query.formDateFrom);
+  if (query.formDateTo) params.set("form_date_to", query.formDateTo);
+  const qs = params.toString();
+  return apiGet<SsrsResponse>(withRefresh(qs ? `/dashboard/ssrs?${qs}` : "/dashboard/ssrs", query.force));
 }
 
 export function getDemographics(opts?: { force?: boolean }): Promise<DemographicsResponse> {

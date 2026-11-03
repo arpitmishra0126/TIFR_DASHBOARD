@@ -16,6 +16,7 @@ import Overview from "./routes/Overview";
 import PhysicalActivity from "./routes/PhysicalActivity";
 import Registry from "./routes/Registry";
 import ScreenTime from "./routes/ScreenTime";
+import Ssrs from "./routes/Ssrs";
 import StudyQuestionnaires from "./routes/StudyQuestionnaires";
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/neurodevelopment" element={<Neurodevelopment />} />
             <Route path="/progress" element={<AssessmentProgress />} />
             <Route path="/data-quality" element={<DataQuality />} />
+            <Route path="/ssrs" element={<Ssrs />} />
             <Route path="/study-questionnaires" element={<StudyQuestionnaires />} />
           </Route>
         </Routes>

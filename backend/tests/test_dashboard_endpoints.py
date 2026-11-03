@@ -259,3 +259,22 @@ def test_progress_endpoint_returns_four_stage_pipeline():
         "ssrs_child": 2,
         "ssrs_teacher": 1,
     }
+
+
+def test_ssrs_endpoint_shape_and_filters():
+    response = client.get("/api/v1/dashboard/ssrs")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_registered"] == 6
+    assert set(body["parent"]) == {"completed", "total", "label"}
+    assert body["parent"]["total"] == 6
+    assert len(body["item_responses"]["parent"]) == 52
+    assert len(body["item_responses"]["child"]) == 34
+    assert len(body["item_responses"]["teacher"]) == 42
+    assert len(body["teacher_competence"]) == 9
+    assert isinstance(body["domain_scores_available"], bool)
+    assert "child_id_not_found_count" in body["data_quality"]
+
+    filtered = client.get("/api/v1/dashboard/ssrs?sex=Male")
+    assert filtered.status_code == 200
+    assert filtered.json()["total_registered"] <= body["total_registered"]

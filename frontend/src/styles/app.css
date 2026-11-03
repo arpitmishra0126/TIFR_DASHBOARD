@@ -774,6 +774,133 @@ a, button {
   }
 }
 
+/* SSRS panel (route "ssrs") - reuses .freq-stacked-*, .freq-legend,
+   .filter-bar, .kpi-row, .chart-grid, .table-card and .data-table as-is;
+   only the item-list layout and the respondent-tab/pending-tile pieces
+   below are new. */
+.ssrs-respondent-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ssrs-respondent-tab {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ssrs-respondent-tab-active {
+  background: var(--series-1);
+  border-color: var(--series-1);
+  color: #ffffff;
+}
+
+.ssrs-scale-legends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.ssrs-scale-legend-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.ssrs-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ssrs-item-row {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.ssrs-item-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.ssrs-item-row-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ssrs-item-row-n {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ssrs-item-row-bars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.ssrs-item-row-no-imp {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ssrs-pending-tile {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.ssrs-pending-tile svg {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.ssrs-pending-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.ssrs-pending-tile p {
+  margin: 0 0 var(--space-2);
+  font-size: 0.85rem;
+}
+
+.ssrs-pending-tile p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 640px) {
+  .ssrs-item-row-bars {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Physical Activity (PAQ-C) only - matches Dietary Intake's compact
    above-the-fold spacing and sharper/subtle card corners, without changing
    the shared .kpi-card/.chart-card/.section-header rules every other page

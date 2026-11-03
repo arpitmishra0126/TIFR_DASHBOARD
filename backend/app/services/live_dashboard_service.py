@@ -9,15 +9,23 @@ from app.ingestion.live_field_map import (
     CORE_BATTERY_INSTRUMENTS,
     REGISTRATION_COMPLETE_FIELD,
     REGISTRY_INSTRUMENT_ENTRIES,
+    SSRS_CHILD_COMMENT_FIELDS,
     SSRS_CHILD_COMPLETE_FIELD,
     SSRS_CHILD_FREQ_FIELDS,
     SSRS_CHILD_IMP_FIELDS,
+    SSRS_PARENT_COMMENT_FIELDS,
     SSRS_PARENT_COMPLETE_FIELD,
+    SSRS_PARENT_DATE_FIELD,
     SSRS_PARENT_FREQ_FIELDS,
+    SSRS_PARENT_ID_FIELD,
     SSRS_PARENT_IMP_FIELDS,
+    SSRS_TEACHER_COMMENT_FIELDS,
     SSRS_TEACHER_COMPLETE_FIELD,
+    SSRS_TEACHER_DATE_FIELD,
     SSRS_TEACHER_FREQ_FIELDS,
+    SSRS_TEACHER_ID_FIELD,
     SSRS_TEACHER_IMP_FIELDS,
+    SSRS_TEACHER_RATING_FIELDS,
 )
 from app.ingestion.normalize import capitalize_label, compute_age_years, parse_complete_flag, parse_date, parse_float, parse_int
 from app.redcap.live_repository import LiveRedCapRepository
@@ -33,8 +41,11 @@ from app.services.module_analytics import (
     build_neurodevelopment_analysis,
     build_physical_activity_analysis,
     build_screen_time_analysis,
+    build_ssrs_analysis,
+    build_ssrs_item_label_map,
     coverage_tier,
 )
+from app.services.ssrs_scoring_key import SSRS_DOMAIN_SCORING_KEY
 from app.schemas.dashboard import (
     AgeBucket,
     AnthropometryChildRow,
@@ -82,6 +93,14 @@ from app.schemas.dashboard import (
     ScreenActivityPoint,
     ScreenTimeResponse,
     SexDistribution,
+    SsrsAgeBandCompletion,
+    SsrsDataQuality,
+    SsrsFrequencySegment,
+    SsrsInstrumentSummary,
+    SsrsItemDistribution,
+    SsrsItemResponse,
+    SsrsResponse,
+    SsrsTeacherCompetenceItem,
     SSRSInstrumentSummary,
     WeeklyActivityDay,
 )
@@ -799,4 +818,95 @@ class LiveDashboardService:
                 "ssrs_teacher": "0 live Teacher assessments are complete - Teacher's counts/summaries will "
                 "populate automatically once real data exists; no value has been invented here.",
             },
+        )
+
+    _SSRS_ITEM_LABEL_FIELDS: tuple[str, ...] = (
+        *SSRS_PARENT_FREQ_FIELDS,
+        *SSRS_CHILD_FREQ_FIELDS,
+        *SSRS_TEACHER_FREQ_FIELDS,
+        *SSRS_TEACHER_RATING_FIELDS,
+    )
+
+    async def get_ssrs(
+        self,
+        force: bool = False,
+        *,
+        age_band: str | None = None,
+        sex: str | None = None,
+        village: str | None = None,
+        respondent: str | None = None,
+        form_date_from: str | None = None,
+        form_date_to: str | None = None,
+    ) -> SsrsResponse:
+        records, choice_maps = await self._load(force=force)
+        # Metadata is fetched again here (not threaded through _load(), whose
+        # contract every other caller depends on) purely to read field_label
+        # text for item display names - the same 30s-TTL cache _load()
+        # itself reads from, so this is a cache hit, not a second live call.
+        metadata = await self._repository.get_metadata(force=force)
+        item_labels = build_ssrs_item_label_map(metadata, self._SSRS_ITEM_LABEL_FIELDS)
+        analysis = build_ssrs_analysis(
+            records,
+            choice_maps,
+            item_labels,
+            parent_freq_fields=SSRS_PARENT_FREQ_FIELDS,
+            parent_imp_fields=SSRS_PARENT_IMP_FIELDS,
+            child_freq_fields=SSRS_CHILD_FREQ_FIELDS,
+            child_imp_fields=SSRS_CHILD_IMP_FIELDS,
+            teacher_freq_fields=SSRS_TEACHER_FREQ_FIELDS,
+            teacher_imp_fields=SSRS_TEACHER_IMP_FIELDS,
+            teacher_rating_fields=SSRS_TEACHER_RATING_FIELDS,
+            parent_id_field=SSRS_PARENT_ID_FIELD,
+            teacher_id_field=SSRS_TEACHER_ID_FIELD,
+            parent_date_field=SSRS_PARENT_DATE_FIELD,
+            teacher_date_field=SSRS_TEACHER_DATE_FIELD,
+            comment_fields=(*SSRS_PARENT_COMMENT_FIELDS, *SSRS_CHILD_COMMENT_FIELDS, *SSRS_TEACHER_COMMENT_FIELDS),
+            domain_scores_available=bool(SSRS_DOMAIN_SCORING_KEY),
+            age_band=age_band,
+            sex=sex,
+            village=village,
+            respondent=respondent,
+            form_date_from=form_date_from,
+            form_date_to=form_date_to,
+        )
+
+        def _item(data: dict) -> SsrsItemResponse:
+            return SsrsItemResponse(
+                item_key=data["item_key"],
+                label=data["label"],
+                frequency=SsrsItemDistribution(
+                    segments=[SsrsFrequencySegment(**s) for s in data["frequency"]["segments"]],
+                    valid_n=data["frequency"]["valid_n"],
+                ),
+                importance=SsrsItemDistribution(
+                    segments=[SsrsFrequencySegment(**s) for s in data["importance"]["segments"]],
+                    valid_n=data["importance"]["valid_n"],
+                )
+                if data["importance"] is not None
+                else None,
+                very_often_percent=data["very_often_percent"],
+            )
+
+        return SsrsResponse(
+            total_registered=analysis["total_registered"],
+            parent=SsrsInstrumentSummary(**analysis["parent"]),
+            child=SsrsInstrumentSummary(**analysis["child"]),
+            teacher=SsrsInstrumentSummary(**analysis["teacher"]),
+            all_three_complete_count=analysis["all_three_complete_count"],
+            completion_by_age_band=[SsrsAgeBandCompletion(**b) for b in analysis["completion_by_age_band"]],
+            data_quality=SsrsDataQuality(**analysis["data_quality"]),
+            item_responses={
+                respondent_key: [_item(item) for item in items]
+                for respondent_key, items in analysis["item_responses"].items()
+            },
+            teacher_competence=[
+                SsrsTeacherCompetenceItem(
+                    item_key=item["item_key"],
+                    label=item["label"],
+                    bands=[SsrsFrequencySegment(**b) for b in item["bands"]],
+                    valid_n=item["valid_n"],
+                )
+                for item in analysis["teacher_competence"]
+            ],
+            domain_scores_available=analysis["domain_scores_available"],
         )

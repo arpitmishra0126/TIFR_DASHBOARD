@@ -21,6 +21,7 @@ from app.schemas.dashboard import (
     ProgressResponse,
     RegistryResponse,
     ScreenTimeResponse,
+    SsrsResponse,
 )
 from app.services.export_service import export_filename
 from app.services.live_dashboard_service import LiveDashboardService
@@ -243,3 +244,25 @@ async def get_progress(
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> ProgressResponse:
     return await service.get_progress(force=refresh)
+
+
+@router.get("/ssrs", response_model=SsrsResponse)
+async def get_ssrs(
+    age_band: str | None = Query(default=None, description='Exact match, e.g. "9 years"'),
+    sex: str | None = Query(default=None),
+    village: str | None = Query(default=None),
+    respondent: str | None = Query(default=None, description='"parent" | "child" | "teacher" - scopes form_date_*'),
+    form_date_from: str | None = Query(default=None),
+    form_date_to: str | None = Query(default=None),
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> SsrsResponse:
+    return await service.get_ssrs(
+        force=refresh,
+        age_band=age_band,
+        sex=sex,
+        village=village,
+        respondent=respondent,
+        form_date_from=form_date_from,
+        form_date_to=form_date_to,
+    )

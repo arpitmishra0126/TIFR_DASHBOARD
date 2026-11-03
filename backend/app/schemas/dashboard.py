@@ -859,6 +859,70 @@ class AnthropometryResponse(BaseModel):
     notes: dict[str, str]
 
 
+# --- SSRS panel (/ssrs, added 2026-11-03) ---
+class SsrsFrequencySegment(BaseModel):
+    code: str
+    label: str
+    count: int
+    percent: float
+
+
+class SsrsItemDistribution(BaseModel):
+    segments: list[SsrsFrequencySegment]
+    valid_n: int
+
+
+class SsrsItemResponse(BaseModel):
+    item_key: str
+    label: str
+    frequency: SsrsItemDistribution
+    # None only when this item genuinely has no paired importance field on
+    # the live REDCap form (confirmed live - not every frequency item has
+    # one) - never a fabricated/empty distribution.
+    importance: SsrsItemDistribution | None
+    very_often_percent: float
+
+
+class SsrsTeacherCompetenceItem(BaseModel):
+    item_key: str
+    label: str
+    bands: list[SsrsFrequencySegment]
+    valid_n: int
+
+
+class SsrsInstrumentSummary(BaseModel):
+    completed: int
+    total: int
+    label: str
+
+
+class SsrsAgeBandCompletion(BaseModel):
+    band: str
+    parent: int
+    child: int
+    teacher: int
+
+
+class SsrsDataQuality(BaseModel):
+    child_id_not_found_count: int
+    form_date_missing_count: int
+    required_items_blank_count: int
+    items_with_comment_count: int
+
+
+class SsrsResponse(BaseModel):
+    total_registered: int
+    parent: SsrsInstrumentSummary
+    child: SsrsInstrumentSummary
+    teacher: SsrsInstrumentSummary
+    all_three_complete_count: int
+    completion_by_age_band: list[SsrsAgeBandCompletion]
+    data_quality: SsrsDataQuality
+    item_responses: dict[str, list[SsrsItemResponse]]
+    teacher_competence: list[SsrsTeacherCompetenceItem]
+    domain_scores_available: bool
+
+
 # OverviewResponse forward-references InstrumentCompletion/ConditionIndicator,
 # which are defined later in this file (after the assessment-module section).
 OverviewResponse.model_rebuild()

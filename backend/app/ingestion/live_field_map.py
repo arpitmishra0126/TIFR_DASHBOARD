@@ -439,6 +439,53 @@ SSRS_CHILD_IMP_FIELDS: tuple[str, ...] = tuple(f"c{i}_imp" for i in range(1, 35)
 SSRS_TEACHER_FREQ_FIELDS: tuple[str, ...] = tuple(f"t{i}_freq" for i in range(1, 43))
 SSRS_TEACHER_IMP_FIELDS: tuple[str, ...] = tuple(f"t{i}_imp" for i in range(1, 31))
 
+# SSRS comment fields (confirmed live 2026-11-03 via a direct REDCap
+# metadata query filtered to each SSRS form) - free text, fetched only to
+# detect a non-blank comment for the "/ssrs" Data Quality panel's "items
+# with a comment, for qualitative review" count. The comment TEXT itself is
+# never read by any calculation or rendered anywhere - only whether it is
+# blank. Parent/Teacher have one comment field per frequency item (52/42);
+# Teacher's comment set also includes one per rating item (t43-t51), for 51
+# total - confirmed live, not assumed.
+SSRS_PARENT_COMMENT_FIELDS: tuple[str, ...] = tuple(f"p{i}_comment" for i in range(1, 53))
+SSRS_CHILD_COMMENT_FIELDS: tuple[str, ...] = tuple(f"c{i}_comment" for i in range(1, 35))
+SSRS_TEACHER_COMMENT_FIELDS: tuple[str, ...] = tuple(f"t{i}_comment" for i in range(1, 43)) + tuple(
+    f"t{i}_comment" for i in range(43, 52)
+)
+
+# Teacher Academic Competence ratings - confirmed live 2026-11-03: 9 real
+# `radio` fields, t43_rating..t51_rating (1=Lowest 10% .. 5=Highest 10%),
+# NOT the 7 the original CLAUDE.md note assumed. These were previously
+# documented as "not part of the approved analytical specification" for the
+# Neurodevelopment page and left unmapped there - that decision is
+# unchanged (Neurodevelopment.tsx still does not show them). The `/ssrs`
+# tab's own "Teacher academic competence" panel is the first consumer.
+SSRS_TEACHER_RATING_FIELDS: tuple[str, ...] = tuple(f"t{i}_rating" for i in range(43, 52))
+
+# SSRS id/date fields (confirmed live 2026-11-03): parent_child_id/
+# teacher_child_id are free text (hand-typed, not a REDCap lookup/relation
+# field), so they must be trimmed and case-normalised before matching
+# against a registered child's own `child_id` - never assumed to match
+# exactly. The Child form has neither an ID nor a date field of its own
+# (confirmed live) - a Child-form record is linked only through the shared
+# REDCap record itself (the same `child_id` every other form on that
+# record shares), and "form date" filtering is inapplicable to Child.
+SSRS_PARENT_ID_FIELD = "parent_child_id"
+SSRS_PARENT_DATE_FIELD = "parent_date"
+SSRS_TEACHER_ID_FIELD = "teacher_child_id"
+SSRS_TEACHER_DATE_FIELD = "teacher_date"
+
+SSRS_DASHBOARD_FIELDS: tuple[str, ...] = (
+    SSRS_PARENT_ID_FIELD,
+    SSRS_PARENT_DATE_FIELD,
+    SSRS_TEACHER_ID_FIELD,
+    SSRS_TEACHER_DATE_FIELD,
+    *SSRS_TEACHER_RATING_FIELDS,
+    *SSRS_PARENT_COMMENT_FIELDS,
+    *SSRS_CHILD_COMMENT_FIELDS,
+    *SSRS_TEACHER_COMMENT_FIELDS,
+)
+
 EXPORT_ONLY_FIELDS: tuple[str, ...] = (
     *SES_EXPORT_FIELDS,
     *DSEQ_EXPORT_FIELDS,
@@ -542,5 +589,6 @@ LIVE_FIELDS: tuple[str, ...] = (
     *ASSESSMENT_TOOL_STATUS_ITEM_FIELDS,
     ANTHROPOMETRY_COMPLETE_FIELD,
     *ANTHROPOMETRY_FIELDS,
+    *SSRS_DASHBOARD_FIELDS,
     *EXPORT_ONLY_FIELDS,
 )

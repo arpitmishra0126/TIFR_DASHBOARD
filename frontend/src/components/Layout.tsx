@@ -33,6 +33,7 @@ const HEADER_TABS: HeaderTab[] = [
   { label: "DSEQ / Screen Time", to: "/screen-time" },
   { label: "Child Health History", to: "/health-screening" },
   { label: "Anthropometry Assessment", to: "/anthropometry" },
+  { label: "SSRS", to: "/ssrs" },
   { label: "Study Questionnaires", to: "/study-questionnaires" },
   { label: "Data Quality", to: "/data-quality" },
 ];

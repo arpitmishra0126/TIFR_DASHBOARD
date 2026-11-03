@@ -672,3 +672,66 @@ export interface AnthropometryResponse {
   rows: AnthropometryChildRow[];
   notes: Record<string, string>;
 }
+
+// --- SSRS panel (/ssrs) ---
+export interface SsrsFrequencySegment {
+  code: string;
+  label: string;
+  count: number;
+  percent: number;
+}
+
+export interface SsrsItemDistribution {
+  segments: SsrsFrequencySegment[];
+  valid_n: number;
+}
+
+export interface SsrsItemResponse {
+  item_key: string;
+  label: string;
+  frequency: SsrsItemDistribution;
+  importance: SsrsItemDistribution | null;
+  very_often_percent: number;
+}
+
+export interface SsrsTeacherCompetenceItem {
+  item_key: string;
+  label: string;
+  bands: SsrsFrequencySegment[];
+  valid_n: number;
+}
+
+export interface SsrsInstrumentSummary {
+  completed: number;
+  total: number;
+  label: string;
+}
+
+export interface SsrsAgeBandCompletion {
+  band: string;
+  parent: number;
+  child: number;
+  teacher: number;
+}
+
+export interface SsrsDataQuality {
+  child_id_not_found_count: number;
+  form_date_missing_count: number;
+  required_items_blank_count: number;
+  items_with_comment_count: number;
+}
+
+export type SsrsRespondent = "parent" | "child" | "teacher";
+
+export interface SsrsResponse {
+  total_registered: number;
+  parent: SsrsInstrumentSummary;
+  child: SsrsInstrumentSummary;
+  teacher: SsrsInstrumentSummary;
+  all_three_complete_count: number;
+  completion_by_age_band: SsrsAgeBandCompletion[];
+  data_quality: SsrsDataQuality;
+  item_responses: Record<SsrsRespondent, SsrsItemResponse[]>;
+  teacher_competence: SsrsTeacherCompetenceItem[];
+  domain_scores_available: boolean;
+}

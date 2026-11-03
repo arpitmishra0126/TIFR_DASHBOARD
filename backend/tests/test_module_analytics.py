@@ -1312,3 +1312,238 @@ def test_build_anthropometry_analysis_detects_invalid_values_and_duplicate_ids()
     assert result["data_quality"]["possible_duplicate_count"] == 1
     assert result["data_quality"]["possible_duplicate_ids"] == ["G1"]
     assert result["data_quality"]["invalid_measurement_counts"]["height"] >= 1
+
+
+# --- SSRS panel (/ssrs, 2026-11-03) -----------------------------------------
+
+def test_parse_ssrs_item_label_strips_number_hindi_and_suffix():
+    raw = (
+        "1. Starts conversations instead of always waiting for others to speak first. (Frequency)"
+        "<br>1. Hindi text here (Hindi suffix)"
+    )
+    assert ma.parse_ssrs_item_label(raw) == "Starts conversations instead of always waiting for others to speak first."
+
+
+def test_parse_ssrs_item_label_handles_rating_items_with_no_suffix():
+    raw = "43. Overall academic performance compared with other children.<br>43. Hindi text here"
+    assert ma.parse_ssrs_item_label(raw) == "Overall academic performance compared with other children."
+
+
+def test_parse_ssrs_item_label_blank_input_returns_blank():
+    assert ma.parse_ssrs_item_label(None) == ""
+    assert ma.parse_ssrs_item_label("") == ""
+
+
+def test_build_ssrs_item_label_map_only_includes_requested_fields():
+    metadata = [
+        {"field_name": "p1_freq", "field_label": "1. Item one. (Frequency)<br>1. Hindi"},
+        {"field_name": "p1_imp", "field_label": "1. Item one. (Importance)<br>1. Hindi"},
+        {"field_name": "p2_freq", "field_label": "2. Item two. (Frequency)<br>2. Hindi"},
+    ]
+    result = ma.build_ssrs_item_label_map(metadata, ("p1_freq",))
+    assert result == {"p1_freq": "Item one."}
+
+
+def test_coded_item_segments_orders_by_code_includes_zero_counts_and_excludes_invalid():
+    choice_maps = {"p1_freq": {"0": "Never", "1": "Sometimes", "2": "Very Often"}}
+    records = [
+        {"p1_freq": "0"},
+        {"p1_freq": "2"},
+        {"p1_freq": "2"},
+        {"p1_freq": ""},  # blank - excluded
+        {"p1_freq": "9"},  # invalid code - excluded, never folded into a real category
+    ]
+    segments, valid_n = ma.coded_item_segments(records, "p1_freq", choice_maps)
+    assert valid_n == 3
+    by_code = {s["code"]: s for s in segments}
+    assert set(by_code) == {"0", "1", "2"}
+    assert by_code["0"]["count"] == 1
+    assert by_code["1"]["count"] == 0
+    assert by_code["1"]["percent"] == 0.0
+    assert by_code["2"]["count"] == 2
+    assert by_code["2"]["percent"] == ma.percent(2, 3)
+
+
+def test_coded_item_segments_handles_zero_valid_responses():
+    choice_maps = {"p1_freq": {"0": "Never", "1": "Sometimes", "2": "Very Often"}}
+    segments, valid_n = ma.coded_item_segments([{"p1_freq": ""}], "p1_freq", choice_maps)
+    assert valid_n == 0
+    assert all(s["count"] == 0 and s["percent"] == 0.0 for s in segments)
+
+
+def test_ssrs_age_band_uses_visit_date_not_today():
+    # Child turns 9 only after the visit date if computed "today" instead of
+    # at visit_date - this locks in "age at visit_date", not current age.
+    record = {"child_dob": "2017-06-01", "visit_date": "2026-05-15"}
+    assert ma._ssrs_age_band(record) == "8 years"
+    record2 = {"child_dob": "2017-06-01", "visit_date": "2026-07-01"}
+    assert ma._ssrs_age_band(record2) == "9 years"
+
+
+def test_ssrs_age_band_unknown_and_other():
+    assert ma._ssrs_age_band({"child_dob": ""}) == "Unknown"
+    assert ma._ssrs_age_band({"child_dob": "2010-01-01", "visit_date": "2026-01-01"}) == "Other"
+
+
+SSRS_CHOICE_MAPS = {
+    "baby_gender": {"1": "Male", "2": "Female"},
+    **{f"p{i}_freq": {"0": "Never", "1": "Sometimes", "2": "Very Often"} for i in range(1, 53)},
+    **{f"p{i}_imp": {"0": "Not Important", "1": "Important", "2": "Critical"} for i in range(1, 41)},
+    **{f"c{i}_freq": {"0": "Never", "1": "Sometimes", "2": "Very Often"} for i in range(1, 35)},
+    **{f"c{i}_imp": {"0": "Not Important", "1": "Important", "2": "Critical"} for i in range(1, 35)},
+    **{f"t{i}_freq": {"0": "Never", "1": "Sometimes", "2": "Very Often"} for i in range(1, 43)},
+    **{f"t{i}_imp": {"0": "Not Important", "1": "Important", "2": "Critical"} for i in range(1, 31)},
+    **{f"t{i}_rating": {"1": "Lowest 10%", "2": "Next lowest 20%", "3": "Middle 40%", "4": "Next highest 20%", "5": "Highest 10%"} for i in range(43, 52)},
+}
+
+
+def _ssrs_record(child_id, **overrides):
+    record = {
+        "child_id": child_id,
+        "baby_gender": "1",
+        "child_dob": "2017-06-01",
+        "village_name": "Alpha",
+        "visit_date": "2026-07-01",  # -> age 9 at visit
+        "ssrs_parent_complete": "0",
+        "ssrs_child_complete": "0",
+        "ssrs_teacher_complete": "0",
+        "parent_child_id": "",
+        "parent_date": "",
+        "teacher_child_id": "",
+        "teacher_date": "",
+    }
+    record.update(overrides)
+    return record
+
+
+def _ssrs_kwargs():
+    import app.ingestion.live_field_map as lfm
+
+    return dict(
+        parent_freq_fields=lfm.SSRS_PARENT_FREQ_FIELDS,
+        parent_imp_fields=lfm.SSRS_PARENT_IMP_FIELDS,
+        child_freq_fields=lfm.SSRS_CHILD_FREQ_FIELDS,
+        child_imp_fields=lfm.SSRS_CHILD_IMP_FIELDS,
+        teacher_freq_fields=lfm.SSRS_TEACHER_FREQ_FIELDS,
+        teacher_imp_fields=lfm.SSRS_TEACHER_IMP_FIELDS,
+        teacher_rating_fields=lfm.SSRS_TEACHER_RATING_FIELDS,
+        parent_id_field=lfm.SSRS_PARENT_ID_FIELD,
+        teacher_id_field=lfm.SSRS_TEACHER_ID_FIELD,
+        parent_date_field=lfm.SSRS_PARENT_DATE_FIELD,
+        teacher_date_field=lfm.SSRS_TEACHER_DATE_FIELD,
+        comment_fields=(),
+        domain_scores_available=False,
+    )
+
+
+def test_build_ssrs_analysis_completion_counts_and_all_three_complete():
+    records = [
+        _ssrs_record(
+            "A1",
+            ssrs_parent_complete="2", ssrs_child_complete="2", ssrs_teacher_complete="2",
+            parent_child_id="a1", teacher_child_id="A1",
+        ),
+        _ssrs_record("A2", ssrs_parent_complete="2", parent_child_id="A2"),
+        _ssrs_record("A3"),
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert result["total_registered"] == 3
+    assert result["parent"]["completed"] == 2
+    assert result["parent"]["total"] == 3
+    assert result["child"]["completed"] == 1
+    assert result["teacher"]["completed"] == 1
+    assert result["all_three_complete_count"] == 1
+
+
+def test_build_ssrs_analysis_id_matching_is_trimmed_and_case_normalised():
+    records = [
+        _ssrs_record("B1", ssrs_parent_complete="2", parent_child_id=" b1 "),  # matches after trim+uppercase
+        _ssrs_record("B2", ssrs_teacher_complete="2", teacher_child_id="B2X"),  # genuinely not found
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert result["data_quality"]["child_id_not_found_count"] == 1
+
+
+def test_build_ssrs_analysis_form_date_missing_only_counted_for_complete_forms():
+    records = [
+        _ssrs_record("C1", ssrs_parent_complete="2", parent_date=""),  # complete but missing date
+        _ssrs_record("C2", ssrs_parent_complete="0", parent_date=""),  # not complete - not flagged
+        _ssrs_record("C3", ssrs_teacher_complete="2", teacher_date="2026-09-01"),  # has a date
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert result["data_quality"]["form_date_missing_count"] == 1
+
+
+def test_build_ssrs_analysis_required_items_blank_only_for_complete_forms():
+    records = [
+        _ssrs_record("D1", ssrs_parent_complete="2", p1_freq=""),  # complete, one blank item
+        _ssrs_record("D2", ssrs_parent_complete="0", p1_freq=""),  # not complete - not flagged
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert result["data_quality"]["required_items_blank_count"] == 1
+
+
+def test_build_ssrs_analysis_respondent_scoped_form_date_filter_only_affects_that_respondent():
+    records = [
+        _ssrs_record("E1", ssrs_parent_complete="2", parent_date="2026-10-15"),
+        _ssrs_record("E2", ssrs_parent_complete="2", parent_date="2026-01-01"),  # outside range
+        _ssrs_record("E3", ssrs_teacher_complete="2", teacher_date="2026-01-01"),  # teacher untouched
+    ]
+    result = ma.build_ssrs_analysis(
+        records, SSRS_CHOICE_MAPS, {}, respondent="parent", form_date_from="2026-10-01", **_ssrs_kwargs(),
+    )
+    assert result["parent"]["completed"] == 1
+    assert result["teacher"]["completed"] == 1  # unaffected by the parent-scoped date filter
+
+
+def test_build_ssrs_analysis_age_band_sex_village_filters_narrow_the_population():
+    records = [
+        _ssrs_record("F1", baby_gender="1", village_name="Alpha"),
+        _ssrs_record("F2", baby_gender="2", village_name="Beta"),
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, sex="Male", **_ssrs_kwargs())
+    assert result["total_registered"] == 1
+    result2 = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, village="Beta", **_ssrs_kwargs())
+    assert result2["total_registered"] == 1
+
+
+def test_build_ssrs_analysis_item_responses_cover_all_items_with_valid_n():
+    records = [
+        _ssrs_record("G1", ssrs_parent_complete="2", p1_freq="2", p1_imp="1"),
+        _ssrs_record("G2", ssrs_parent_complete="2", p1_freq="0", p1_imp="0"),
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {"p1_freq": "Item one."}, **_ssrs_kwargs())
+    parent_items = result["item_responses"]["parent"]
+    assert len(parent_items) == 52
+    first = next(i for i in parent_items if i["item_key"] == "p1")
+    assert first["label"] == "Item one."
+    assert first["frequency"]["valid_n"] == 2
+    assert first["importance"]["valid_n"] == 2
+    # p41..p52 have no paired importance field (confirmed live) - must be None, not fabricated.
+    last = next(i for i in parent_items if i["item_key"] == "p52")
+    assert last["importance"] is None
+
+
+def test_build_ssrs_analysis_teacher_competence_covers_all_nine_rating_items():
+    records = [_ssrs_record("H1", ssrs_teacher_complete="2", t43_rating="3")]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert len(result["teacher_competence"]) == 9
+    t43 = next(i for i in result["teacher_competence"] if i["item_key"] == "t43_rating")
+    assert t43["valid_n"] == 1
+
+
+def test_build_ssrs_analysis_completion_by_age_band_groups_by_visit_date_age():
+    records = [
+        _ssrs_record("I1", child_dob="2017-06-01", visit_date="2026-07-01", ssrs_parent_complete="2"),  # 9 yrs
+        _ssrs_record("I2", child_dob="2016-06-01", visit_date="2026-07-01", ssrs_child_complete="2"),  # 10 yrs
+    ]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    by_band = {b["band"]: b for b in result["completion_by_age_band"]}
+    assert by_band["9 years"]["parent"] == 1
+    assert by_band["10 years"]["child"] == 1
+
+
+def test_build_ssrs_analysis_domain_scores_available_reflects_scoring_key():
+    records = [_ssrs_record("J1")]
+    result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
+    assert result["domain_scores_available"] is False
