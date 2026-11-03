@@ -42,10 +42,10 @@ from app.services.module_analytics import (
     build_physical_activity_analysis,
     build_screen_time_analysis,
     build_ssrs_analysis,
+    build_ssrs_child_detail,
     build_ssrs_item_label_map,
     coverage_tier,
 )
-from app.services.ssrs_scoring_key import SSRS_DOMAIN_SCORING_KEY
 from app.schemas.dashboard import (
     AgeBucket,
     AnthropometryChildRow,
@@ -94,12 +94,23 @@ from app.schemas.dashboard import (
     ScreenTimeResponse,
     SexDistribution,
     SsrsAgeBandCompletion,
+    SsrsAgreementPoint,
+    SsrsAgreementResult,
+    SsrsChildDetailResponse,
+    SsrsChildItemAnswer,
+    SsrsChildRatingAnswer,
+    SsrsChildRespondentDetail,
+    SsrsChildScoreCell,
+    SsrsChildScoreRow,
     SsrsDataQuality,
+    SsrsDomainScoreSummary,
     SsrsFrequencySegment,
     SsrsInstrumentSummary,
     SsrsItemDistribution,
     SsrsItemResponse,
+    SsrsMeanByAgeSexRow,
     SsrsResponse,
+    SsrsScoreHistogramBin,
     SsrsTeacherCompetenceItem,
     SSRSInstrumentSummary,
     WeeklyActivityDay,
@@ -861,7 +872,6 @@ class LiveDashboardService:
             parent_date_field=SSRS_PARENT_DATE_FIELD,
             teacher_date_field=SSRS_TEACHER_DATE_FIELD,
             comment_fields=(*SSRS_PARENT_COMMENT_FIELDS, *SSRS_CHILD_COMMENT_FIELDS, *SSRS_TEACHER_COMMENT_FIELDS),
-            domain_scores_available=bool(SSRS_DOMAIN_SCORING_KEY),
             age_band=age_band,
             sex=sex,
             village=village,
@@ -908,5 +918,72 @@ class LiveDashboardService:
                 )
                 for item in analysis["teacher_competence"]
             ],
-            domain_scores_available=analysis["domain_scores_available"],
+            scores={
+                respondent_key: {
+                    domain_key: SsrsDomainScoreSummary(
+                        **{**summary, "histogram": [SsrsScoreHistogramBin(**b) for b in summary["histogram"]]}
+                    )
+                    for domain_key, summary in domains.items()
+                }
+                for respondent_key, domains in analysis["scores"].items()
+            },
+            mean_by_age_sex={
+                respondent_key: [SsrsMeanByAgeSexRow(**row) for row in rows]
+                for respondent_key, rows in analysis["mean_by_age_sex"].items()
+            },
+            agreement={
+                compare_key: SsrsAgreementResult(
+                    n=result["n"],
+                    correlation=result["correlation"],
+                    points=[SsrsAgreementPoint(**p) for p in result["points"]],
+                )
+                for compare_key, result in analysis["agreement"].items()
+            },
+            child_scores=[
+                SsrsChildScoreRow(
+                    child_id=row["child_id"],
+                    age_band=row["age_band"],
+                    sex=row["sex"],
+                    parent_social=SsrsChildScoreCell(**row["parent_social"]),
+                    parent_problem=SsrsChildScoreCell(**row["parent_problem"]),
+                    child_social=SsrsChildScoreCell(**row["child_social"]),
+                    teacher_social=SsrsChildScoreCell(**row["teacher_social"]),
+                    teacher_problem=SsrsChildScoreCell(**row["teacher_problem"]),
+                    teacher_academic=SsrsChildScoreCell(**row["teacher_academic"]),
+                )
+                for row in analysis["child_scores"]
+            ],
+        )
+
+    async def get_ssrs_child_detail(self, child_id_value: str, force: bool = False) -> SsrsChildDetailResponse | None:
+        records, choice_maps = await self._load(force=force)
+        metadata = await self._repository.get_metadata(force=force)
+        item_labels = build_ssrs_item_label_map(metadata, self._SSRS_ITEM_LABEL_FIELDS)
+        data = build_ssrs_child_detail(
+            records,
+            choice_maps,
+            item_labels,
+            child_id_value,
+            parent_freq_fields=SSRS_PARENT_FREQ_FIELDS,
+            parent_imp_fields=SSRS_PARENT_IMP_FIELDS,
+            child_freq_fields=SSRS_CHILD_FREQ_FIELDS,
+            child_imp_fields=SSRS_CHILD_IMP_FIELDS,
+            teacher_freq_fields=SSRS_TEACHER_FREQ_FIELDS,
+            teacher_imp_fields=SSRS_TEACHER_IMP_FIELDS,
+            teacher_rating_fields=SSRS_TEACHER_RATING_FIELDS,
+        )
+        if data is None:
+            return None
+
+        def _detail(d: dict) -> SsrsChildRespondentDetail:
+            return SsrsChildRespondentDetail(
+                items=[SsrsChildItemAnswer(**i) for i in d["items"]],
+                ratings=[SsrsChildRatingAnswer(**r) for r in d["ratings"]],
+            )
+
+        return SsrsChildDetailResponse(
+            child_id=data["child_id"],
+            parent=_detail(data["parent"]),
+            child=_detail(data["child"]),
+            teacher=_detail(data["teacher"]),
         )

@@ -908,6 +908,98 @@ class SsrsDataQuality(BaseModel):
     form_date_missing_count: int
     required_items_blank_count: int
     items_with_comment_count: int
+    # Count of (child, domain) pairs across the six raw-score domains where
+    # the form has some data but not every item was answered - a genuinely
+    # partial domain, never a form that was never started at all.
+    domains_not_scored_count: int
+
+
+# --- SSRS raw domain scoring (added 2026-11-03) ---
+class SsrsScoreHistogramBin(BaseModel):
+    label: str
+    count: int
+
+
+class SsrsDomainScoreSummary(BaseModel):
+    domain: str
+    respondent: str
+    item_count: int
+    minimum: int
+    maximum: int
+    direction: str
+    n_scored: int
+    n_forms: int
+    mean: float | None
+    std_dev: float | None
+    median: float | None
+    q1: float | None
+    q3: float | None
+    iqr: float | None
+    histogram: list[SsrsScoreHistogramBin]
+
+
+class SsrsMeanByAgeSexRow(BaseModel):
+    band: str
+    male_mean: float | None
+    male_n: int
+    female_mean: float | None
+    female_n: int
+
+
+class SsrsAgreementPoint(BaseModel):
+    child_id: str
+    a: float
+    b: float
+
+
+class SsrsAgreementResult(BaseModel):
+    n: int
+    correlation: float | None
+    points: list[SsrsAgreementPoint]
+
+
+class SsrsChildScoreCell(BaseModel):
+    status: str  # "scored" | "not_scored" | "no_form"
+    score: int | None
+    answered: int
+    total: int
+
+
+class SsrsChildScoreRow(BaseModel):
+    child_id: str
+    age_band: str
+    sex: str
+    parent_social: SsrsChildScoreCell
+    parent_problem: SsrsChildScoreCell
+    child_social: SsrsChildScoreCell
+    teacher_social: SsrsChildScoreCell
+    teacher_problem: SsrsChildScoreCell
+    teacher_academic: SsrsChildScoreCell
+
+
+class SsrsChildItemAnswer(BaseModel):
+    item_key: str
+    label: str
+    frequency: str | None
+    importance: str | None
+
+
+class SsrsChildRatingAnswer(BaseModel):
+    item_key: str
+    label: str
+    rating: str
+
+
+class SsrsChildRespondentDetail(BaseModel):
+    items: list[SsrsChildItemAnswer]
+    ratings: list[SsrsChildRatingAnswer]
+
+
+class SsrsChildDetailResponse(BaseModel):
+    child_id: str
+    parent: SsrsChildRespondentDetail
+    child: SsrsChildRespondentDetail
+    teacher: SsrsChildRespondentDetail
 
 
 class SsrsResponse(BaseModel):
@@ -920,7 +1012,10 @@ class SsrsResponse(BaseModel):
     data_quality: SsrsDataQuality
     item_responses: dict[str, list[SsrsItemResponse]]
     teacher_competence: list[SsrsTeacherCompetenceItem]
-    domain_scores_available: bool
+    scores: dict[str, dict[str, SsrsDomainScoreSummary]]
+    mean_by_age_sex: dict[str, list[SsrsMeanByAgeSexRow]]
+    agreement: dict[str, SsrsAgreementResult]
+    child_scores: list[SsrsChildScoreRow]
 
 
 # OverviewResponse forward-references InstrumentCompletion/ConditionIndicator,

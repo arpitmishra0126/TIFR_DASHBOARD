@@ -1432,7 +1432,6 @@ def _ssrs_kwargs():
         parent_date_field=lfm.SSRS_PARENT_DATE_FIELD,
         teacher_date_field=lfm.SSRS_TEACHER_DATE_FIELD,
         comment_fields=(),
-        domain_scores_available=False,
     )
 
 
@@ -1543,7 +1542,193 @@ def test_build_ssrs_analysis_completion_by_age_band_groups_by_visit_date_age():
     assert by_band["10 years"]["child"] == 1
 
 
-def test_build_ssrs_analysis_domain_scores_available_reflects_scoring_key():
+def _domain(key: str):
+    from app.services.ssrs_scoring import SSRS_DOMAIN_BY_RESPONDENT_KEY
+
+    return SSRS_DOMAIN_BY_RESPONDENT_KEY[key]
+
+
+def test_ssrs_score_domains_match_the_approved_field_boundaries_and_ranges():
+    from app.services.ssrs_scoring import SSRS_SCORE_DOMAINS
+
+    by_key = {f"{d.respondent}_{d.key}": d for d in SSRS_SCORE_DOMAINS}
+    assert by_key["parent_social_skills"].fields[0] == "p1_freq"
+    assert by_key["parent_social_skills"].fields[-1] == "p40_freq"
+    assert (by_key["parent_social_skills"].minimum, by_key["parent_social_skills"].maximum) == (0, 80)
+    assert by_key["parent_problem_behaviours"].fields[0] == "p41_freq"
+    assert by_key["parent_problem_behaviours"].fields[-1] == "p52_freq"
+    assert (by_key["parent_problem_behaviours"].minimum, by_key["parent_problem_behaviours"].maximum) == (0, 24)
+    assert by_key["child_social_skills"].fields[0] == "c1_freq"
+    assert by_key["child_social_skills"].fields[-1] == "c34_freq"
+    assert (by_key["child_social_skills"].minimum, by_key["child_social_skills"].maximum) == (0, 68)
+    assert by_key["teacher_social_skills"].fields[0] == "t1_freq"
+    assert by_key["teacher_social_skills"].fields[-1] == "t30_freq"
+    assert (by_key["teacher_social_skills"].minimum, by_key["teacher_social_skills"].maximum) == (0, 60)
+    assert by_key["teacher_problem_behaviours"].fields[0] == "t31_freq"
+    assert by_key["teacher_problem_behaviours"].fields[-1] == "t42_freq"
+    assert (by_key["teacher_problem_behaviours"].minimum, by_key["teacher_problem_behaviours"].maximum) == (0, 24)
+    # Teacher academic/classroom competence is t43_rating..t51_rating - nine
+    # items, NOT a seven-item t43-t49 range.
+    academic = by_key["teacher_academic_competence"]
+    assert academic.fields == tuple(f"t{i}_rating" for i in range(43, 52))
+    assert len(academic.fields) == 9
+    assert (academic.minimum, academic.maximum) == (9, 45)
+
+
+def test_ssrs_domain_score_for_child_sums_a_fully_answered_complete_form():
+    record = _ssrs_record("K1", ssrs_parent_complete="2", **{f"p{i}_freq": "2" for i in range(41, 53)})
+    cell = ma._ssrs_domain_score_for_child(record, _domain("parent_problem_behaviours"))
+    assert cell == {"status": "scored", "score": 24, "answered": 12, "total": 12}
+
+
+def test_ssrs_domain_score_for_child_one_skipped_item_is_not_scored():
+    values = {f"p{i}_freq": "2" for i in range(41, 53)}
+    values["p45_freq"] = ""  # one item left blank
+    record = _ssrs_record("K2", ssrs_parent_complete="2", **values)
+    cell = ma._ssrs_domain_score_for_child(record, _domain("parent_problem_behaviours"))
+    assert cell["status"] == "not_scored"
+    assert cell["score"] is None
+    assert cell["answered"] == 11
+    assert cell["total"] == 12
+
+
+def test_ssrs_domain_score_for_child_blank_is_never_treated_as_zero():
+    # Every item explicitly "0" (a real, valid Never answer) must score 0,
+    # not be confused with - or excluded like - a blank/unanswered item.
+    record = _ssrs_record("K3", ssrs_parent_complete="2", **{f"p{i}_freq": "0" for i in range(41, 53)})
+    cell = ma._ssrs_domain_score_for_child(record, _domain("parent_problem_behaviours"))
+    assert cell == {"status": "scored", "score": 0, "answered": 12, "total": 12}
+
+    blank_record = _ssrs_record("K4", ssrs_parent_complete="2")  # nothing answered at all
+    blank_cell = ma._ssrs_domain_score_for_child(blank_record, _domain("parent_problem_behaviours"))
+    assert blank_cell == {"status": "no_form", "score": None, "answered": 0, "total": 12}
+
+
+def test_ssrs_domain_score_for_child_teacher_academic_competence_range_is_9_to_45():
+    record = _ssrs_record("K5", ssrs_teacher_complete="2", **{f"t{i}_rating": "5" for i in range(43, 52)})
+    cell = ma._ssrs_domain_score_for_child(record, _domain("teacher_academic_competence"))
+    assert cell == {"status": "scored", "score": 45, "answered": 9, "total": 9}
+    assert _domain("teacher_academic_competence").minimum == 9
+    assert _domain("teacher_academic_competence").maximum == 45
+
+
+def test_ssrs_domain_score_for_child_respects_social_skills_problem_behaviours_boundary():
+    # p40 belongs to Social Skills, p41 belongs to Problem Behaviours - the
+    # two domains must never be combined into one total.
+    social = _domain("parent_social_skills")
+    problem = _domain("parent_problem_behaviours")
+    assert "p40_freq" in social.fields and "p41_freq" not in social.fields
+    assert "p41_freq" in problem.fields and "p40_freq" not in problem.fields
+    # t30/t31 boundary (Teacher Social Skills vs Problem Behaviours)
+    t_social = _domain("teacher_social_skills")
+    t_problem = _domain("teacher_problem_behaviours")
+    assert "t30_freq" in t_social.fields and "t31_freq" not in t_social.fields
+    assert "t31_freq" in t_problem.fields and "t30_freq" not in t_problem.fields
+    # t42/t43 boundary (Teacher Problem Behaviours vs Academic Competence)
+    t_academic = _domain("teacher_academic_competence")
+    assert "t42_freq" not in t_academic.fields
+    assert "t43_rating" in t_academic.fields
+
+
+def test_ssrs_domain_summary_n_scored_and_n_forms_and_histogram_range():
+    records = [
+        _ssrs_record("L1", ssrs_parent_complete="2", **{f"p{i}_freq": "2" for i in range(41, 53)}),  # scored 24
+        _ssrs_record("L2", ssrs_parent_complete="2", **{f"p{i}_freq": "0" for i in range(41, 53)}),  # scored 0
+        _ssrs_record("L3", ssrs_parent_complete="2", p41_freq=""),  # complete but not fully answered
+        _ssrs_record("L4", ssrs_parent_complete="0"),  # form not even started
+    ]
+    summary = ma._ssrs_domain_summary(records, _domain("parent_problem_behaviours"))
+    assert summary["n_forms"] == 3  # 3 children with ssrs_parent_complete == "2"
+    assert summary["n_scored"] == 2  # only L1 and L2 fully answered every item
+    assert summary["mean"] == 12.0
+    assert summary["minimum"] == 0 and summary["maximum"] == 24
+    assert sum(b["count"] for b in summary["histogram"]) == 2
+
+
+def test_ssrs_agreement_requires_at_least_three_children_scored_by_both():
+    map_a = {"X1": 50.0, "X2": 60.0}
+    map_b = {"X1": 55.0, "X2": 58.0}
+    result = ma._ssrs_agreement(map_a, map_b)
+    assert result["n"] == 2
+    assert result["correlation"] is None
+    assert result["points"] == []
+
+    map_a3 = {"X1": 50.0, "X2": 60.0, "X3": 70.0}
+    map_b3 = {"X1": 55.0, "X2": 58.0, "X3": 80.0}
+    result3 = ma._ssrs_agreement(map_a3, map_b3)
+    assert result3["n"] == 3
+    assert result3["correlation"] is not None
+    assert len(result3["points"]) == 3
+
+
+def test_ssrs_child_score_rows_report_not_scored_and_no_form_states():
+    values = {f"c{i}_freq": "1" for i in range(1, 35)}
+    values["c20_freq"] = ""  # one skipped item
+    records = [
+        _ssrs_record("M1", ssrs_child_complete="2", **values),
+    ]
+    rows = ma._ssrs_child_score_rows(records, SSRS_CHOICE_MAPS)
+    row = rows[0]
+    assert row["child_social"]["status"] == "not_scored"
+    assert row["child_social"]["answered"] == 33
+    assert row["child_social"]["total"] == 34
+    assert row["teacher_social"]["status"] == "no_form"
+    assert row["teacher_social"]["score"] is None
+
+
+def test_ssrs_domains_not_scored_count_counts_partial_domains_only():
+    values = {f"p{i}_freq": "1" for i in range(41, 53)}
+    values["p45_freq"] = ""
+    records = [
+        _ssrs_record("N1", ssrs_parent_complete="2", **values),  # 1 partial domain (Problem Behaviours)
+        _ssrs_record("N2", ssrs_parent_complete="0"),  # no form at all - not counted
+    ]
+    assert ma._ssrs_domains_not_scored_count(records) == 1
+
+
+def test_build_ssrs_child_detail_returns_none_for_unknown_child():
+    records = [_ssrs_record("O1")]
+    result = ma.build_ssrs_child_detail(records, SSRS_CHOICE_MAPS, {}, "does-not-exist", **_ssrs_kwargs_for_child_detail())
+    assert result is None
+
+
+def _ssrs_kwargs_for_child_detail():
+    import app.ingestion.live_field_map as lfm
+
+    return dict(
+        parent_freq_fields=lfm.SSRS_PARENT_FREQ_FIELDS,
+        parent_imp_fields=lfm.SSRS_PARENT_IMP_FIELDS,
+        child_freq_fields=lfm.SSRS_CHILD_FREQ_FIELDS,
+        child_imp_fields=lfm.SSRS_CHILD_IMP_FIELDS,
+        teacher_freq_fields=lfm.SSRS_TEACHER_FREQ_FIELDS,
+        teacher_imp_fields=lfm.SSRS_TEACHER_IMP_FIELDS,
+        teacher_rating_fields=lfm.SSRS_TEACHER_RATING_FIELDS,
+    )
+
+
+def test_build_ssrs_child_detail_returns_only_answered_items_no_comments():
+    record = _ssrs_record("O2", ssrs_parent_complete="2", p1_freq="2", p1_imp="1")
+    result = ma.build_ssrs_child_detail(
+        [record], SSRS_CHOICE_MAPS, {"p1_freq": "Item one."}, "O2", **_ssrs_kwargs_for_child_detail(),
+    )
+    assert result["child_id"] == "O2"
+    p1 = next(i for i in result["parent"]["items"] if i["item_key"] == "p1")
+    assert p1["label"] == "Item one."
+    assert p1["frequency"] == "Very Often"
+    assert p1["importance"] == "Important"
+    # Only genuinely-answered items are included - p2..p52 were left blank
+    # on this record and must not appear.
+    assert all(i["item_key"] != "p2" for i in result["parent"]["items"])
+
+
+def test_build_ssrs_analysis_scores_section_present_and_data_quality_has_domains_not_scored_count():
     records = [_ssrs_record("J1")]
     result = ma.build_ssrs_analysis(records, SSRS_CHOICE_MAPS, {}, **_ssrs_kwargs())
-    assert result["domain_scores_available"] is False
+    assert set(result["scores"]["parent"].keys()) == {"social_skills", "problem_behaviours"}
+    assert set(result["scores"]["child"].keys()) == {"social_skills"}
+    assert set(result["scores"]["teacher"].keys()) == {"social_skills", "problem_behaviours", "academic_competence"}
+    assert "domains_not_scored_count" in result["data_quality"]
+    assert "agreement" in result and set(result["agreement"].keys()) == {
+        "parent_vs_teacher", "parent_vs_child", "teacher_vs_child",
+    }
+    assert isinstance(result["child_scores"], list)

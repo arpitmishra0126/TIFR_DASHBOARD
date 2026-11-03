@@ -29,6 +29,7 @@ from typing import Callable
 from app.ingestion.choice_maps import ChoiceMap
 from app.ingestion.normalize import compute_age_years, parse_complete_flag, parse_date, parse_float
 from app.services import iap_2015_reference as iap
+from app.services.ssrs_scoring import SSRS_DOMAIN_BY_RESPONDENT_KEY, SSRS_DOMAINS_BY_RESPONDENT, SSRS_SCORE_DOMAINS, SsrsScoreDomain
 
 # --- Field lists (single source of truth - approved 2026-08-26) ---
 
@@ -1785,6 +1786,268 @@ def _ssrs_data_quality(
     }
 
 
+# --- SSRS raw domain scoring (added 2026-11-03, see ssrs_scoring.py) ------
+# Raw totals of the frequency answers only; importance is never scored; no
+# item is reverse-scored. A domain is scored only when its form is Complete
+# AND every one of its fields is answered - never summed from a partial
+# form, and a blank is never treated as a 0.
+
+
+def _ssrs_domain_score_for_child(record: dict, domain: SsrsScoreDomain) -> dict:
+    values: list[int] = []
+    answered = 0
+    for field in domain.fields:
+        raw = (record.get(field) or "").strip()
+        if raw == "":
+            continue
+        answered += 1
+        parsed = parse_float(raw)
+        if parsed is not None:
+            values.append(int(parsed))
+    complete = parse_complete_flag(record.get(domain.complete_field))
+    if answered == 0:
+        return {"status": "no_form", "score": None, "answered": 0, "total": len(domain.fields)}
+    if complete and len(values) == len(domain.fields):
+        return {"status": "scored", "score": sum(values), "answered": len(values), "total": len(domain.fields)}
+    return {"status": "not_scored", "score": None, "answered": answered, "total": len(domain.fields)}
+
+
+def _ssrs_score_histogram(values: list[int], minimum: int, maximum: int, bins: int = 8) -> list[dict]:
+    """Fixed-range histogram spanning the domain's own full possible score
+    range (never data-driven min/max, unlike a generic measurement
+    histogram) so every domain's chart reads against its own real scale."""
+    if maximum <= minimum:
+        return []
+    width = (maximum - minimum) / bins
+    edges = [minimum + width * i for i in range(1, bins + 1)]
+    labels = [f"{round(minimum + width * i)}–{round(minimum + width * (i + 1))}" for i in range(bins)]
+    counts = [0] * bins
+    for value in values:
+        idx = bins - 1
+        for i, edge in enumerate(edges):
+            if value <= edge or i == bins - 1:
+                idx = i
+                break
+        counts[idx] += 1
+    return [{"label": label, "count": count} for label, count in zip(labels, counts)]
+
+
+def _ssrs_domain_summary(reg: list[dict], domain: SsrsScoreDomain) -> dict:
+    n_forms = complete_count(reg, domain.complete_field)
+    scored_values: list[int] = []
+    for r in reg:
+        cell = _ssrs_domain_score_for_child(r, domain)
+        if cell["status"] == "scored" and cell["score"] is not None:
+            scored_values.append(cell["score"])
+    n_scored = len(scored_values)
+    if n_scored >= 2:
+        q1, _q2, q3 = quantiles(scored_values, n=4)
+        q1, q3 = round(q1, 2), round(q3, 2)
+        iqr = round(q3 - q1, 2)
+        std_dev = round(stdev(scored_values), 2)
+    else:
+        q1 = q3 = iqr = std_dev = None
+    return {
+        "domain": domain.label,
+        "respondent": domain.respondent,
+        "item_count": len(domain.fields),
+        "minimum": domain.minimum,
+        "maximum": domain.maximum,
+        "direction": domain.direction,
+        "n_scored": n_scored,
+        "n_forms": n_forms,
+        "mean": round(mean(scored_values), 2) if scored_values else None,
+        "std_dev": std_dev,
+        "median": round(median(scored_values), 2) if scored_values else None,
+        "q1": q1,
+        "q3": q3,
+        "iqr": iqr,
+        "histogram": _ssrs_score_histogram(scored_values, domain.minimum, domain.maximum),
+    }
+
+
+def _ssrs_mean_by_age_sex(reg: list[dict], choice_maps: dict[str, ChoiceMap], domain: SsrsScoreDomain) -> list[dict]:
+    buckets: dict[tuple[str, str], list[int]] = {}
+    for r in reg:
+        cell = _ssrs_domain_score_for_child(r, domain)
+        if cell["status"] != "scored" or cell["score"] is None:
+            continue
+        band = _ssrs_age_band(r)
+        # .title() normalizes REDCap's own choice-label casing (confirmed
+        # live: this project's baby_gender labels are lowercase
+        # "male"/"female", not "Male"/"Female") - same precedent as the
+        # existing sex_label normalization above.
+        sex = resolve_value("baby_gender", r.get("baby_gender"), choice_maps).strip().title()
+        buckets.setdefault((band, sex), []).append(cell["score"])
+    order = list(_SSRS_AGE_BAND_ORDER)
+    for b in ("Other", "Unknown"):
+        if any(key[0] == b for key in buckets):
+            order.append(b)
+    rows = []
+    for band in order:
+        male_vals = buckets.get((band, "Male"), [])
+        female_vals = buckets.get((band, "Female"), [])
+        if not male_vals and not female_vals:
+            continue
+        rows.append(
+            {
+                "band": band,
+                "male_mean": round(mean(male_vals), 2) if male_vals else None,
+                "male_n": len(male_vals),
+                "female_mean": round(mean(female_vals), 2) if female_vals else None,
+                "female_n": len(female_vals),
+            }
+        )
+    return rows
+
+
+def _pearson_correlation(xs: list[float], ys: list[float]) -> float | None:
+    n = len(xs)
+    if n < 2:
+        return None
+    mean_x, mean_y = mean(xs), mean(ys)
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    var_y = sum((y - mean_y) ** 2 for y in ys)
+    if var_x == 0 or var_y == 0:
+        return None
+    return round(cov / ((var_x**0.5) * (var_y**0.5)), 3)
+
+
+def _ssrs_social_skills_pct_map(reg: list[dict], domain: SsrsScoreDomain) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for r in reg:
+        cid = child_id(r)
+        if not cid:
+            continue
+        cell = _ssrs_domain_score_for_child(r, domain)
+        if cell["status"] == "scored" and cell["score"] is not None:
+            out[cid] = round(cell["score"] / domain.maximum * 100, 1)
+    return out
+
+
+def _ssrs_agreement(map_a: dict[str, float], map_b: dict[str, float]) -> dict:
+    """Respondent agreement on Social Skills, % of each respondent's own
+    maximum, for children scored by BOTH respondents. Requires n >= 3
+    before a correlation/scatter is ever drawn."""
+    common = sorted(set(map_a) & set(map_b))
+    points = [{"child_id": cid, "a": map_a[cid], "b": map_b[cid]} for cid in common]
+    n = len(points)
+    if n < 3:
+        return {"n": n, "correlation": None, "points": []}
+    correlation = _pearson_correlation([p["a"] for p in points], [p["b"] for p in points])
+    return {"n": n, "correlation": correlation, "points": points}
+
+
+def _ssrs_child_score_rows(reg: list[dict], choice_maps: dict[str, ChoiceMap]) -> list[dict]:
+    rows = []
+    for r in reg:
+        cid = child_id(r)
+        if not cid:
+            continue
+        rows.append(
+            {
+                "child_id": cid,
+                "age_band": _ssrs_age_band(r),
+                "sex": resolve_value("baby_gender", r.get("baby_gender"), choice_maps).strip().title(),
+                "parent_social": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["parent_social_skills"]),
+                "parent_problem": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["parent_problem_behaviours"]),
+                "child_social": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["child_social_skills"]),
+                "teacher_social": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["teacher_social_skills"]),
+                "teacher_problem": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["teacher_problem_behaviours"]),
+                "teacher_academic": _ssrs_domain_score_for_child(r, SSRS_DOMAIN_BY_RESPONDENT_KEY["teacher_academic_competence"]),
+            }
+        )
+    return rows
+
+
+def _ssrs_domains_not_scored_count(reg: list[dict]) -> int:
+    """Count of (child, domain) pairs across all six domains where the form
+    has some data but could not be scored (a genuinely partial domain, not
+    a form that was never started at all)."""
+    count = 0
+    for r in reg:
+        for domain in SSRS_SCORE_DOMAINS:
+            if _ssrs_domain_score_for_child(r, domain)["status"] == "not_scored":
+                count += 1
+    return count
+
+
+_SSRS_CHILD_ITEM_DETAIL_LABEL_UNKNOWN = "Unknown"
+
+
+def _ssrs_child_item_detail(
+    record: dict,
+    freq_fields: tuple[str, ...],
+    imp_fields: tuple[str, ...],
+    rating_fields: tuple[str, ...],
+    choice_maps: dict[str, ChoiceMap],
+    item_labels: dict[str, str],
+) -> dict:
+    """Raw item-level frequency/importance/rating answers for exactly one
+    child - used only by the /ssrs child drill-down, never a cohort-level
+    aggregate. A blank item is simply omitted, never shown as a fabricated
+    answer; no comment field is ever read here."""
+    imp_set = set(imp_fields)
+
+    def _label_for(field: str, raw: str | None) -> str | None:
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+        return choice_maps.get(field, {}).get(raw, raw)
+
+    items = []
+    for freq_field in freq_fields:
+        base = freq_field.rsplit("_freq", 1)[0]
+        imp_field = f"{base}_imp"
+        freq_label = _label_for(freq_field, record.get(freq_field))
+        imp_label = _label_for(imp_field, record.get(imp_field)) if imp_field in imp_set else None
+        if freq_label is None and imp_label is None:
+            continue
+        items.append(
+            {
+                "item_key": base,
+                "label": item_labels.get(freq_field) or base,
+                "frequency": freq_label,
+                "importance": imp_label,
+            }
+        )
+    ratings = []
+    for field in rating_fields:
+        label = _label_for(field, record.get(field))
+        if label is not None:
+            ratings.append({"item_key": field, "label": item_labels.get(field) or field, "rating": label})
+    return {"items": items, "ratings": ratings}
+
+
+def build_ssrs_child_detail(
+    records: list[dict],
+    choice_maps: dict[str, ChoiceMap],
+    item_labels: dict[str, str],
+    child_id_value: str,
+    *,
+    parent_freq_fields: tuple[str, ...],
+    parent_imp_fields: tuple[str, ...],
+    child_freq_fields: tuple[str, ...],
+    child_imp_fields: tuple[str, ...],
+    teacher_freq_fields: tuple[str, ...],
+    teacher_imp_fields: tuple[str, ...],
+    teacher_rating_fields: tuple[str, ...],
+) -> dict | None:
+    reg = registered_records(records)
+    record = next((r for r in reg if child_id(r) == child_id_value), None)
+    if record is None:
+        return None
+    return {
+        "child_id": child_id_value,
+        "parent": _ssrs_child_item_detail(record, parent_freq_fields, parent_imp_fields, (), choice_maps, item_labels),
+        "child": _ssrs_child_item_detail(record, child_freq_fields, child_imp_fields, (), choice_maps, item_labels),
+        "teacher": _ssrs_child_item_detail(
+            record, teacher_freq_fields, teacher_imp_fields, teacher_rating_fields, choice_maps, item_labels,
+        ),
+    }
+
+
 def _ssrs_filter_base(
     reg: list[dict],
     choice_maps: dict[str, ChoiceMap],
@@ -1831,7 +2094,6 @@ def build_ssrs_analysis(
     parent_date_field: str,
     teacher_date_field: str,
     comment_fields: tuple[str, ...],
-    domain_scores_available: bool,
     age_band: str | None = None,
     sex: str | None = None,
     village: str | None = None,
@@ -1869,6 +2131,34 @@ def build_ssrs_analysis(
         and parse_complete_flag(r.get("ssrs_teacher_complete"))
     }
 
+    data_quality = _ssrs_data_quality(
+        reg,
+        parent_id_field,
+        teacher_id_field,
+        parent_date_field,
+        teacher_date_field,
+        parent_freq_fields,
+        child_freq_fields,
+        teacher_freq_fields,
+        comment_fields,
+    )
+    data_quality["domains_not_scored_count"] = _ssrs_domains_not_scored_count(reg)
+
+    scores = {
+        resp: {d.key: _ssrs_domain_summary(reg, d) for d in domains}
+        for resp, domains in SSRS_DOMAINS_BY_RESPONDENT.items()
+    }
+    social_skills_by_respondent = {d.respondent: d for d in SSRS_SCORE_DOMAINS if d.key == "social_skills"}
+    mean_by_age_sex = {
+        resp: _ssrs_mean_by_age_sex(reg, choice_maps, domain) for resp, domain in social_skills_by_respondent.items()
+    }
+    pct_maps = {resp: _ssrs_social_skills_pct_map(reg, domain) for resp, domain in social_skills_by_respondent.items()}
+    agreement = {
+        "parent_vs_teacher": _ssrs_agreement(pct_maps["parent"], pct_maps["teacher"]),
+        "parent_vs_child": _ssrs_agreement(pct_maps["parent"], pct_maps["child"]),
+        "teacher_vs_child": _ssrs_agreement(pct_maps["teacher"], pct_maps["child"]),
+    }
+
     return {
         "total_registered": total,
         "parent": {"completed": complete_count(parent_reg, "ssrs_parent_complete"), "total": total, "label": "SSRS Parent"},
@@ -1876,24 +2166,17 @@ def build_ssrs_analysis(
         "teacher": {"completed": complete_count(teacher_reg, "ssrs_teacher_complete"), "total": total, "label": "SSRS Teacher"},
         "all_three_complete_count": len(all_three_ids),
         "completion_by_age_band": _ssrs_completion_by_age_band(reg),
-        "data_quality": _ssrs_data_quality(
-            reg,
-            parent_id_field,
-            teacher_id_field,
-            parent_date_field,
-            teacher_date_field,
-            parent_freq_fields,
-            child_freq_fields,
-            teacher_freq_fields,
-            comment_fields,
-        ),
+        "data_quality": data_quality,
         "item_responses": {
             "parent": _ssrs_item_responses(parent_reg, parent_freq_fields, parent_imp_fields, choice_maps, item_labels),
             "child": _ssrs_item_responses(child_reg, child_freq_fields, child_imp_fields, choice_maps, item_labels),
             "teacher": _ssrs_item_responses(teacher_reg, teacher_freq_fields, teacher_imp_fields, choice_maps, item_labels),
         },
         "teacher_competence": _ssrs_teacher_competence(teacher_reg, teacher_rating_fields, choice_maps, item_labels),
-        "domain_scores_available": domain_scores_available,
+        "scores": scores,
+        "mean_by_age_sex": mean_by_age_sex,
+        "agreement": agreement,
+        "child_scores": _ssrs_child_score_rows(reg, choice_maps),
     }
 
 

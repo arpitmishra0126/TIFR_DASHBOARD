@@ -6540,6 +6540,149 @@ scan after the fix returned zero matches for `212` or `213` anywhere on
 the page; KPI cards now read `166/222`, `163/222`, `95/222`. Frontend
 `tsc -b`/`npm run build` succeed; backend untouched.
 
+**Raw domain scoring added to the SSRS tab (2026-11-03, same day - a real
+scoring implementation, supersedes the "Domain Scores and Respondent
+Agreement / Pending scoring key" tile above, which is now removed):** per
+an approved scoring specification, the `/ssrs` page now computes and
+displays real raw domain totals - not a placeholder. Scope: additive to
+the SSRS module only; no other dashboard page, calculation, or REDCap
+mapping touched.
+
+**Scoring rule (single source of truth):** `backend/app/services
+/ssrs_scoring.py` (new file, replaces the now-deleted `ssrs_scoring_key.py`
+placeholder) defines `SsrsScoreDomain` (respondent, key, label, field
+tuple, complete field, min, max, direction text) and the six approved
+domains:
+
+| Respondent | Domain | Fields | Range | Direction |
+|---|---|---|---|---|
+| Parent | Social Skills | p1_freq..p40_freq | 0-80 | higher = stronger social skills |
+| Parent | Problem Behaviours | p41_freq..p52_freq | 0-24 | higher = more concerns |
+| Child | Social Skills | c1_freq..c34_freq | 0-68 | higher = stronger social skills |
+| Teacher | Social Skills | t1_freq..t30_freq | 0-60 | higher = stronger social skills |
+| Teacher | Problem Behaviours | t31_freq..t42_freq | 0-24 | higher = more concerns |
+| Teacher | Academic/Classroom Competence | t43_rating..t51_rating | 9-45 | higher = stronger classroom functioning |
+
+A domain score is the raw sum of the domain's own coded item values
+(frequency 0/1/2; academic rating 1-5) - **importance is never scored, and
+no item is reverse-scored**. `SSRS_TEACHER_RATING_FIELDS` (already
+`t43_rating..t51_rating`, 9 items) was re-confirmed correct during this
+pass via a codebase-wide search for a "7-item"/"t43-t49" assumption -
+none was found; the field map was already right from the original SSRS
+build.
+
+**Missing-item rule**: a domain is scored only when its form is marked
+Complete AND every item in the domain is answered - a partial form is
+never summed, and a blank item is never treated as a 0 (locked in by a
+dedicated test distinguishing an explicit "0" answer from a genuinely
+blank one). New `module_analytics.py` functions: `_ssrs_domain_score_for_
+child()` (per-child `{status: "scored"|"not_scored"|"no_form", score,
+answered, total}`), `_ssrs_score_histogram()` (fixed-range histogram
+spanning the domain's own full possible score, not data-driven min/max),
+`_ssrs_domain_summary()` (mean/SD, median/IQR, n_scored/n_forms,
+histogram), `_ssrs_mean_by_age_sex()` (Social Skills only, per the
+approved spec's own chart titles), `_pearson_correlation()`,
+`_ssrs_social_skills_pct_map()` + `_ssrs_agreement()` (Social Skills as %
+of each respondent's own maximum, for children scored by both
+respondents; draws nothing below n=3), `_ssrs_child_score_rows()` (one row
+per child, all six domain cells), `_ssrs_domains_not_scored_count()` (new
+`SsrsDataQuality.domains_not_scored_count` field - counts `not_scored`
+domain instances only, never a form that was never started).
+`build_ssrs_analysis()`'s signature dropped `domain_scores_available:
+bool` (no longer meaningful - scores are always real now) and gained
+`scores`/`mean_by_age_sex`/`agreement`/`child_scores` in its return dict.
+
+**Child item-level drill-down (new, scoped endpoint)**: clicking a child
+in the Child-Level Scores table lazily fetches
+`GET /api/v1/dashboard/ssrs/child/{child_id}` (new route, new
+`LiveDashboardService.get_ssrs_child_detail()`, new `build_ssrs_child_
+detail()`/`_ssrs_child_item_detail()` in `module_analytics.py`) - returns
+that one child's real, answered-only frequency/importance labels (Parent/
+Child) and rating labels (Teacher), reusing the same per-field choice-map
+resolution the rest of the app already uses. Returns 404 for an unknown
+child. No comment field is ever read by this endpoint; no child name is
+ever shown (Child ID is the only identifier, same precedent as every
+other participant-level view in this app).
+
+**New schemas** (`dashboard.py`): `SsrsScoreHistogramBin`,
+`SsrsDomainScoreSummary`, `SsrsMeanByAgeSexRow`, `SsrsAgreementPoint`,
+`SsrsAgreementResult`, `SsrsChildScoreCell`, `SsrsChildScoreRow`,
+`SsrsChildItemAnswer`, `SsrsChildRatingAnswer`, `SsrsChildRespondentDetail`,
+`SsrsChildDetailResponse`; `SsrsResponse` gained `scores`/
+`mean_by_age_sex`/`agreement`/`child_scores` and lost
+`domain_scores_available`; `SsrsDataQuality` gained
+`domains_not_scored_count`.
+
+**Frontend** (`Ssrs.tsx` restructured, matching the updated wireframe):
+a new "Scores: Raw Domain Totals" panel was added directly below the 4
+KPI cards - its own Parent/Child/Teacher respondent switch, 2-3 domain
+cards (mean (SD), median (IQR), a `ProportionBar` possible-range
+indicator, n scored/n forms, direction text), one histogram per domain
+(reuses the existing `CategoryBarChart`), a "Mean Social Skills Score by
+Age Group and Sex" `GroupedBarChart`, and a "Respondent Agreement: Social
+Skills, % of Maximum" panel with a Parent-vs-Teacher/Parent-vs-Child/
+Teacher-vs-Child "Compare" selector and a new `CorrelationScatter` chart
+component (`frontend/src/components/charts/CorrelationScatter.tsx`,
+modelled on the existing `ScreenActivityScatter`) - shows an explicit "need
+at least 3 children" message instead of ever drawing a chart below n=3.
+The former "Item Responses" panel was moved below Completion-by-Age-Band/
+Data-Quality and wrapped in a collapsed-by-default `DetailDisclosure`
+titled "Item detail" - its own content/logic is unchanged. The "Domain
+Scores and Respondent Agreement" pending tile was deleted outright and
+replaced by a new, real "How Each Score Is Calculated" table (Respondent/
+Domain/Items/Range/Direction - Range/Direction read live from the API,
+Items text is a small local reference map since the API doesn't expose raw
+field-name ranges) plus a new "Child-Level Scores" sortable table (click
+any column header to sort; a scored cell shows its number, otherwise "Not
+scored: x of N answered" or "No form yet" in muted italic) with a Search
+Child ID box and click-to-expand per-row item-level answers (lazy-fetched,
+cached per child, reset whenever filters/refresh change). `.ssrs-pending-
+tile*` CSS was deleted; new `.ssrs-domain-*`/`.ssrs-compare-row`/`.ssrs-
+child-*` CSS added to `app.css`.
+
+**Live bug found and fixed during verification**: `_ssrs_mean_by_age_sex()`
+and `_ssrs_child_score_rows()` bucketed/displayed sex using the raw
+`resolve_value("baby_gender", ...)` result - this live REDCap project's own
+`baby_gender` choice labels are lowercase (`"male"`/`"female"`, confirmed
+via a live API response), not `"Male"`/`"Female"`, so the Teacher Mean-
+Social-Skills-by-Age-and-Sex chart silently rendered as "no data" despite
+95 real scored Teacher forms (the dict bucket key `"Male"` never matched
+the actual `"male"` key). Fixed by adding `.title()` to both call sites -
+matching the existing precedent already used elsewhere in this file at
+`build_screen_time_analysis()`'s own `sex_label` normalization. Re-verified
+live after the fix: the chart now renders real bars (e.g. 9 years Male
+mean 43.2/n=41, Female mean 48.32/n=38); the Child-Level Scores table's Sex
+column now reads "Male"/"Female" consistently.
+
+Tests: 13 new in `test_module_analytics.py` (domain field/range boundaries
+including the explicit p40/p41, t30/t31, t42/t43 boundaries; a complete
+fully-answered form scores correctly; one skipped item is not_scored; an
+explicit "0" answer scores as 0 while a fully-blank domain is no_form,
+never conflated; teacher academic 9-45 range; domain summary n_scored/
+n_forms/histogram; agreement's n>=3 gate; child score rows' not_scored/
+no_form states; domains_not_scored_count; child-detail 404 and real
+answered-only item content) + 2 new/updated in `test_dashboard_endpoints.py`
+(`/ssrs` shape assertions for `scores`/`agreement`/`child_scores`/
+`domains_not_scored_count`; a new `/ssrs/child/{id}` 200+404 test). Backend:
+**224/224 tests pass** (up from 211). Frontend `tsc -b`/`npm run build`
+succeed. Live-verified against a local backend hitting live REDCap (213
+registered, 167/169/95 Parent/Child/Teacher complete at time of check):
+Parent Social Skills mean 55.7 (SD 10.2), median 56 (IQR 49-63), 167
+scored/167 forms; Teacher Academic Competence mean 28.8 (SD 10.8), range
+9-45 confirmed; agreement n=162 (Parent vs Child)/95 (Parent vs
+Teacher)/94 (Teacher vs Child), each with a real correlation; Child-Level
+Scores table correctly showed real numbers, "Not scored: x of N answered",
+and "No form yet" across different real children; clicking a child row
+fetched and displayed its real per-item frequency/importance labels (e.g.
+"Starts conversations... = Sometimes / Critical") and Teacher ratings (e.g.
+"Overall academic performance... = Highest 10%"); `domains_not_scored_
+count` showed 3 live. Verified in both light and dark theme at 1440px and
+390px mobile - zero console errors, zero horizontal page overflow at
+either width. Not independently verified: the `/ssrs/child/{id}` 404 path
+was tested against a nonexistent ID string only (no way to confirm REDCap
+itself never allocates that ID, though this is already consistent with
+every other "unknown record" path elsewhere in this app).
+
 ---
 
 ## EXISTING VERIFICATION HISTORY
@@ -6553,7 +6696,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **211/211 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-11-03 SSRS dashboard module). Frontend `npm run build` succeeds (no `lint` script exists in this project - `npm run build` already runs `tsc -b` + `vite build`).
+Backend test count: **224/224 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-11-03 SSRS raw domain scoring follow-up). Frontend `npm run build` succeeds (no `lint` script exists in this project - `npm run build` already runs `tsc -b` + `vite build`).
 
 Do not assume this remains true after changes - run the tests.
 

@@ -272,9 +272,32 @@ def test_ssrs_endpoint_shape_and_filters():
     assert len(body["item_responses"]["child"]) == 34
     assert len(body["item_responses"]["teacher"]) == 42
     assert len(body["teacher_competence"]) == 9
-    assert isinstance(body["domain_scores_available"], bool)
     assert "child_id_not_found_count" in body["data_quality"]
+    assert "domains_not_scored_count" in body["data_quality"]
+    assert set(body["scores"]["parent"].keys()) == {"social_skills", "problem_behaviours"}
+    assert set(body["scores"]["child"].keys()) == {"social_skills"}
+    assert set(body["scores"]["teacher"].keys()) == {"social_skills", "problem_behaviours", "academic_competence"}
+    academic = body["scores"]["teacher"]["academic_competence"]
+    assert academic["item_count"] == 9
+    assert (academic["minimum"], academic["maximum"]) == (9, 45)
+    assert set(body["agreement"].keys()) == {"parent_vs_teacher", "parent_vs_child", "teacher_vs_child"}
+    assert isinstance(body["child_scores"], list)
+    assert len(body["child_scores"]) == 6
+    row = next(r for r in body["child_scores"] if r["child_id"] == "REC001")
+    assert set(row["parent_social"]) == {"status", "score", "answered", "total"}
 
     filtered = client.get("/api/v1/dashboard/ssrs?sex=Male")
     assert filtered.status_code == 200
     assert filtered.json()["total_registered"] <= body["total_registered"]
+
+
+def test_ssrs_child_detail_endpoint_returns_item_level_answers_and_404_for_unknown():
+    response = client.get("/api/v1/dashboard/ssrs/child/REC001")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["child_id"] == "REC001"
+    p1 = next(i for i in body["parent"]["items"] if i["item_key"] == "p1")
+    assert p1["frequency"] is not None
+
+    missing = client.get("/api/v1/dashboard/ssrs/child/does-not-exist")
+    assert missing.status_code == 404

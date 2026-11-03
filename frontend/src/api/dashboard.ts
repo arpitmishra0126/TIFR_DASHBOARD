@@ -12,6 +12,7 @@ import type {
   ProgressResponse,
   RegistryResponse,
   ScreenTimeResponse,
+  SsrsChildDetailResponse,
   SsrsResponse,
 } from "../types/liveDashboard";
 
@@ -79,6 +80,10 @@ export function getSsrs(query: SsrsQuery = {}): Promise<SsrsResponse> {
   if (query.formDateTo) params.set("form_date_to", query.formDateTo);
   const qs = params.toString();
   return apiGet<SsrsResponse>(withRefresh(qs ? `/dashboard/ssrs?${qs}` : "/dashboard/ssrs", query.force));
+}
+
+export function getSsrsChildDetail(childId: string, opts?: { force?: boolean }): Promise<SsrsChildDetailResponse> {
+  return apiGet<SsrsChildDetailResponse>(withRefresh(`/dashboard/ssrs/child/${encodeURIComponent(childId)}`, opts?.force));
 }
 
 export function getDemographics(opts?: { force?: boolean }): Promise<DemographicsResponse> {

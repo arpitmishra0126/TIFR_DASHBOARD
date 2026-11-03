@@ -865,34 +865,208 @@ a, button {
   font-style: italic;
 }
 
-.ssrs-pending-tile {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px dashed var(--border-hairline);
-  border-radius: var(--radius-control);
-  background: var(--surface-2);
-  color: var(--text-secondary);
+/* SSRS raw domain scoring (added 2026-11-03) - "Scores: raw domain
+   totals" panel + the Child-Level Scores table. Reuses .ssrs-respondent-
+   tabs/.chart-grid/.table-card/.data-table/.filter-bar-label as-is. */
+.ssrs-domain-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
-.ssrs-pending-tile svg {
-  flex-shrink: 0;
+.ssrs-domain-grid-1,
+.ssrs-domain-grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.ssrs-domain-card {
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.ssrs-domain-card-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.ssrs-domain-card-range-label {
+  font-weight: 500;
+  font-size: 0.75rem;
   color: var(--text-muted);
 }
 
-.ssrs-pending-title {
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: var(--space-2);
+.ssrs-domain-stat-row {
+  display: flex;
+  gap: var(--space-5);
+  margin-bottom: var(--space-3);
 }
 
-.ssrs-pending-tile p {
-  margin: 0 0 var(--space-2);
+.ssrs-domain-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ssrs-domain-stat-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.ssrs-domain-stat-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ssrs-domain-range-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-2);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ssrs-domain-range-mid {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.ssrs-domain-card-footer {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-hairline);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.ssrs-compare-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.ssrs-compare-row select {
+  flex: 1;
+}
+
+.ssrs-child-search {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  background: var(--surface-1);
+  color: var(--text-primary);
   font-size: 0.85rem;
 }
 
-.ssrs-pending-tile p:last-child {
-  margin-bottom: 0;
+.ssrs-child-table-card {
+  max-height: 440px;
+  overflow: auto;
+}
+
+.ssrs-child-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  z-index: 1;
+}
+
+.ssrs-sort-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ssrs-sort-th svg {
+  flex-shrink: 0;
+}
+
+.ssrs-child-row {
+  cursor: pointer;
+}
+
+.ssrs-child-row:hover {
+  background: var(--surface-2);
+}
+
+.ssrs-child-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.ssrs-cell-muted {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.82rem;
+}
+
+.ssrs-child-detail-row td {
+  background: var(--surface-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ssrs-child-detail-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.ssrs-child-detail-panel-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.ssrs-child-detail-table {
+  margin-bottom: var(--space-2);
+  max-height: 220px;
+  display: block;
+  overflow-y: auto;
+}
+
+.ssrs-child-detail-table thead,
+.ssrs-child-detail-table tbody {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+@media (max-width: 760px) {
+  .ssrs-domain-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {

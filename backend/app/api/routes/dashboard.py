@@ -4,7 +4,7 @@ Every endpoint here reads live from REDCap (via the cached LiveRedCapRepository)
 and normalizes in memory. There is no database. The REDCap token never leaves
 the backend process.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from app.api.deps import get_live_dashboard_service
@@ -21,6 +21,7 @@ from app.schemas.dashboard import (
     ProgressResponse,
     RegistryResponse,
     ScreenTimeResponse,
+    SsrsChildDetailResponse,
     SsrsResponse,
 )
 from app.services.export_service import export_filename
@@ -266,3 +267,15 @@ async def get_ssrs(
         form_date_from=form_date_from,
         form_date_to=form_date_to,
     )
+
+
+@router.get("/ssrs/child/{child_id}", response_model=SsrsChildDetailResponse)
+async def get_ssrs_child_detail(
+    child_id: str,
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> SsrsChildDetailResponse:
+    result = await service.get_ssrs_child_detail(child_id, force=refresh)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Child not found")
+    return result

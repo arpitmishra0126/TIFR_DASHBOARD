@@ -719,9 +719,104 @@ export interface SsrsDataQuality {
   form_date_missing_count: number;
   required_items_blank_count: number;
   items_with_comment_count: number;
+  domains_not_scored_count: number;
 }
 
 export type SsrsRespondent = "parent" | "child" | "teacher";
+
+// --- SSRS raw domain scoring (added 2026-11-03) ---
+export interface SsrsScoreHistogramBin {
+  label: string;
+  count: number;
+}
+
+export type SsrsDomainKey = "social_skills" | "problem_behaviours" | "academic_competence";
+
+export interface SsrsDomainScoreSummary {
+  domain: string;
+  respondent: SsrsRespondent;
+  item_count: number;
+  minimum: number;
+  maximum: number;
+  direction: string;
+  n_scored: number;
+  n_forms: number;
+  mean: number | null;
+  std_dev: number | null;
+  median: number | null;
+  q1: number | null;
+  q3: number | null;
+  iqr: number | null;
+  histogram: SsrsScoreHistogramBin[];
+}
+
+export interface SsrsMeanByAgeSexRow {
+  band: string;
+  male_mean: number | null;
+  male_n: number;
+  female_mean: number | null;
+  female_n: number;
+}
+
+export interface SsrsAgreementPoint {
+  child_id: string;
+  a: number;
+  b: number;
+}
+
+export interface SsrsAgreementResult {
+  n: number;
+  correlation: number | null;
+  points: SsrsAgreementPoint[];
+}
+
+export type SsrsCompare = "parent_vs_teacher" | "parent_vs_child" | "teacher_vs_child";
+
+export type SsrsChildScoreStatus = "scored" | "not_scored" | "no_form";
+
+export interface SsrsChildScoreCell {
+  status: SsrsChildScoreStatus;
+  score: number | null;
+  answered: number;
+  total: number;
+}
+
+export interface SsrsChildScoreRow {
+  child_id: string;
+  age_band: string;
+  sex: string;
+  parent_social: SsrsChildScoreCell;
+  parent_problem: SsrsChildScoreCell;
+  child_social: SsrsChildScoreCell;
+  teacher_social: SsrsChildScoreCell;
+  teacher_problem: SsrsChildScoreCell;
+  teacher_academic: SsrsChildScoreCell;
+}
+
+export interface SsrsChildItemAnswer {
+  item_key: string;
+  label: string;
+  frequency: string | null;
+  importance: string | null;
+}
+
+export interface SsrsChildRatingAnswer {
+  item_key: string;
+  label: string;
+  rating: string;
+}
+
+export interface SsrsChildRespondentDetail {
+  items: SsrsChildItemAnswer[];
+  ratings: SsrsChildRatingAnswer[];
+}
+
+export interface SsrsChildDetailResponse {
+  child_id: string;
+  parent: SsrsChildRespondentDetail;
+  child: SsrsChildRespondentDetail;
+  teacher: SsrsChildRespondentDetail;
+}
 
 export interface SsrsResponse {
   total_registered: number;
@@ -733,5 +828,8 @@ export interface SsrsResponse {
   data_quality: SsrsDataQuality;
   item_responses: Record<SsrsRespondent, SsrsItemResponse[]>;
   teacher_competence: SsrsTeacherCompetenceItem[];
-  domain_scores_available: boolean;
+  scores: Record<SsrsRespondent, Partial<Record<SsrsDomainKey, SsrsDomainScoreSummary>>>;
+  mean_by_age_sex: Record<SsrsRespondent, SsrsMeanByAgeSexRow[]>;
+  agreement: Record<SsrsCompare, SsrsAgreementResult>;
+  child_scores: SsrsChildScoreRow[];
 }
