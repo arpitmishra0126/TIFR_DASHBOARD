@@ -12,6 +12,7 @@ from app.schemas.dashboard import (
     AnthropometryResponse,
     AssessmentTimelineResponse,
     AssessmentToolStatusResponse,
+    ChildProfileResponse,
     DemographicsResponse,
     DietaryIntakeResponse,
     HealthScreeningResponse,
@@ -276,6 +277,18 @@ async def get_ssrs_child_detail(
     service: LiveDashboardService = Depends(get_live_dashboard_service),
 ) -> SsrsChildDetailResponse:
     result = await service.get_ssrs_child_detail(child_id, force=refresh)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Child not found")
+    return result
+
+
+@router.get("/child/{child_id}/profile", response_model=ChildProfileResponse)
+async def get_child_profile(
+    child_id: str,
+    refresh: bool = _REFRESH_QUERY,
+    service: LiveDashboardService = Depends(get_live_dashboard_service),
+) -> ChildProfileResponse:
+    result = await service.get_child_profile(child_id, force=refresh)
     if result is None:
         raise HTTPException(status_code=404, detail="Child not found")
     return result

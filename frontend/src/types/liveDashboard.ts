@@ -90,6 +90,10 @@ export interface RegistryChild {
   visit_date: string | null;
   registration_complete: boolean;
   instrument_status: Record<string, boolean>;
+  // Tri-state version of instrument_status (2026-11-25, Master Tracker) -
+  // "complete" / "in_progress" (REDCap's own "Unverified" code) /
+  // "not_started", read from the same raw completion field codes.
+  instrument_status_detail: Record<string, "complete" | "in_progress" | "not_started">;
   // Assessment Tool Status (2026-09-11) - one of "done" / "not_done" /
   // "not_answered" for each of the four separate tests, keyed by
   // "sangian" / "vwm" / "dccs" / "cd". A status label only - no score or
@@ -636,6 +640,8 @@ export interface AnthropometryDataQuality {
 
 export interface AnthropometryChildRow {
   child_id: string;
+  // Added 2026-11-25 for the Master Tracker's Child Journey panel.
+  measurement_date: string | null;
   age_at_assessment: number | null;
   sex: string | null;
   height_cm: number | null;
@@ -832,4 +838,24 @@ export interface SsrsResponse {
   mean_by_age_sex: Record<SsrsRespondent, SsrsMeanByAgeSexRow[]>;
   agreement: Record<SsrsCompare, SsrsAgreementResult>;
   child_scores: SsrsChildScoreRow[];
+}
+
+// --- Child profile (Master Tracker's Child Journey panel, 2026-11-25) ---
+export interface ChhConditionValue {
+  label: string;
+  value: string;
+}
+
+export interface ChildHealthHistorySnapshot {
+  completion_status: "complete" | "in_progress" | "not_started";
+  any_named_condition: boolean | null;
+  any_general_flag: boolean | null;
+  named_conditions: ChhConditionValue[];
+  general_flags: ChhConditionValue[];
+}
+
+export interface ChildProfileResponse {
+  child_id: string;
+  health_history: ChildHealthHistorySnapshot;
+  anthropometry: AnthropometryChildRow | null;
 }

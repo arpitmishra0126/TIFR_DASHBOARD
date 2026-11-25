@@ -37,6 +37,28 @@ def parse_complete_flag(value: str | None) -> bool:
     return value.strip().lower() in _COMPLETE_VALUES
 
 
+_UNVERIFIED_VALUES = {"unverified", "1"}
+
+
+def parse_completion_status(value: str | None) -> str:
+    """Tri-state REDCap instrument 'Complete?' status: "complete" (code 2),
+    "in_progress" (code 1, REDCap's own "Unverified" state), or
+    "not_started" (code 0, blank, or anything else) - the same raw codes
+    parse_complete_flag already collapses to a bool, just not collapsed.
+    Added for the Master Tracker panel (2026-11-25), which needs to show a
+    genuine in-progress/partial state per REDCap's own convention rather
+    than only Complete/Not Complete.
+    """
+    if value is None:
+        return "not_started"
+    normalized = value.strip().lower()
+    if normalized in _COMPLETE_VALUES:
+        return "complete"
+    if normalized in _UNVERIFIED_VALUES:
+        return "in_progress"
+    return "not_started"
+
+
 def parse_date(value: str | None) -> date | None:
     """Parse a REDCap date string (YYYY-MM-DD) into a date object."""
     if not value or not value.strip():

@@ -4,6 +4,7 @@ from app.ingestion.normalize import (
     capitalize_label,
     compute_age_years,
     parse_complete_flag,
+    parse_completion_status,
     parse_date,
     parse_float,
     parse_int,
@@ -31,6 +32,16 @@ def test_parse_complete_flag_handles_live_redcap_numeric_codes():
     assert parse_complete_flag("2") is True
     assert parse_complete_flag("0") is False
     assert parse_complete_flag("1") is False
+
+
+def test_parse_completion_status_tri_state():
+    assert parse_completion_status("2") == "complete"
+    assert parse_completion_status("1") == "in_progress"
+    assert parse_completion_status("0") == "not_started"
+    assert parse_completion_status(None) == "not_started"
+    assert parse_completion_status("") == "not_started"
+    assert parse_completion_status("Complete") == "complete"
+    assert parse_completion_status("Unverified") == "in_progress"
 
 
 def test_parse_float_variants():

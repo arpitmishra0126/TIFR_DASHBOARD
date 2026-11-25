@@ -27,13 +27,22 @@ from app.ingestion.live_field_map import (
     SSRS_TEACHER_IMP_FIELDS,
     SSRS_TEACHER_RATING_FIELDS,
 )
-from app.ingestion.normalize import capitalize_label, compute_age_years, parse_complete_flag, parse_date, parse_float, parse_int
+from app.ingestion.normalize import (
+    capitalize_label,
+    compute_age_years,
+    parse_complete_flag,
+    parse_completion_status,
+    parse_date,
+    parse_float,
+    parse_int,
+)
 from app.redcap.live_repository import LiveRedCapRepository
 from app.services.export_service import build_active_cases_csv, build_active_cases_workbook
 from app.services.module_analytics import (
     SANGIAN_ASSESSMENT_FIELDS,
     VWM_ASSESSMENT_FIELDS,
     build_anthropometry_analysis,
+    build_child_profile,
     build_assessment_timeline,
     build_assessment_tool_status_analysis,
     build_dietary_analysis,
@@ -63,7 +72,10 @@ from app.schemas.dashboard import (
     AssessmentToolParticipantStatus,
     AssessmentToolStatusResponse,
     CategoryCount,
+    ChhConditionValue,
     ChildHealthHistorySections,
+    ChildHealthHistorySnapshot,
+    ChildProfileResponse,
     ConditionIndicator,
     DemographicsResponse,
     DeviceMinutes,
@@ -210,6 +222,9 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
     dob = parse_date(record.get("child_dob"))
     visit_date = parse_date(record.get("visit_date"))
     instrument_status = {key: parse_complete_flag(record.get(field)) for key, field, _ in REGISTRY_INSTRUMENT_ENTRIES}
+    instrument_status_detail = {
+        key: parse_completion_status(record.get(field)) for key, field, _ in REGISTRY_INSTRUMENT_ENTRIES
+    }
     core_battery_complete = all(parse_complete_flag(record.get(f)) for f in CORE_BATTERY_COMPLETE_FIELDS)
     return RegistryChild(
         redcap_child_id=child_id,
@@ -221,6 +236,7 @@ def _normalize_child(record: dict, choice_maps: dict[str, ChoiceMap]) -> Registr
         visit_date=visit_date.isoformat() if visit_date else None,
         registration_complete=parse_complete_flag(record.get(REGISTRATION_COMPLETE_FIELD)),
         instrument_status=instrument_status,
+        instrument_status_detail=instrument_status_detail,
         assessment_tool_status_detail=_assessment_tool_status_detail(record),
         core_battery_complete=core_battery_complete,
         progression_stage=_progression_stage(record, core_battery_complete),
@@ -986,4 +1002,22 @@ class LiveDashboardService:
             parent=_detail(data["parent"]),
             child=_detail(data["child"]),
             teacher=_detail(data["teacher"]),
+        )
+
+    async def get_child_profile(self, child_id_value: str, force: bool = False) -> ChildProfileResponse | None:
+        records, choice_maps = await self._load(force=force)
+        data = build_child_profile(records, choice_maps, child_id_value)
+        if data is None:
+            return None
+        hh = data["health_history"]
+        return ChildProfileResponse(
+            child_id=data["child_id"],
+            health_history=ChildHealthHistorySnapshot(
+                completion_status=hh["completion_status"],
+                any_named_condition=hh["any_named_condition"],
+                any_general_flag=hh["any_general_flag"],
+                named_conditions=[ChhConditionValue(**c) for c in hh["named_conditions"]],
+                general_flags=[ChhConditionValue(**c) for c in hh["general_flags"]],
+            ),
+            anthropometry=AnthropometryChildRow(**data["anthropometry"]) if data["anthropometry"] else None,
         )

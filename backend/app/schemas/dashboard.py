@@ -92,6 +92,13 @@ class RegistryChild(BaseModel):
     # Registry participant x assessment status view and the "Missing
     # Instrument" quick query.
     instrument_status: dict[str, bool] = Field(default_factory=dict)
+    # Tri-state version of instrument_status (2026-11-25, Master Tracker) -
+    # "complete" / "in_progress" (REDCap's own "Unverified" code) /
+    # "not_started", read straight from the same raw completion field codes
+    # instrument_status already collapses to a bool. Purely additive - every
+    # existing instrument_status consumer (Registry's ✓/– dots, the Missing
+    # Instrument quick query) is untouched.
+    instrument_status_detail: dict[str, str] = Field(default_factory=dict)
     # Assessment Tool Status per-child detail (2026-09-11) - one of "done" /
     # "not_done" / "not_answered" for each of the four separate tests
     # (sangian/vwm/dccs/cd), derived directly from that child's own raw
@@ -822,6 +829,12 @@ class AnthropometryChildRow(BaseModel):
     "Not available" result(s) concisely (e.g. "Height: Missing sex")."""
 
     child_id: str
+    # Added 2026-11-25 for the Child Journey profile panel (Master Tracker) -
+    # this child's own assessment_date, already fetched/parsed elsewhere in
+    # this module (age-at-assessment derivation) but not previously exposed
+    # per-row. Purely additive - every existing consumer of this schema is
+    # unaffected.
+    measurement_date: str | None
     age_at_assessment: int | None
     sex: str | None
     height_cm: float | None
@@ -857,6 +870,38 @@ class AnthropometryResponse(BaseModel):
     data_quality: AnthropometryDataQuality
     rows: list[AnthropometryChildRow]
     notes: dict[str, str]
+
+
+# --- Child profile (Master Tracker's Child Journey panel, 2026-11-25) ---
+class ChhConditionValue(BaseModel):
+    label: str
+    value: str
+
+
+class ChildHealthHistorySnapshot(BaseModel):
+    """completion_status is one of "complete"/"in_progress"/"not_started"
+    (same tri-state as RegistryChild.instrument_status_detail).
+    any_named_condition/any_general_flag are True/False once at least one
+    of that group's fields is answered for this child, or None when none
+    of them are answered yet - "not assessable", never guessed as False."""
+
+    completion_status: str
+    any_named_condition: bool | None
+    any_general_flag: bool | None
+    named_conditions: list[ChhConditionValue]
+    general_flags: list[ChhConditionValue]
+
+
+class ChildProfileResponse(BaseModel):
+    """Single-child supplement to the Master Tracker's Child Journey panel -
+    reuses the existing Health Screening/Anthropometry calculations for one
+    child, rather than a duplicated/second implementation. `anthropometry`
+    is null when this child has no engagement with that instrument at all
+    (never a fabricated row)."""
+
+    child_id: str
+    health_history: ChildHealthHistorySnapshot
+    anthropometry: AnthropometryChildRow | None
 
 
 # --- SSRS panel (/ssrs, added 2026-11-03) ---

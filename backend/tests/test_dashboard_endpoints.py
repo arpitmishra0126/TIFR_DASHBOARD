@@ -301,3 +301,18 @@ def test_ssrs_child_detail_endpoint_returns_item_level_answers_and_404_for_unkno
 
     missing = client.get("/api/v1/dashboard/ssrs/child/does-not-exist")
     assert missing.status_code == 404
+
+
+def test_child_profile_endpoint_returns_health_history_and_404_for_unknown():
+    response = client.get("/api/v1/dashboard/child/REC001/profile")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["child_id"] == "REC001"
+    hh = body["health_history"]
+    assert hh["completion_status"] == "complete"
+    assert hh["any_named_condition"] is True  # chh_q8_asthma = "1" on REC001's fixture record
+    # REC001's fixture has no anthropometry engagement - null, not a fabricated row.
+    assert body["anthropometry"] is None
+
+    missing = client.get("/api/v1/dashboard/child/does-not-exist/profile")
+    assert missing.status_code == 404

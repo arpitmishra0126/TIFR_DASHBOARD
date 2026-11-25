@@ -3,6 +3,7 @@ import type {
   AnthropometryResponse,
   AssessmentTimelineResponse,
   AssessmentToolStatusResponse,
+  ChildProfileResponse,
   DemographicsResponse,
   DietaryIntakeResponse,
   HealthScreeningResponse,
@@ -84,6 +85,10 @@ export function getSsrs(query: SsrsQuery = {}): Promise<SsrsResponse> {
 
 export function getSsrsChildDetail(childId: string, opts?: { force?: boolean }): Promise<SsrsChildDetailResponse> {
   return apiGet<SsrsChildDetailResponse>(withRefresh(`/dashboard/ssrs/child/${encodeURIComponent(childId)}`, opts?.force));
+}
+
+export function getChildProfile(childId: string, opts?: { force?: boolean }): Promise<ChildProfileResponse> {
+  return apiGet<ChildProfileResponse>(withRefresh(`/dashboard/child/${encodeURIComponent(childId)}/profile`, opts?.force));
 }
 
 export function getDemographics(opts?: { force?: boolean }): Promise<DemographicsResponse> {

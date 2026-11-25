@@ -6211,3 +6211,382 @@ th.registry-instrument-col-highlighted {
     width: 100%;
   }
 }
+
+/* --- Master Tracker (2026-11-25) --- */
+.mt-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.mt-last-synced {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mt-summary-row {
+  margin-bottom: var(--space-4);
+}
+
+.mt-filter-row {
+  margin-bottom: var(--space-4);
+}
+
+.mt-result-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2);
+}
+
+/* Independently scrollable - shows ~5 data rows at a time regardless of
+ * cohort size, with a sticky header so the instrument columns stay
+ * labelled while scrolling (same pattern as .ats-pstatus-table-wrap). */
+.mt-table-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 290px;
+  margin-bottom: var(--space-4);
+}
+
+table.mt-tracker-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+}
+
+tr.mt-row-selected {
+  background: var(--surface-2);
+}
+
+table.mt-tracker-table th,
+table.mt-tracker-table td {
+  white-space: nowrap;
+}
+
+.mt-child-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-weight: 600;
+  color: var(--series-1);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.mt-view-button {
+  border: 1px solid var(--border-hairline);
+  background: var(--surface-1);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.mt-view-button:hover {
+  border-color: var(--series-1);
+  color: var(--series-1);
+}
+
+.mt-progress-cell {
+  min-width: 140px;
+}
+
+.mt-progress-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+}
+
+.mt-status-td {
+  text-align: center;
+}
+
+.mt-status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mt-status-complete {
+  color: var(--status-good);
+  background: var(--status-good-bg);
+}
+
+.mt-status-in_progress {
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+}
+
+.mt-status-not_started {
+  color: var(--status-critical);
+  background: rgba(208, 59, 59, 0.12);
+}
+
+.mt-pending-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px dashed var(--border-hairline);
+  border-radius: var(--radius-sharp);
+  padding: 2px 6px;
+  cursor: help;
+}
+
+.mt-empty-row {
+  text-align: center;
+  color: var(--text-muted);
+  padding: var(--space-5) 0;
+}
+
+.mt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-5);
+}
+
+.mt-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mt-journey-panel {
+  padding: var(--space-4);
+}
+
+.mt-journey-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--border-hairline);
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.mt-journey-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.mt-journey-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mt-journey-progress-pill {
+  background: var(--status-good-bg);
+  color: var(--status-good);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.mt-journey-close {
+  border: none;
+  background: var(--surface-2);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+/* Child Journey - a compact profile, not a second tracking table: a single
+ * vertical stack of short sections rather than a two-column layout. */
+.mt-journey-body-profile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.mt-journey-info-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-5);
+  margin: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.mt-journey-info-compact div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.mt-journey-info-compact dt {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.mt-journey-info-compact dd {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.86rem;
+  color: var(--text-primary);
+}
+
+.mt-journey-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.mt-journey-section-title {
+  margin: 0 0 var(--space-2);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.mt-journey-unavailable {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-style: italic;
+  margin: 0;
+}
+
+.mt-journey-summary-line {
+  font-size: 0.86rem;
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2);
+}
+
+.mt-journey-footnote {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: var(--space-2) 0 0;
+}
+
+.mt-anthro-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.mt-anthro-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 100px;
+}
+
+.mt-anthro-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.mt-anthro-value {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+}
+
+.mt-screening-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sharp);
+}
+
+.mt-screening-tag-flag {
+  color: var(--status-warning);
+  background: var(--status-warning-bg);
+}
+
+.mt-screening-tag-normal {
+  color: var(--status-good);
+  background: var(--status-good-bg);
+}
+
+.mt-screening-tag-na {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.mt-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.mt-timeline li {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mt-timeline-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--series-1);
+}
+
+.mt-timeline-dot-pending {
+  background: var(--text-muted);
+}
+
+.mt-timeline-label {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.mt-timeline-date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+table.mt-journey-table th,
+table.mt-journey-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+@media (max-width: 760px) {
+  .mt-timeline li {
+    grid-template-columns: 10px 1fr;
+  }
+
+  .mt-timeline-date {
+    grid-column: 2;
+  }
+}

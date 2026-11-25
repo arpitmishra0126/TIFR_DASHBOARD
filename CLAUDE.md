@@ -6403,6 +6403,160 @@ entire pass.
 
 ---
 
+## MASTER TRACKER PANEL - PHASE 1 IMPLEMENTED 2026-11-25
+
+A new top-nav tab, **"Master Tracker"**, added as the FIRST tab (before
+"Dashboard") in `frontend/src/components/Layout.tsx`'s `HEADER_TABS`, route
+`/master-tracker` (`frontend/src/routes/MasterTracker.tsx`, registered in
+`App.tsx`). A centralized, child-wise (UID-wise) study tracker: one row per
+registered child, one column per study instrument, built entirely from the
+existing `/dashboard/registry` endpoint (the same `RegistryChild` data
+Registry.tsx/DataQuality.tsx already consume) - no new analytics endpoint,
+no mock data.
+
+**Backend (additive only)**: `normalize.py` gained `parse_completion_status()`
+- a genuine tri-state read of REDCap's own instrument "Complete?" field code
+(0="not_started"/Incomplete, 1="in_progress"/Unverified, 2="complete") - the
+same raw codes `parse_complete_flag()` already collapses to a bool, just not
+collapsed. `RegistryChild` gained `instrument_status_detail: dict[str, str]`
+(keyed the same as the existing boolean `instrument_status`, via
+`REGISTRY_INSTRUMENT_ENTRIES`), populated in `live_dashboard_service
+.py::_normalize_child()` alongside (not replacing) the existing boolean
+field - every existing `instrument_status` consumer (Registry's ✓/– dots,
+the Missing Instrument quick query) is untouched. Live-verified: this
+project's live data currently has no REDCap "Unverified" (code 1) records
+for any instrument (2005 complete / 338 not_started, 0 in_progress) - the
+tri-state will populate automatically once any instrument is genuinely
+marked Unverified in REDCap, same "will populate automatically" precedent
+used elsewhere in this app (e.g. SSRS Teacher). Tests:
+`test_parse_completion_status_tri_state` in `test_normalize.py`. Backend:
+**225/225 tests pass** (up from 224).
+
+**UI** (`MasterTracker.tsx`): header (title/subtitle, Last Synced timestamp
+from the existing `useRefresh().lastUpdated`, an Export button reusing the
+existing Active Cases CSV export - `exportActiveCasesCsv()`, the same
+established export architecture, not a new one) -> 4 summary KPI cards
+(Total Children/Fully Completed/In Progress/Not Started, all computed
+client-side from the fetched cohort, never hardcoded) -> search (by UID) +
+Test/Assessment filter + Completion Status filter + Reset -> a child x
+instrument matrix table (UID, Overall Progress bar, one ✓/⏱/✕ status-dot
+column per instrument reusing `Registry.tsx`'s exported `INSTRUMENT_COLUMNS`
+so the two pages can never disagree on instrument set/order/labels, an
+"AVI Files" column, an Actions/View column) -> a status legend -> a
+click-to-open "Child Journey" panel (child info + a per-instrument
+Status/Date Initiated/Date of Test/AVI-File-Details/Remarks table).
+
+**Site/Centre filter was intentionally omitted** - this project's live
+REDCap metadata has no Site/Centre field anywhere (only `village`, a
+different, already-filterable concept used elsewhere in the app) - per the
+task's own "only if the field exists in the available data" instruction,
+nothing was substituted in as a fake Site/Centre filter.
+
+**Clearly labelled "Pending Integration" placeholders** (never fabricated,
+never counted as "Not Started") for every genuinely unavailable
+integration, since no per-instrument date or file-tracking field/system
+exists anywhere in this codebase: per-instrument "Date Initiated"/"Date of
+Test", and "AVI / File Details" (both the table's AVI Files column and the
+Child Journey panel's file-details column). The Child Journey panel's own
+"Remarks" column shows "—" (genuinely no per-instrument remarks field is
+mapped anywhere in this app) rather than a placeholder label, since it is
+not an integration gap, just no data to show.
+
+Verified via a headless-browser pass against a local backend (port 8001)
++ live frontend dev server, both themes, at 1440px: zero console errors;
+live data confirmed (213 registered at time of check, KPI cards/status
+dots/progress bars all reading real live completion data); the Child
+Journey drill-down panel renders correctly with real child info and the
+per-instrument status table, "Pending Integration" badges correctly shown
+for date/file columns; dark theme confirmed legible (no low-contrast
+regression). `tsc -b` clean, `npm run build` succeeds.
+
+**Not yet implemented (explicitly out of scope for Phase 1, per the task's
+own "start building immediately even if some info isn't accessible yet"
+instruction)**: AVI/video-interview file storage integration, per-
+instrument test-initiation/completion dates (REDCap has no such field on
+any instrument - only one child-level `visit_date`, already shown in the
+Child Journey panel), and any Site/Centre concept. Revisit this section
+once a real data source for any of these exists - do not guess at one.
+
+**Child Journey UX refinement (2026-11-25, same day):** the Child Journey
+panel previously repeated the exact same 10-instrument status matrix
+already visible in the Master Tracker table above it - redundant. Redesigned
+into a genuine per-child profile; the Master Tracker matrix itself (table,
+summary cards, search/filters) is unchanged except that its table container
+is now independently scrollable (`max-height`, sticky header), showing
+~5 rows at a time regardless of cohort size.
+
+- **New backend endpoint**, `GET /api/v1/dashboard/child/{child_id}/profile`
+  (`ChildProfileResponse` schema, `LiveDashboardService.get_child_profile()`,
+  `module_analytics.build_child_profile()`) - reuses the existing, already-
+  validated Anthropometry (`build_anthropometry_analysis`'s IAP 2015
+  screening) and Child Health History (`CHH_NAMED_CONDITIONS`/
+  `CHH_GENERAL_FLAGS`) calculations for exactly one child, rather than a
+  second/duplicated screening or condition-detection implementation - same
+  "do not duplicate screening logic" precedent as the Anthropometry module
+  itself. Returns 404 for an unknown child_id (same convention as the
+  existing `/ssrs/child/{id}` endpoint). `AnthropometryChildRow` gained an
+  additive `measurement_date` field (that child's own `assessment_date`,
+  already parsed elsewhere in `build_anthropometry_analysis` but not
+  previously exposed per-row) - every other `AnthropometryChildRow`
+  consumer (the main `/anthropometry` page's child-review table) is
+  unaffected. Tests: `test_build_child_profile_returns_none_for_unknown_child`,
+  `test_build_child_profile_merges_health_history_and_anthropometry`,
+  `test_build_child_profile_health_history_not_started_is_none_not_false`
+  in `test_module_analytics.py` + an endpoint test in
+  `test_dashboard_endpoints.py`. Backend: **229/229 tests pass** (up from
+  225).
+- **`MasterTracker.tsx`'s Child Journey panel rebuilt** around a compact
+  profile instead of a second tracking table: (1) a single-row compact
+  profile strip (UID, Village/Centre, Age, Sex, Visit Date, Current
+  Status); (2) **Growth & Anthropometry** - height/weight/BMI/measurement
+  date plus a 3-row screening-result table (Height-for-Age/Weight-for-Age/
+  BMI), each tagged exactly one of **"Screening flag detected"** / **"No
+  supported flag"** / **"Not assessable"** (never a diagnosis, never a
+  guessed classification) - or an explicit "Data unavailable" state if the
+  child has no anthropometry engagement at all; (3) **Illness / Health
+  History** - a one-line summary (no conditions recorded / one or more
+  recorded / not yet assessed - these three states are never conflated)
+  with the full named-condition/general-flag table tucked behind a
+  `DetailDisclosure`; (4) **Study Journey / Timeline** - Registration/
+  Enrolment (`visit_date`), Anthropometry Assessment (`measurement_date`),
+  Latest Recorded Study Activity (the later of the two, computed
+  client-side, never a fabricated date), and AVI/Video Interview Files +
+  Associated Documents/Files, both genuinely unavailable today and shown as
+  **"Pending Integration"**; (5) the original 10-row instrument status
+  matrix is kept, but only inside a collapsed-by-default `DetailDisclosure`
+  titled **"Assessment Status Details (per-instrument status)"** - test
+  name + status only (the generic Date Initiated/Date of Test/AVI/Remarks
+  placeholder columns from the Phase 1 version were dropped here, since
+  they added no new information per-child beyond what Growth &
+  Anthropometry/Timeline above already show more specifically). The panel
+  lazily fetches `getChildProfile(childId)` on open (own loading/error
+  state, reset whenever a different child is selected) - the Master
+  Tracker's own already-fetched registry data is reused for everything
+  else (instrument status, visit date, demographics), so nothing is
+  fetched twice.
+- **Master Tracker table**: `.mt-table-wrap` gained `max-height: 290px` +
+  `overflow-y: auto` + a sticky `thead` (same `.ats-pstatus-table-wrap`
+  convention already used elsewhere in this app) - the table now always
+  shows ~5 data rows with the rest reachable by scrolling, independent of
+  the page's own scroll; a small "N of M children shown" line was added
+  above it so the active search/filter result count is visible without
+  needing to scroll the (now-fixed-height) table itself.
+Frontend `tsc -b`/`npm run build` succeed. Live-verified via a headless-
+browser pass against a local backend (port 8001) + live frontend dev
+server, both themes, at 1440px: zero console errors; a known flagged
+child (06IND047B, height 114.3cm/weight 17.8kg at age 9/10) correctly
+showed "Short stature"/"Low weight-for-age" screening flags and "Normal"
+BMI, matching the IAP 2015 reference table exactly (same spot-check
+figures already documented in the ANTHROPOMETRY ASSESSMENT MODULE section
+above); a not-started child correctly showed "Data unavailable"/"Not yet
+assessed"/"Not Available" throughout its profile and timeline, never a
+fabricated value; the Master Tracker table scrolled independently showing
+exactly 5 rows at a time with a sticky header.
+
+---
+
 ## SSRS DASHBOARD MODULE - IMPLEMENTED 2026-11-03
 
 A new top-nav tab, **"SSRS"**, between "Anthropometry Assessment" and "Study
@@ -6696,7 +6850,7 @@ The application has previously been verified with:
 - backend tests
 - frontend build
 
-Backend test count: **224/224 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-11-03 SSRS raw domain scoring follow-up). Frontend `npm run build` succeeds (no `lint` script exists in this project - `npm run build` already runs `tsc -b` + `vite build`).
+Backend test count: **229/229 passing** (see the dated sections above for what each batch of new tests covers - most recently the 2026-11-25 Master Tracker Child Journey profile endpoint). Frontend `npm run build` succeeds (no `lint` script exists in this project - `npm run build` already runs `tsc -b` + `vite build`).
 
 Do not assume this remains true after changes - run the tests.
 

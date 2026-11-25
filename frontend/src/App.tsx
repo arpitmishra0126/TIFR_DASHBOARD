@@ -11,6 +11,7 @@ import DataQuality from "./routes/DataQuality";
 import Demographics from "./routes/Demographics";
 import DietaryIntake from "./routes/DietaryIntake";
 import HealthScreening from "./routes/HealthScreening";
+import MasterTracker from "./routes/MasterTracker";
 import Neurodevelopment from "./routes/Neurodevelopment";
 import Overview from "./routes/Overview";
 import PhysicalActivity from "./routes/PhysicalActivity";
@@ -25,6 +26,7 @@ export default function App() {
       <RefreshProvider>
         <Routes>
           <Route element={<Layout />}>
+            <Route path="/master-tracker" element={<MasterTracker />} />
             <Route path="/" element={<Overview />} />
             <Route path="/registry" element={<Registry />} />
             <Route path="/demographics" element={<Demographics />} />

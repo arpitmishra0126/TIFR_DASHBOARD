@@ -1732,3 +1732,54 @@ def test_build_ssrs_analysis_scores_section_present_and_data_quality_has_domains
         "parent_vs_teacher", "parent_vs_child", "teacher_vs_child",
     }
     assert isinstance(result["child_scores"], list)
+
+
+# --- Child profile (Master Tracker Child Journey panel) ---
+
+def test_build_child_profile_returns_none_for_unknown_child():
+    records = [_anthro_record("K1")]
+    assert ma.build_child_profile(records, ANTHRO_CHOICE_MAPS, "NOPE") is None
+
+
+def test_build_child_profile_merges_health_history_and_anthropometry():
+    record = _anthro_record("K2")
+    record.update(
+        {
+            "child_illness_history_complete": "2",
+            "chh_q8_asthma": "1",  # Yes
+            "chh_q8_heart": "0",  # No
+            "chh_illness_current": "0",  # No
+            "chh_chronic_condition": "1",  # Yes
+        }
+    )
+    choice_maps = {
+        **ANTHRO_CHOICE_MAPS,
+        "chh_q8_asthma": {"1": "Yes", "0": "No"},
+        "chh_q8_heart": {"1": "Yes", "0": "No"},
+        "chh_illness_current": {"1": "Yes", "0": "No"},
+        "chh_chronic_condition": {"1": "Yes", "0": "No"},
+    }
+    result = ma.build_child_profile([record], choice_maps, "K2")
+    assert result["child_id"] == "K2"
+
+    hh = result["health_history"]
+    assert hh["completion_status"] == "complete"
+    assert hh["any_named_condition"] is True  # asthma = Yes
+    assert hh["any_general_flag"] is True  # chronic_condition = Yes
+    asthma_row = next(r for r in hh["named_conditions"] if r["label"] == "Asthma")
+    assert asthma_row["value"] == "Yes"
+
+    assert result["anthropometry"] is not None
+    assert result["anthropometry"]["child_id"] == "K2"
+    assert result["anthropometry"]["measurement_date"] == "2026-09-10"
+
+
+def test_build_child_profile_health_history_not_started_is_none_not_false():
+    record = {"child_id": "K3", "child_illness_history_complete": "0"}
+    result = ma.build_child_profile([record], ANTHRO_CHOICE_MAPS, "K3")
+    hh = result["health_history"]
+    assert hh["completion_status"] == "not_started"
+    assert hh["any_named_condition"] is None
+    assert hh["any_general_flag"] is None
+    # Never touched the anthropometry form either - null, not a fabricated row.
+    assert result["anthropometry"] is None

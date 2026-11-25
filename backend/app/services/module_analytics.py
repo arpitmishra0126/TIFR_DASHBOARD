@@ -27,7 +27,7 @@ from statistics import mean, median, quantiles, stdev
 from typing import Callable
 
 from app.ingestion.choice_maps import ChoiceMap
-from app.ingestion.normalize import compute_age_years, parse_complete_flag, parse_date, parse_float
+from app.ingestion.normalize import compute_age_years, parse_complete_flag, parse_completion_status, parse_date, parse_float
 from app.services import iap_2015_reference as iap
 from app.services.ssrs_scoring import SSRS_DOMAIN_BY_RESPONDENT_KEY, SSRS_DOMAINS_BY_RESPONDENT, SSRS_SCORE_DOMAINS, SsrsScoreDomain
 
@@ -2837,9 +2837,11 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
             ) if note
         )
 
+        measurement_date = _parse_anthro_datetime(r.get(ANTHROPOMETRY_DATE_FIELD))
         rows.append(
             {
                 "child_id": child_id(r),
+                "measurement_date": measurement_date.isoformat() if measurement_date else None,
                 "age_at_assessment": age,
                 "sex": sex_label,
                 "height_cm": height,
@@ -2924,4 +2926,61 @@ def build_anthropometry_analysis(records: list[dict], choice_maps: dict[str, Cho
         "age_distribution": age_distribution,
         "data_quality": data_quality,
         "rows": rows,
+    }
+
+
+# --- Child profile (Master Tracker's Child Journey panel, 2026-11-25) ---
+# Reuses existing cohort-level calculations (build_anthropometry_analysis's
+# IAP 2015 screening classifications, CHH_NAMED_CONDITIONS/CHH_GENERAL_FLAGS)
+# for a single child, rather than a second/duplicated screening or
+# condition-detection implementation - "do not duplicate screening logic"
+# per the Child Journey redesign spec.
+def _chh_condition_list(
+    record: dict, fields: tuple[tuple[str, str], ...], choice_maps: dict[str, ChoiceMap],
+) -> tuple[list[dict], bool | None]:
+    """One {label, value} row per field (the field's own resolved choice
+    label, or "" if genuinely blank/unanswered), plus an overall any_yes
+    flag - True/False once at least one field is answered, None if every
+    field in the group is blank (not assessable yet), never guessed."""
+    rows: list[dict] = []
+    any_yes = False
+    any_answered = False
+    for field, label in fields:
+        raw = (record.get(field) or "").strip()
+        if raw:
+            any_answered = True
+            if raw == "1":
+                any_yes = True
+        rows.append({"label": label, "value": resolve_value(field, record.get(field), choice_maps)})
+    return rows, (any_yes if any_answered else None)
+
+
+def build_child_profile(records: list[dict], choice_maps: dict[str, ChoiceMap], child_id_value: str) -> dict | None:
+    """One child's health-history summary + anthropometry snapshot, for the
+    Master Tracker's Child Journey panel. Returns None if the child_id does
+    not match a registered record. Instrument completion/registry fields
+    themselves are NOT repeated here - the frontend already has those from
+    the existing /dashboard/registry response."""
+    reg = registered_records(records)
+    record = next((r for r in reg if child_id(r) == child_id_value), None)
+    if record is None:
+        return None
+
+    chh_status = parse_completion_status(record.get("child_illness_history_complete"))
+    named_conditions, any_named_condition = _chh_condition_list(record, CHH_NAMED_CONDITIONS, choice_maps)
+    general_flags, any_general_flag = _chh_condition_list(record, CHH_GENERAL_FLAGS, choice_maps)
+
+    anthro_rows = build_anthropometry_analysis(records, choice_maps)["rows"]
+    anthro_row = next((r for r in anthro_rows if r["child_id"] == child_id_value), None)
+
+    return {
+        "child_id": child_id_value,
+        "health_history": {
+            "completion_status": chh_status,
+            "any_named_condition": any_named_condition,
+            "any_general_flag": any_general_flag,
+            "named_conditions": named_conditions,
+            "general_flags": general_flags,
+        },
+        "anthropometry": anthro_row,
     }

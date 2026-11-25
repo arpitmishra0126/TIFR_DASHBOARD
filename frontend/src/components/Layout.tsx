@@ -28,7 +28,12 @@ interface HeaderTab {
 // by direct URL, same "reachable by URL, not nav-linked" precedent already
 // used throughout this app - do not add further tabs here without an
 // explicit instruction.
+//
+// Master Tracker added 2026-11-25 as the FIRST tab, before Dashboard, per
+// explicit instruction - a new child-wise (UID-wise) study journey/test-
+// completion/file-tracking panel at route /master-tracker.
 const HEADER_TABS: HeaderTab[] = [
+  { label: "Master Tracker", to: "/master-tracker" },
   { label: "Dashboard", to: "/" },
   { label: "DSEQ / Screen Time", to: "/screen-time" },
   { label: "Child Health History", to: "/health-screening" },
